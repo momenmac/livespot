@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/ui/auth/login_screen.dart';
-import 'package:flutter_application_2/ui/onboarding/onboarding_screen.dart';
-import 'package:flutter_application_2/ui/pages/home.dart';
+import 'package:flutter_application_2/ui/pages/onboarding/onboarding_screen.dart';
+import 'package:flutter_application_2/ui/pages/home/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
