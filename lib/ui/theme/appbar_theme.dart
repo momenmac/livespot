@@ -7,6 +7,7 @@ class TAppBarTheme {
   static AppBarTheme lightAppBarTheme = AppBarTheme(
     elevation: 0,
     centerTitle: false,
+    backgroundColor: Colors.transparent,
     iconTheme: IconThemeData(color: ThemeConstants.black),
     titleTextStyle: TextStyle(
       color: ThemeConstants.black,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart';
 import 'package:flutter_application_2/ui/widgets/account_link.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
-import 'package:flutter_application_2/ui/pages/home.dart'; // ensure Home is imported
 
 class GetStartedScreen extends StatelessWidget {
   const GetStartedScreen({super.key});
@@ -50,7 +50,8 @@ class GetStartedScreen extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => Home()),
+                          MaterialPageRoute(
+                              builder: (context) => CreateAccountScreen()),
                         );
                       },
                     ),

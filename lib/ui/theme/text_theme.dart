@@ -18,47 +18,40 @@ class TTextTheme {
         fontSize: 13.83,
         fontWeight: FontWeight.w500,
         color: ThemeConstants.black),
-    // headlineLarge: TextStyle().copyWith(
-    //     fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
-    // headlineMedium: TextStyle().copyWith(
-    //     fontSize: 24.0, fontWeight: FontWeight.w600, color: Colors.black),
-    // headlineSmall: TextStyle().copyWith(
-    //     fontSize: 18.0, fontWeight: FontWeight.w600, color: Colors.black),
-
+    headlineLarge: TextStyle().copyWith(
+        fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
+    headlineMedium: TextStyle().copyWith(
+        fontSize: 24.0, fontWeight: FontWeight.w600, color: Colors.black),
+    headlineSmall: TextStyle().copyWith(
+        fontSize: 18.0, fontWeight: FontWeight.w600, color: Colors.black),
     bodySmall: GoogleFonts.nunitoSans(
         fontSize: 10.0,
         fontWeight: FontWeight.w300,
         color: ThemeConstants.black),
-
     bodyMedium: GoogleFonts.nunitoSans(
         fontSize: 12.0,
         fontWeight: FontWeight.bold,
         color: ThemeConstants.black),
-
     bodyLarge: GoogleFonts.nunitoSans(
       fontSize: 19.0,
       fontWeight: FontWeight.w300,
       color: ThemeConstants.black,
     ),
-
     titleSmall: GoogleFonts.raleway(
         fontSize: 16.0,
         fontWeight: FontWeight.w500,
         color: ThemeConstants.black,
         letterSpacing: -0.16),
-
     titleMedium: GoogleFonts.raleway(
         fontSize: 21.0,
         fontWeight: FontWeight.bold,
         color: ThemeConstants.black,
         letterSpacing: -0.16),
-
     titleLarge: GoogleFonts.raleway(
         fontSize: 28.0,
         fontWeight: FontWeight.bold,
         color: ThemeConstants.black,
         letterSpacing: -0.28),
-
     displayLarge: GoogleFonts.raleway(
         fontSize: 52.0,
         fontWeight: FontWeight.bold,
@@ -67,6 +60,12 @@ class TTextTheme {
   );
   // Dark Theme
   static TextTheme darkTextTheme = TextTheme(
+    headlineLarge: TextStyle().copyWith(
+        fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
+    headlineMedium: TextStyle().copyWith(
+        fontSize: 24.0, fontWeight: FontWeight.w600, color: Colors.black),
+    headlineSmall: TextStyle().copyWith(
+        fontSize: 18.0, fontWeight: FontWeight.w600, color: Colors.black),
     labelSmall: GoogleFonts.nunitoSans(
         fontSize: 15.0,
         fontWeight: FontWeight.w300,

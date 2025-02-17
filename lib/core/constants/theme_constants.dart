@@ -12,9 +12,12 @@ class ThemeConstants {
   static const Color red = Color(0xFFF63C3C);
   static const Color yellow = Color(0xFFECA61B);
   static const Color black = Color(0xff202020);
-  static const Color grey = Color(0xFFD2D2D2);
+  static const Color grey = Color.fromARGB(255, 173, 173, 173);
   static const Color greyLight = Color(0xffF8F8F8);
   static const Color darkBackgroundColor = Color(0xFF121212);
   static const Color darkCardColor = Color(0xFF1E1E1E);
   static const Color lightBackgroundColor = Color.fromARGB(255, 255, 255, 255);
+
+  static const textFieldFillColor = greyLight;
+  static const textFieldLabelColor = grey;
 }
