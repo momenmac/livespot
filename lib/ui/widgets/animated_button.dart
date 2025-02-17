@@ -1,5 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String text;
@@ -61,7 +62,7 @@ class AnimatedButtonState extends State<AnimatedButton>
               child: Text(
                 widget.text,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
+                      color: ThemeConstants.lightBackgroundColor,
                     ),
               ),
             ),
