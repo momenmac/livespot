@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/utils/theme/theme.dart';
 import 'package:flutter_application_2/ui/auth/login_screen.dart';
 import 'package:flutter_application_2/ui/pages/onboarding/onboarding_screen.dart';
 import 'package:flutter_application_2/ui/pages/home/home.dart';
@@ -28,11 +29,8 @@ class MyApp extends StatelessWidget {
       title: 'My App',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
-      theme: ThemeData(
-        colorScheme:
-            ColorScheme.fromSeed(seedColor: Color.fromARGB(255, 0, 180, 216)),
-        useMaterial3: true,
-      ),
+      theme: TAppTheme.lightTheme,
+      darkTheme: TAppTheme.darkTheme,
       home: isOnboardingCompleted
           ? (isLoggedIn ? Home() : LoginScreen())
           : OnboardingScreen(),

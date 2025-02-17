@@ -19,6 +19,12 @@ class OnboardingScreenState extends State<OnboardingScreen>
   late AnimationController _animationController;
   late Animation<Offset> _offsetAnimation;
 
+  final List<List<Color>> _gradients = [
+    [Colors.blue.shade100, Colors.white],
+    [Colors.purple.shade100, Colors.white],
+    [Colors.green.shade100, Colors.white],
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -118,8 +124,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
           ),
         ],
       ),
-      body: Container(
-        color: Color.fromARGB(255, 255, 255, 255),
+      body: AnimatedContainer(
+        duration: Duration(milliseconds: 500),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: _gradients[_currentPage],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
         child: Column(
           children: [
             Expanded(
@@ -177,9 +190,15 @@ class OnboardingScreenState extends State<OnboardingScreen>
                   ),
                   padding: EdgeInsets.symmetric(horizontal: 100, vertical: 15),
                 ),
-                child: Text(
-                  'Next',
-                  style: TextStyle(fontSize: 16, color: Colors.blue),
+                child: AnimatedSwitcher(
+                  duration: Duration(milliseconds: 300),
+                  child: Text(
+                    _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
+                    key: ValueKey<String>(_currentPage == _pages.length - 1
+                        ? 'Get Started'
+                        : 'Next'),
+                    style: TextStyle(fontSize: 16, color: Colors.blue),
+                  ),
                 ),
               ),
             ),
