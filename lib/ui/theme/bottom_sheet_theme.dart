@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 
 class TBottomSheetTheme {
   TBottomSheetTheme._();
 
   static final lightBottomSheetTheme = BottomSheetThemeData(
-    backgroundColor: Colors.white,
-    modalBackgroundColor: Colors.white,
+    backgroundColor: ThemeConstants.lightBackgroundColor,
+    modalBackgroundColor: ThemeConstants.lightBackgroundColor,
     elevation: 0,
     constraints: const BoxConstraints(minWidth: double.infinity),
     shape: RoundedRectangleBorder(
@@ -17,8 +18,8 @@ class TBottomSheetTheme {
   );
 
   static final darkBottomSheetTheme = BottomSheetThemeData(
-    backgroundColor: Colors.black,
-    modalBackgroundColor: Colors.black,
+    backgroundColor: ThemeConstants.darkBackgroundColor,
+    modalBackgroundColor: ThemeConstants.darkBackgroundColor,
     elevation: 0,
     constraints: const BoxConstraints(minWidth: double.infinity),
     shape: RoundedRectangleBorder(

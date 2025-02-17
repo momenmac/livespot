@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/utils/theme/theme.dart';
-import 'package:flutter_application_2/ui/auth/login_screen.dart';
-import 'package:flutter_application_2/ui/pages/onboarding/onboarding_screen.dart';
-import 'package:flutter_application_2/ui/pages/home/home.dart';
+import 'package:flutter_application_2/ui/theme/theme.dart';
+import 'package:flutter_application_2/ui/auth/get_started_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
@@ -31,9 +29,7 @@ class MyApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       theme: TAppTheme.lightTheme,
       darkTheme: TAppTheme.darkTheme,
-      home: isOnboardingCompleted
-          ? (isLoggedIn ? Home() : LoginScreen())
-          : OnboardingScreen(),
+      home: GetStartedScreen(),
     );
   }
 }

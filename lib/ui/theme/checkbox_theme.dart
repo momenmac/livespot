@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 
 class TCheckboxTheme {
   TCheckboxTheme._();
 
   static final CheckboxThemeData lightCheckboxTheme = CheckboxThemeData(
-    fillColor: WidgetStateProperty.all(Colors.blue),
-    checkColor: WidgetStateProperty.all(Colors.white),
-    overlayColor: WidgetStateProperty.all(Colors.blue),
+    fillColor: WidgetStateProperty.all(ThemeConstants.primaryColor),
+    checkColor: WidgetStateProperty.all(ThemeConstants.lightBackgroundColor),
+    overlayColor: WidgetStateProperty.all(ThemeConstants.primaryColor),
     splashRadius: 24,
     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: RoundedRectangleBorder(
@@ -15,9 +16,9 @@ class TCheckboxTheme {
   );
 
   static final darkCheckboxTheme = CheckboxThemeData(
-    fillColor: WidgetStateProperty.all(Colors.blue),
-    checkColor: WidgetStateProperty.all(Colors.white),
-    overlayColor: WidgetStateProperty.all(Colors.blue),
+    fillColor: WidgetStateProperty.all(ThemeConstants.primaryColor),
+    checkColor: WidgetStateProperty.all(ThemeConstants.lightBackgroundColor),
+    overlayColor: WidgetStateProperty.all(ThemeConstants.primaryColor),
     splashRadius: 24,
     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: RoundedRectangleBorder(

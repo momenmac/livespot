@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/ui/widgets/sign_in_button.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -16,13 +15,6 @@ class LoginScreen extends StatelessWidget {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 20),
-            SignInButton(
-              onPressed: () {
-                // Handle Google sign-in
-              },
-              text: 'Sign in with Google',
-              icon: Icons.g_mobiledata,
-            ),
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 
 class TElevatedButtonTheme {
   TElevatedButtonTheme._();
@@ -6,13 +7,13 @@ class TElevatedButtonTheme {
   static final lightElevatedButtonTheme = ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
     elevation: 0,
-    foregroundColor: Colors.white,
-    backgroundColor: Colors.blue,
-    disabledBackgroundColor: Colors.grey,
-    disabledForegroundColor: Colors.grey,
+    foregroundColor: ThemeConstants.lightBackgroundColor,
+    backgroundColor: ThemeConstants.primaryColor,
+    disabledBackgroundColor: ThemeConstants.greyLight,
+    disabledForegroundColor: ThemeConstants.grey,
     padding: EdgeInsets.symmetric(vertical: 16),
     side: BorderSide(
-      color: Colors.blue,
+      color: ThemeConstants.primaryColor,
     ),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
@@ -26,13 +27,13 @@ class TElevatedButtonTheme {
   static final darkElevatedButtonTheme = ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
     elevation: 0,
-    foregroundColor: Colors.white,
-    backgroundColor: Colors.blue,
-    disabledBackgroundColor: Colors.grey,
-    disabledForegroundColor: Colors.grey,
+    foregroundColor: ThemeConstants.lightBackgroundColor,
+    backgroundColor: ThemeConstants.primaryColor,
+    disabledBackgroundColor: ThemeConstants.greyLight,
+    disabledForegroundColor: ThemeConstants.grey,
     padding: EdgeInsets.symmetric(vertical: 16),
     side: BorderSide(
-      color: Colors.blue,
+      color: ThemeConstants.primaryColor,
     ),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
