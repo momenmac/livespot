@@ -6,14 +6,16 @@ class TTextTheme {
   TTextTheme._();
 
   static TextTheme lightTextTheme = TextTheme(
-    labelSmall: GoogleFonts.nunitoSans(
-        fontSize: 15, fontWeight: FontWeight.w300, color: ThemeConstants.black),
+    labelSmall: GoogleFonts.poppins(
+        fontSize: 13.83,
+        fontWeight: FontWeight.w500,
+        color: ThemeConstants.black),
     labelLarge: GoogleFonts.nunitoSans(
         fontSize: 22.0,
         fontWeight: FontWeight.w300,
         color: ThemeConstants.black),
-    labelMedium: GoogleFonts.poppins(
-        fontSize: 18, fontWeight: FontWeight.w500, color: ThemeConstants.black),
+    labelMedium: GoogleFonts.nunitoSans(
+        fontSize: 15, fontWeight: FontWeight.w500, color: ThemeConstants.black),
     headlineLarge: TextStyle().copyWith(
         fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
     headlineMedium: TextStyle().copyWith(
@@ -62,16 +64,16 @@ class TTextTheme {
         fontSize: 24.0, fontWeight: FontWeight.w600, color: Colors.black),
     headlineSmall: TextStyle().copyWith(
         fontSize: 18.0, fontWeight: FontWeight.w600, color: Colors.black),
-    labelSmall: GoogleFonts.nunitoSans(
-        fontSize: 15.0,
-        fontWeight: FontWeight.w300,
+    labelSmall: GoogleFonts.poppins(
+        fontSize: 13.83,
+        fontWeight: FontWeight.w500,
         color: ThemeConstants.lightBackgroundColor),
     labelLarge: GoogleFonts.nunitoSans(
         fontSize: 22.0,
         fontWeight: FontWeight.w300,
         color: ThemeConstants.lightBackgroundColor),
-    labelMedium: GoogleFonts.poppins(
-        fontSize: 13.83,
+    labelMedium: GoogleFonts.nunitoSans(
+        fontSize: 15,
         fontWeight: FontWeight.w500,
         color: ThemeConstants.lightBackgroundColor),
     bodySmall: GoogleFonts.nunitoSans(

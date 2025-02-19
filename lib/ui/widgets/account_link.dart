@@ -12,7 +12,7 @@ class AccountLink extends StatelessWidget {
       children: [
         Text(
           TextStrings.iAlreadyHaveAnAccount,
-          style: Theme.of(context).textTheme.labelSmall,
+          style: Theme.of(context).textTheme.labelMedium,
         ),
         CricleButton(
           onPressed: () {},

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/assest_path_constants.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/core/constants/reg_exp_constants.dart';
+import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
@@ -24,6 +26,17 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   late Animation<double> _fadeAnimation;
   Uint8List? _imageBytes;
 
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  final List<GlobalKey<CustomTextFieldState>> _textFieldKeys = [
+    GlobalKey<CustomTextFieldState>(),
+    GlobalKey<CustomTextFieldState>(),
+    GlobalKey<CustomTextFieldState>(),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +51,29 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   @override
   void dispose() {
     _controller.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _handleDonePressed() {
+    for (var key in _textFieldKeys) {
+      key.currentState?.triggerValidation();
+    }
+
+    if (_formKey.currentState!.validate()) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerifyEmailScreen(
+            email: _emailController.text,
+            profileImage: _imageBytes,
+            censorEmail: false,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _pickImage() async {
@@ -50,6 +85,45 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
         _imageBytes = bytes;
       });
     }
+  }
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return TextStrings.emailRequired;
+    }
+    if (!RegExpConstants.emailRegex.hasMatch(value)) {
+      return TextStrings.invalidEmail;
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return TextStrings.passwordRequired;
+    }
+    if (value.length < 8) {
+      return TextStrings.passwordMinLength;
+    }
+    if (!RegExpConstants.uppercaseRegex.hasMatch(value)) {
+      return TextStrings.passwordUppercase;
+    }
+    if (!RegExpConstants.lowercaseRegex.hasMatch(value)) {
+      return TextStrings.passwordLowercase;
+    }
+    if (!RegExpConstants.numberRegex.hasMatch(value)) {
+      return TextStrings.passwordNumber;
+    }
+    return null;
+  }
+
+  String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return TextStrings.confirmPasswordRequired;
+    }
+    if (value != _passwordController.text) {
+      return TextStrings.passwordsDoNotMatch;
+    }
+    return null;
   }
 
   @override
@@ -91,88 +165,92 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                       child: ResponsiveContainer(
                         child: FadeTransition(
                           opacity: _fadeAnimation,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              orientation == Orientation.portrait
-                                  ? ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                          maxWidth: 400, minWidth: 400),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            TextStrings.createAccountTitle,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .displayLarge,
-                                            textAlign: TextAlign.left,
-                                          ),
-                                          const SizedBox(height: 37),
-                                          _buildProfilePicturePicker(),
-                                        ],
-                                      ),
-                                    )
-                                  : ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                          maxWidth: 400, minWidth: 400),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                orientation == Orientation.portrait
+                                    ? ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                            maxWidth: 400, minWidth: 400),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
                                               TextStrings.createAccountTitle,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .displayLarge,
-                                              textAlign: TextAlign.start,
+                                              textAlign: TextAlign.left,
                                             ),
-                                          ),
-                                          _buildProfilePicturePicker(),
-                                        ],
+                                            const SizedBox(height: 37),
+                                            _buildProfilePicturePicker(),
+                                          ],
+                                        ),
+                                      )
+                                    : ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                            maxWidth: 400, minWidth: 400),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                TextStrings.createAccountTitle,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .displayLarge,
+                                                textAlign: TextAlign.start,
+                                              ),
+                                            ),
+                                            _buildProfilePicturePicker(),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                              const SizedBox(height: 37),
-                              Form(
-                                child: Column(
-                                  children: [
-                                    CustomTextField(
-                                      label: TextStrings.email,
-                                      keyboardType: TextInputType.emailAddress,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: TextStrings.password,
-                                      obscureText: true,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: TextStrings.confirmPassword,
-                                      obscureText: true,
-                                    ),
-                                  ],
+                                const SizedBox(height: 37),
+                                CustomTextField(
+                                  key: _textFieldKeys[0],
+                                  controller: _emailController,
+                                  label: TextStrings.email,
+                                  keyboardType: TextInputType.emailAddress,
+                                  validator: _validateEmail,
                                 ),
-                              ),
-                              const SizedBox(height: 37),
-                              AnimatedButton(
-                                onPressed: () {
-                                  // Handle account creation
-                                },
-                                text: TextStrings.done,
-                              ),
-                              const SizedBox(height: 37),
-                              Center(
-                                child: TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                  child: Text(TextStrings.cancel),
+                                const SizedBox(height: 16),
+                                CustomTextField(
+                                  key: _textFieldKeys[1],
+                                  controller: _passwordController,
+                                  label: TextStrings.password,
+                                  obscureText: true,
+                                  validator: _validatePassword,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 16),
+                                CustomTextField(
+                                  key: _textFieldKeys[2],
+                                  controller: _confirmPasswordController,
+                                  label: TextStrings.confirmPassword,
+                                  obscureText: true,
+                                  validator: _validateConfirmPassword,
+                                ),
+                                const SizedBox(height: 37),
+                                AnimatedButton(
+                                  onPressed: _handleDonePressed,
+                                  text: TextStrings.next,
+                                ),
+                                const SizedBox(height: 37),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: Text(TextStrings.cancel),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
