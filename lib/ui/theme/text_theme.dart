@@ -7,17 +7,13 @@ class TTextTheme {
 
   static TextTheme lightTextTheme = TextTheme(
     labelSmall: GoogleFonts.nunitoSans(
-        fontSize: 15.0,
-        fontWeight: FontWeight.w300,
-        color: ThemeConstants.black),
+        fontSize: 15, fontWeight: FontWeight.w300, color: ThemeConstants.black),
     labelLarge: GoogleFonts.nunitoSans(
         fontSize: 22.0,
         fontWeight: FontWeight.w300,
         color: ThemeConstants.black),
     labelMedium: GoogleFonts.poppins(
-        fontSize: 13.83,
-        fontWeight: FontWeight.w500,
-        color: ThemeConstants.black),
+        fontSize: 18, fontWeight: FontWeight.w500, color: ThemeConstants.black),
     headlineLarge: TextStyle().copyWith(
         fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
     headlineMedium: TextStyle().copyWith(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
 
 class CustomTextField extends StatefulWidget {
   final String label;
@@ -44,23 +43,18 @@ class CustomTextFieldState extends State<CustomTextField>
   @override
   Widget build(BuildContext context) {
     return ScaleTransition(
-      scale: _scaleAnimation,
-      child: TextFormField(
-        obscureText: widget.obscureText,
-        keyboardType: widget.keyboardType,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          filled: true,
-          fillColor: ThemeConstants.textFieldFillColor,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none,
-          ),
-          labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: ThemeConstants.textFieldLabelColor,
+        scale: _scaleAnimation,
+        child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: 400,
+              maxWidth: 400,
+            ),
+            child: TextFormField(
+              obscureText: widget.obscureText,
+              keyboardType: widget.keyboardType,
+              decoration: InputDecoration(
+                label: Text(widget.label),
               ),
-        ),
-      ),
-    );
+            )));
   }
 }

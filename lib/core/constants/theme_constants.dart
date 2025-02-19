@@ -18,6 +18,8 @@ class ThemeConstants {
   static const Color darkCardColor = Color(0xFF1E1E1E);
   static const Color lightBackgroundColor = Color.fromARGB(255, 255, 255, 255);
 
-  static const textFieldFillColor = greyLight;
-  static const textFieldLabelColor = grey;
+  static const textFieldFillColorLight = greyLight;
+  static const textFieldLabelColorLight = Color.fromARGB(255, 147, 147, 147);
+  static const textFieldFillColorDark = Color(0xFF1E1E1E);
+  static const textFieldLabelColorDark = grey;
 }

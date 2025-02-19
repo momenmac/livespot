@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/assest_path_constants.dart';
+import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
@@ -6,7 +8,8 @@ import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
+import 'dart:typed_data';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -19,7 +22,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
-  XFile? _image;
+  Uint8List? _imageBytes;
 
   @override
   void initState() {
@@ -41,117 +44,195 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    setState(() {
-      _image = image;
-    });
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        _imageBytes = bytes;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final defaultWidth = 457.0;
+    final defaultHeight = 900.0;
+
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned(
-            top: -20,
-            left: -20,
-            child: CustomPaint(
-              size: Size(MediaQuery.of(context).size.width,
-                  MediaQuery.of(context).size.height * .5),
-              painter: Bubble1(),
-            ),
-          ),
-          Positioned(
-            right: -135,
-            top: 30,
-            child: CustomPaint(
-              size: Size(MediaQuery.of(context).size.width * .6,
-                  MediaQuery.of(context).size.height * .3),
-              painter: Bubble2(),
-            ),
-          ),
-          SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 100),
-                    Text(
-                      'Create\nAccount',
-                      style: Theme.of(context).textTheme.displayLarge,
-                    ),
-                    const SizedBox(height: 37),
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: CircleAvatar(
-                        radius: 45,
-                        backgroundColor: ThemeConstants.textFieldFillColor,
-                        backgroundImage: _image != null
-                            ? FileImage(File(_image!.path))
-                            : null,
-                        child: _image == null
-                            ? SvgPicture.asset(
-                                'assets/icons/Upload.svg',
-                                width: 75,
-                                height: 75,
-                              )
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 37),
-                    Form(
-                      child: Column(
-                        children: [
-                          CustomTextField(
-                            label: 'Email',
-                            keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: 'Password',
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: 'Confirm Password',
-                            obscureText: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 37),
-                    AnimatedButton(
-                      onPressed: () {
-                        // Handle account creation
-                      },
-                      text: 'Done',
-                    ),
-                    const SizedBox(height: 37),
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 15,
-                            fontFamily: 'Nunito Sans',
-                            fontWeight: FontWeight.w300,
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          final verticalPadding =
+              orientation == Orientation.portrait ? 100.0 : 20.0;
+          final bottomPadding =
+              orientation == Orientation.portrait ? 69.0 : 20.0;
+          return Stack(
+            children: [
+              Positioned(
+                top: -20,
+                left: -20,
+                child: CustomPaint(
+                  size: Size(defaultWidth, defaultHeight * .5),
+                  painter: Bubble1(),
+                ),
+              ),
+              Positioned(
+                right: -135,
+                top: 30,
+                child: CustomPaint(
+                  size: Size(defaultWidth * .6, defaultHeight * .3),
+                  painter: Bubble2(),
+                ),
+              ),
+              Center(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        20, verticalPadding, 20, bottomPadding),
+                    child: Center(
+                      child: ResponsiveContainer(
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              orientation == Orientation.portrait
+                                  ? ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          maxWidth: 400, minWidth: 400),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            TextStrings.createAccountTitle,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .displayLarge,
+                                            textAlign: TextAlign.left,
+                                          ),
+                                          const SizedBox(height: 37),
+                                          _buildProfilePicturePicker(),
+                                        ],
+                                      ),
+                                    )
+                                  : ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          maxWidth: 400, minWidth: 400),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              TextStrings.createAccountTitle,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .displayLarge,
+                                              textAlign: TextAlign.start,
+                                            ),
+                                          ),
+                                          _buildProfilePicturePicker(),
+                                        ],
+                                      ),
+                                    ),
+                              const SizedBox(height: 37),
+                              Form(
+                                child: Column(
+                                  children: [
+                                    CustomTextField(
+                                      label: TextStrings.email,
+                                      keyboardType: TextInputType.emailAddress,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    CustomTextField(
+                                      label: TextStrings.password,
+                                      obscureText: true,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    CustomTextField(
+                                      label: TextStrings.confirmPassword,
+                                      obscureText: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 37),
+                              AnimatedButton(
+                                onPressed: () {
+                                  // Handle account creation
+                                },
+                                text: TextStrings.done,
+                              ),
+                              const SizedBox(height: 37),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                  child: Text(TextStrings.cancel),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProfilePicturePicker() {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: _pickImage,
+          child: CircleAvatar(
+            radius: 45,
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? ThemeConstants.textFieldFillColorDark
+                : ThemeConstants.textFieldFillColorLight,
+            backgroundImage:
+                _imageBytes != null ? MemoryImage(_imageBytes!) : null,
+            child: _imageBytes == null
+                ? SvgPicture.asset(
+                    AssestPathConstants.uploadSvg,
+                    width: 75,
+                    height: 75,
+                  )
+                : null,
+          ),
+        ),
+        if (_imageBytes != null)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _imageBytes = null;
+                  });
+                },
+                child: CircleAvatar(
+                  radius: 12,
+                  backgroundColor: ThemeConstants.red,
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: ThemeConstants.lightBackgroundColor,
+                  ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
