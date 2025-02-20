@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:flutter_application_2/ui/auth/get_started_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart'; // Un-commented import
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform, // Pass Firebase options
+  );
   final prefs = await SharedPreferences.getInstance();
-  // final isOnboardingCompleted = prefs.getBool('isOnboardingCompleted') ?? false;
   final isOnboardingCompleted = false;
   final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
   runApp(MyApp(

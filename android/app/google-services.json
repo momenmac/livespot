@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "813529293309",
+    "project_id": "livespot-b1eb4",
+    "storage_bucket": "livespot-b1eb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813529293309:android:ad33ed367ab91367583994",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqJRKJ3mFY0C7onZdDzW1pX-SYB4ts-rA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

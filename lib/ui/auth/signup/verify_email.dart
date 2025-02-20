@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/core/utils/email_utils.dart';
@@ -104,33 +105,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       _verificationKey.currentState?.clearFields();
 
       if (_attemptCount >= _maxAttempts) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: Text(TextStrings.tooManyAttemptsTitle),
-            content: Text(TextStrings.tooManyAttemptsMessage),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop(); // Return to previous screen
-                },
-                child: Text(TextStrings.goBack),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _attemptCount = 0;
-                  });
-                  _handleResendCode();
-                },
-                child: Text(TextStrings.requestNewCode),
-              ),
-            ],
-          ),
-        );
+        _showTooManyAttemptsDialog();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -146,6 +121,46 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
         );
       }
     }
+  }
+
+  void _showTooManyAttemptsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Theme.of(context).platform == TargetPlatform.iOS
+          ? CupertinoAlertDialog(
+              title: Text(TextStrings.tooManyAttemptsTitle),
+              content: Text(TextStrings.tooManyAttemptsMessage),
+              actions: _buildDialogActions(context),
+            )
+          : AlertDialog(
+              title: Text(TextStrings.tooManyAttemptsTitle),
+              content: Text(TextStrings.tooManyAttemptsMessage),
+              actions: _buildDialogActions(context),
+            ),
+    );
+  }
+
+  List<Widget> _buildDialogActions(BuildContext context) {
+    return [
+      TextButton(
+        onPressed: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
+        },
+        child: Text(TextStrings.goBack),
+      ),
+      TextButton(
+        onPressed: () {
+          Navigator.of(context).pop();
+          setState(() {
+            _attemptCount = 0;
+          });
+          _handleResendCode();
+        },
+        child: Text(TextStrings.requestNewCode),
+      ),
+    ];
   }
 
   @override
@@ -172,146 +187,154 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     final defaultHeight = 442.65;
 
     return Scaffold(
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          final verticalPadding =
-              orientation == Orientation.portrait ? 100.0 : 20.0;
-          final bottomPadding =
-              orientation == Orientation.portrait ? 69.0 : 20.0;
-          return Stack(
-            children: [
-              Positioned(
-                top: -120,
-                right: -500,
-                child: Transform(
-                  transform: Matrix4.rotationZ(1.5),
-                  child: CustomPaint(
-                    size: Size(500, 500),
-                    painter: Bubble1(),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: OrientationBuilder(
+          builder: (context, orientation) {
+            final verticalPadding =
+                orientation == Orientation.portrait ? 100.0 : 20.0;
+            final bottomPadding =
+                orientation == Orientation.portrait ? 69.0 : 20.0;
+            return Stack(
+              children: [
+                Positioned(
+                  top: -120,
+                  right: -500,
+                  child: Transform(
+                    transform: Matrix4.rotationZ(1.5),
+                    child: CustomPaint(
+                      size: Size(500, 500),
+                      painter: Bubble1(),
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                right: -170,
-                top: -290,
-                child: CustomPaint(
-                  size: Size(defaultWidth, defaultHeight),
-                  painter: Bubble2(),
+                Positioned(
+                  right: -170,
+                  top: -290,
+                  child: CustomPaint(
+                    size: Size(defaultWidth, defaultHeight),
+                    painter: Bubble2(),
+                  ),
                 ),
-              ),
-              Center(
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                        20, verticalPadding, 20, bottomPadding),
-                    child: Center(
-                      child: ResponsiveContainer(
-                        child: FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 120,
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color.fromARGB(
-                                          60, 101, 101, 101),
-                                      spreadRadius: 2,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
+                Center(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                          20, verticalPadding, 20, bottomPadding),
+                      child: Center(
+                        child: ResponsiveContainer(
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color.fromARGB(
+                                            60, 101, 101, 101),
+                                        spreadRadius: 2,
+                                        blurRadius: 8,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                    border: Border.all(
+                                      color: Theme.of(context).primaryColor,
+                                      width: 3,
                                     ),
-                                  ],
-                                  border: Border.all(
-                                    color: Theme.of(context).primaryColor,
-                                    width: 3,
+                                  ),
+                                  child: ClipOval(
+                                    child: widget.profileImage != null
+                                        ? Image.memory(
+                                            widget.profileImage!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Icon(
+                                            Icons.person,
+                                            size: 60,
+                                            color:
+                                                Theme.of(context).primaryColor,
+                                          ),
                                   ),
                                 ),
-                                child: ClipOval(
-                                  child: widget.profileImage != null
-                                      ? Image.memory(
-                                          widget.profileImage!,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Icon(
-                                          Icons.person,
-                                          size: 60,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                TextStrings.verifyEmail,
-                                style: Theme.of(context).textTheme.displayLarge,
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                TextStrings.verificationCodeSent,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                                textAlign: TextAlign.center,
-                              ),
-                              if (widget.email != null)
+                                const SizedBox(height: 24),
                                 Text(
-                                  widget.censorEmail
-                                      ? censorEmail(widget.email!)
-                                      : widget.email!,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  TextStrings.verifyEmail,
+                                  style:
+                                      Theme.of(context).textTheme.displayLarge,
                                   textAlign: TextAlign.center,
                                 ),
-                              const SizedBox(height: 37),
-                              VerificationCodeField(
-                                key: _verificationKey,
-                                onCompleted: _handleCodeCompletion,
-                              ),
-                              const SizedBox(height: 37),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(TextStrings.didntReceiveCode),
-                                  TextButton(
-                                    onPressed: _isResendEnabled
-                                        ? _handleResendCode
-                                        : null,
-                                    child: Text(
-                                      _isResendEnabled
-                                          ? TextStrings.resend
-                                          : TextStrings.resendTimer.replaceAll(
-                                              '%d', _resendTimer.toString()),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 37),
-                              Center(
-                                child: TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                  child: Text(TextStrings.cancel),
+                                const SizedBox(height: 16),
+                                Text(
+                                  TextStrings.verificationCodeSent,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ],
+                                if (widget.email != null)
+                                  Text(
+                                    widget.censorEmail
+                                        ? censorEmail(widget.email!)
+                                        : widget.email!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                const SizedBox(height: 37),
+                                VerificationCodeField(
+                                  key: _verificationKey,
+                                  onCompleted: _handleCodeCompletion,
+                                ),
+                                const SizedBox(height: 37),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(TextStrings.didntReceiveCode),
+                                    TextButton(
+                                      onPressed: _isResendEnabled
+                                          ? _handleResendCode
+                                          : null,
+                                      child: Text(
+                                        _isResendEnabled
+                                            ? TextStrings.resend
+                                            : TextStrings.resendTimer
+                                                .replaceAll('%d',
+                                                    _resendTimer.toString()),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 37),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: Text(TextStrings.cancel),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

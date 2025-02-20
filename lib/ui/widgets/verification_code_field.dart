@@ -56,38 +56,55 @@ class VerificationCodeFieldState extends State<VerificationCodeField> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(
-        6,
-        (index) => Container(
-          width: 50,
-          height: 50,
-          margin: EdgeInsets.symmetric(horizontal: 4),
-          child: TextField(
-            controller: _controllers[index],
-            focusNode: _focusNodes[index],
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(1),
-            ],
-            decoration: InputDecoration(
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: Theme.of(context).primaryColor,
-                  width: 2,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 20),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            6,
+            (index) => Container(
+              width: 50,
+              height: 50,
+              margin: EdgeInsets.symmetric(horizontal: 4),
+              child: TextFormField(
+                // Changed to TextFormField for better form integration
+                controller: _controllers[index],
+                focusNode: _focusNodes[index],
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(1),
+                ],
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]
+                      : Colors.grey[200],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).primaryColor,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: EdgeInsets.zero,
                 ),
+                onChanged: (value) => _onChanged(index, value),
+                // Add textInputAction for better keyboard handling
+                textInputAction:
+                    index < 5 ? TextInputAction.next : TextInputAction.done,
               ),
             ),
-            onChanged: (value) => _onChanged(index, value),
           ),
         ),
       ),

@@ -1,0 +1,20 @@
+{
+  "buildFiles": [
+    "/Users/momen_mac/development/flutter/packages/flutter_tools/gradle/src/main/groovy/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/momen_mac/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/momen_mac/Desktop/flutter_application/android/app/.cxx/Debug/4a5s5t5o/armeabi-v7a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/momen_mac/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/momen_mac/Desktop/flutter_application/android/app/.cxx/Debug/4a5s5t5o/armeabi-v7a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {}
+}

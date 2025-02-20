@@ -53,4 +53,12 @@ class TextStrings {
       'Please wait for the timer or try requesting a new code.';
   static const String goBack = 'Go Back';
   static const String requestNewCode = 'Request New Code';
+
+  //! Login
+  static const String loginTitle = 'Login';
+  static const String loginDescription = 'Login to your account';
+  static const String loginButton = 'Login';
+  static const String loginWithGoogle = 'Login with Google';
+  static const String loginWithFacebook = 'Login with Facebook';
+  static const String loginWithApple = 'Login with Apple';
 }
