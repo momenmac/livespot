@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
-import 'package:flutter_application_2/ui/auth/get_started_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // Un-commented import
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
