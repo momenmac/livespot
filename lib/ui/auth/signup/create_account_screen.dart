@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/assest_path_constants.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
-import 'package:flutter_application_2/core/constants/reg_exp_constants.dart';
-import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
@@ -12,6 +10,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'dart:typed_data';
+import 'package:flutter_application_2/core/utils/validation_helper.dart';
+import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/routes/app_routes.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -30,8 +31,12 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
 
   final List<GlobalKey<CustomTextFieldState>> _textFieldKeys = [
+    GlobalKey<CustomTextFieldState>(),
+    GlobalKey<CustomTextFieldState>(),
     GlobalKey<CustomTextFieldState>(),
     GlobalKey<CustomTextFieldState>(),
     GlobalKey<CustomTextFieldState>(),
@@ -54,6 +59,8 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     super.dispose();
   }
 
@@ -63,15 +70,13 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
     }
 
     if (_formKey.currentState!.validate()) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VerifyEmailScreen(
-            email: _emailController.text,
-            profileImage: _imageBytes,
-            censorEmail: false,
-          ),
-        ),
+      NavigationService().navigateTo(
+        AppRoutes.verifyEmail,
+        arguments: {
+          'email': _emailController.text,
+          'profileImage': _imageBytes,
+          'censorEmail': false,
+        },
       );
     }
   }
@@ -85,45 +90,6 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
         _imageBytes = bytes;
       });
     }
-  }
-
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return TextStrings.emailRequired;
-    }
-    if (!RegExpConstants.emailRegex.hasMatch(value)) {
-      return TextStrings.invalidEmail;
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return TextStrings.passwordRequired;
-    }
-    if (value.length < 8) {
-      return TextStrings.passwordMinLength;
-    }
-    if (!RegExpConstants.uppercaseRegex.hasMatch(value)) {
-      return TextStrings.passwordUppercase;
-    }
-    if (!RegExpConstants.lowercaseRegex.hasMatch(value)) {
-      return TextStrings.passwordLowercase;
-    }
-    if (!RegExpConstants.numberRegex.hasMatch(value)) {
-      return TextStrings.passwordNumber;
-    }
-    return null;
-  }
-
-  String? _validateConfirmPassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return TextStrings.confirmPasswordRequired;
-    }
-    if (value != _passwordController.text) {
-      return TextStrings.passwordsDoNotMatch;
-    }
-    return null;
   }
 
   @override
@@ -150,7 +116,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
               ),
               Positioned(
                 right: -135,
-                top: 30,
+                top: 15,
                 child: CustomPaint(
                   size: Size(defaultWidth * .6, defaultHeight * .3),
                   painter: Bubble2(),
@@ -171,53 +137,77 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                orientation == Orientation.portrait
-                                    ? ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                            maxWidth: 400, minWidth: 400),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              TextStrings.createAccountTitle,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .displayLarge,
-                                              textAlign: TextAlign.left,
-                                            ),
-                                            const SizedBox(height: 37),
-                                            _buildProfilePicturePicker(),
-                                          ],
-                                        ),
-                                      )
-                                    : ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                            maxWidth: 400, minWidth: 400),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                TextStrings.createAccountTitle,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .displayLarge,
-                                                textAlign: TextAlign.start,
-                                              ),
-                                            ),
-                                            _buildProfilePicturePicker(),
-                                          ],
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      maxWidth: 400, minWidth: 400),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          TextStrings.createAccountTitle,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .displayLarge,
+                                          textAlign: TextAlign.start,
                                         ),
                                       ),
-                                const SizedBox(height: 37),
+                                      _buildProfilePicturePicker(),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 50),
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: 400,
+                                      minWidth: 400,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        CustomTextField(
+                                          key: _textFieldKeys[3],
+                                          controller: _firstNameController,
+                                          label: TextStrings.firstName,
+                                          keyboardType: TextInputType.name,
+                                          validator: (value) {
+                                            if (value == null ||
+                                                value.isEmpty) {
+                                              return TextStrings
+                                                  .firstNameRequied;
+                                            }
+                                            return null;
+                                          },
+                                          maxWidth: 175,
+                                        ),
+                                        CustomTextField(
+                                          key: _textFieldKeys[4],
+                                          controller: _lastNameController,
+                                          label: TextStrings.lastName,
+                                          keyboardType: TextInputType.name,
+                                          validator: (value) {
+                                            if (value == null ||
+                                                value.isEmpty) {
+                                              return TextStrings
+                                                  .lastNameRequied;
+                                            }
+                                            return null;
+                                          },
+                                          maxWidth: 175,
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
                                 CustomTextField(
                                   key: _textFieldKeys[0],
                                   controller: _emailController,
                                   label: TextStrings.email,
                                   keyboardType: TextInputType.emailAddress,
-                                  validator: _validateEmail,
+                                  validator: ValidationHelper.validateEmail,
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextField(
@@ -225,7 +215,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                                   controller: _passwordController,
                                   label: TextStrings.password,
                                   obscureText: true,
-                                  validator: _validatePassword,
+                                  validator: ValidationHelper.validatePassword,
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextField(
@@ -233,7 +223,11 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                                   controller: _confirmPasswordController,
                                   label: TextStrings.confirmPassword,
                                   obscureText: true,
-                                  validator: _validateConfirmPassword,
+                                  validator: (value) =>
+                                      ValidationHelper.validateConfirmPassword(
+                                    value,
+                                    _passwordController.text,
+                                  ),
                                 ),
                                 const SizedBox(height: 37),
                                 AnimatedButton(
@@ -243,9 +237,8 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                                 const SizedBox(height: 37),
                                 Center(
                                   child: TextButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                    },
+                                    onPressed: () =>
+                                        NavigationService().goBack(),
                                     child: Text(TextStrings.cancel),
                                   ),
                                 ),
@@ -270,20 +263,31 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
       children: [
         GestureDetector(
           onTap: _pickImage,
-          child: CircleAvatar(
-            radius: 45,
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? ThemeConstants.textFieldFillColorDark
-                : ThemeConstants.textFieldFillColorLight,
-            backgroundImage:
-                _imageBytes != null ? MemoryImage(_imageBytes!) : null,
-            child: _imageBytes == null
-                ? SvgPicture.asset(
-                    AssestPathConstants.uploadSvg,
-                    width: 75,
-                    height: 75,
-                  )
-                : null,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.light
+                    ? ThemeConstants.textFieldFillColorLight
+                    : ThemeConstants.textFieldFillColorDark,
+                width: 4,
+              ),
+            ),
+            child: CircleAvatar(
+              radius: 45,
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeConstants.textFieldFillColorDark
+                  : ThemeConstants.textFieldFillColorLight,
+              backgroundImage:
+                  _imageBytes != null ? MemoryImage(_imageBytes!) : null,
+              child: _imageBytes == null
+                  ? SvgPicture.asset(
+                      AssestPathConstants.uploadSvg,
+                      width: 75,
+                      height: 75,
+                    )
+                  : null,
+            ),
           ),
         ),
         if (_imageBytes != null)

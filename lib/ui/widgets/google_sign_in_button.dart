@@ -3,6 +3,8 @@ import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/widgets/social_login_button.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/core/constants/assest_path_constants.dart';
 
 class GoogleSignInButton extends StatefulWidget {
   final GoogleSignIn googleSignIn;
@@ -32,7 +34,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                 final user = await widget.googleSignIn.signIn();
                 widget.onSignIn(user);
               } catch (error) {
-                print('Google Sign In Error: $error');
+                print('${TextStrings.googleSignInError}$error');
                 widget.onSignIn(null);
               }
             },
@@ -52,12 +54,12 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Image.asset(
-                  'assets/icons/Google.png',
+                  AssestPathConstants.googleIcon,
                   height: 24,
                   width: 24,
                 ),
                 const SizedBox(width: 12),
-                const Text('Sign in with Google'),
+                Text(TextStrings.signInWithGoogle),
               ],
             ),
           ),
@@ -65,14 +67,14 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
       );
     } else {
       return SocialLoginButton(
-        text: 'Continue with Google',
-        iconPath: 'assets/icons/Google.png',
+        text: TextStrings.continueWithGoogle,
+        iconPath: AssestPathConstants.googleIcon,
         onPressed: () async {
           try {
             final account = await widget.googleSignIn.signIn();
             widget.onSignIn(account);
           } catch (error) {
-            print('Google Sign In Error: $error');
+            print('${TextStrings.googleSignInError}$error');
             widget.onSignIn(null);
           }
         },

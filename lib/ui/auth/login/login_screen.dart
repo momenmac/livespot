@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
-import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
+import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/routes/app_routes.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,8 +26,8 @@ class LoginScreenState extends State<LoginScreen>
   final _passwordController = TextEditingController();
 
   // Temporary credentials for testing
-  final String _tempEmail = 'test@example.com';
-  final String _tempPassword = 'Password123';
+  final String _tempEmail = 'test';
+  final String _tempPassword = '123';
 
   final List<GlobalKey<CustomTextFieldState>> _textFieldKeys = [
     GlobalKey<CustomTextFieldState>(),
@@ -67,6 +68,9 @@ class LoginScreenState extends State<LoginScreen>
       }
 
       if (_formKey.currentState!.validate()) {
+        // TODO: Replace temporary credentials with actual backend authentication
+        // TODO: Implement proper JWT/token storage after successful login
+        // TODO: Add proper error handling for network issues
         if (_emailController.text == _tempEmail &&
             _passwordController.text == _tempPassword) {
           if (!mounted) return;
@@ -86,11 +90,8 @@ class LoginScreenState extends State<LoginScreen>
 
           if (!mounted) return;
 
-          // Use pushReplacement instead of pushAndRemoveUntil for better stability
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => Home()),
-          );
+          // Update navigation to keep only GetStarted screen in stack
+          NavigationService().replaceUntilHome(AppRoutes.home);
         } else {
           if (!mounted) return;
 
@@ -111,6 +112,10 @@ class LoginScreenState extends State<LoginScreen>
         });
       }
     }
+  }
+
+  void _handleCancel() {
+    NavigationService().goBack();
   }
 
   String? _validateEmail(String? value) {
@@ -215,13 +220,20 @@ class LoginScreenState extends State<LoginScreen>
                                 obscureText: true,
                                 validator: _validatePassword,
                               ),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () {
-                                    // Handle forgot password
-                                  },
-                                  child: Text(TextStrings.forgotPassword),
+                              Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: 400,
+                                    minWidth: 400,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: () => NavigationService()
+                                          .navigateTo(AppRoutes.forgotPassword),
+                                      child: Text(TextStrings.forgotPassword),
+                                    ),
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -238,9 +250,7 @@ class LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 37),
                               Center(
                                 child: TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
+                                  onPressed: _handleCancel,
                                   child: Text(TextStrings.cancel),
                                 ),
                               ),

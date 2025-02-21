@@ -18,7 +18,14 @@ class TextStrings {
       'Successfully logged in with Google';
   static const String failedToLoginWithGoogle = 'Failed to sign in with Google';
 
+  //! Google Sign In
+  static const String signInWithGoogle = 'Sign in with Google';
+  static const String continueWithGoogle = 'Continue with Google';
+  static const String googleSignInError = 'Google Sign In Error: ';
+
   //!create account and login screens
+  static const String firstName = 'First Name';
+  static const String lastName = 'Last Name';
   static const String confirmPassword = 'Confirm Password';
   static const String createAccount = 'Create Account';
   static const String createAccountTitle = 'Create\nAccount';
@@ -28,10 +35,12 @@ class TextStrings {
   static const String password = 'Password';
   static const String forgotPassword = 'Forgot password?';
   static const String loginDescription = 'Login to your account';
-  static String loginSucessful = 'Login successful!';
-  static String invalidCredentials = 'Invalid credentials';
+  static const String loginSucessful = 'Login successful!';
+  static const String invalidCredentials = 'Invalid credentials';
 
   //! Validation messages
+  static const String firstNameRequied = 'First Name is required';
+  static const String lastNameRequied = 'Last Name is required';
   static const String emailRequired = 'Email is required';
   static const String invalidEmail = 'Enter a valid email address';
   static const String passwordRequired = 'Password is required';
@@ -61,4 +70,24 @@ class TextStrings {
       'Please wait for the timer or try requesting a new code.';
   static const String goBack = 'Go Back';
   static const String requestNewCode = 'Request New Code';
+
+  static const String newPassword = 'New Password';
+
+  //! Forgot Password Screen
+  static const String forgotPasswordTitle = 'Forgot Password';
+  static const String enterEmailForCode =
+      'Enter your email to receive a verification code';
+  static const String enterVerificationCode =
+      'Enter the verification code sent to your email';
+  static const String sendCode = 'Send Code';
+  static const String backToLogin = 'Back to Login';
+  static const String codeSentTo = 'Verification code sent to %s';
+  static const String invalidVerificationCode = 'Invalid verification code';
+
+  //! Reset Password Screen
+  static const String resetPasswordTitle = 'Reset Password';
+  static const String createNewPasswordFor = 'Create a new password for\n%s';
+  static const String updatePassword = 'Update Password';
+  static const String passwordUpdateSuccess = 'Password updated successfully';
+  static const String passwordResetCancelled = 'Password reset cancelled';
 }

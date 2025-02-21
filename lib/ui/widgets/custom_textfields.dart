@@ -7,6 +7,7 @@ class CustomTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final bool validateOnType;
+  final double? maxWidth;
 
   const CustomTextField({
     super.key,
@@ -16,6 +17,7 @@ class CustomTextField extends StatefulWidget {
     this.controller,
     this.validator,
     this.validateOnType = false,
+    this.maxWidth = 400,
   });
 
   @override
@@ -71,8 +73,8 @@ class CustomTextFieldState extends State<CustomTextField>
       scale: _scaleAnimation,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          minWidth: 400,
-          maxWidth: 400,
+          minWidth: widget.maxWidth!,
+          maxWidth: widget.maxWidth!,
         ),
         child: TextFormField(
           controller: widget.controller,

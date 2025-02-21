@@ -6,11 +6,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/core/utils/email_utils.dart';
-import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/ui/widgets/verification_code_field.dart';
+import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/routes/app_routes.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String? email;
@@ -62,6 +63,9 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   }
 
   void _handleResendCode() {
+    // TODO: Request new verification code from backend
+    // TODO: Update rate limiting in database
+    // TODO: Log verification attempts for security
     setState(() {
       _attemptCount = 0;
     });
@@ -69,10 +73,14 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   }
 
   void _handleCodeCompletion(String code) {
+    // TODO: Verify code against backend verification system
+    // TODO: Update user record to mark email as verified
+    // TODO: Handle verification timeout
     if (_attemptCount >= _maxAttempts) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(TextStrings.tooManyAttempts),
+          content: Text(TextStrings.tooManyAttempts,
+              style: TextStyle(color: Colors.white)),
           backgroundColor: ThemeConstants.red,
           margin: EdgeInsets.all(10.0),
           behavior: SnackBarBehavior.floating,
@@ -97,10 +105,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           behavior: SnackBarBehavior.floating,
         ),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => Home()),
-      );
+      NavigationService().replaceUntilHome(AppRoutes.home);
     } else {
       _verificationKey.currentState?.clearFields();
 
@@ -317,9 +322,8 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
                                 const SizedBox(height: 37),
                                 Center(
                                   child: TextButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                    },
+                                    onPressed: () =>
+                                        NavigationService().goBack(),
                                     child: Text(TextStrings.cancel),
                                   ),
                                 ),

@@ -31,6 +31,13 @@ class AuthService {
     try {
       GoogleSignInAccount? account = await googleSignIn.signIn();
       if (account != null) {
+        // TODO: Verify Google token with backend
+        // TODO: Check if user exists in database
+        // TODO: If new user, create user record with Google data
+        // TODO: Generate and store JWT token
+        // TODO: Store user preferences and settings
+        // TODO: Log sign in attempt for security
+
         print('==== Google Sign In Success ====');
         print('Email: ${account.email}');
         print('Display Name: ${account.displayName}');
@@ -43,6 +50,8 @@ class AuthService {
       }
       return account;
     } catch (error) {
+      // TODO: Log authentication errors to backend
+      // TODO: Implement proper error handling and user feedback
       print('==== Google Sign In Error ====');
       print('Error details: $error');
       print('============================');
@@ -52,8 +61,13 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
+      // TODO: Invalidate JWT token
+      // TODO: Clear user session in backend
+      // TODO: Log sign out event
+      // TODO: Clear local secure storage
       await googleSignIn.signOut();
     } catch (error) {
+      // TODO: Handle sign out errors properly
       print('Sign out error: $error');
     }
   }
@@ -61,6 +75,10 @@ class AuthService {
   Future<GoogleSignInAccount?> signInSilently() async {
     GoogleSignInAccount? account = await googleSignIn.signInSilently();
     if (account != null) {
+      // TODO: Verify session is still valid in backend
+      // TODO: Refresh JWT token if needed
+      // TODO: Update last active timestamp
+      // TODO: Sync user data with backend
       print('User signed in silently:');
       print('Display Name: ${account.displayName}');
       print('Email: ${account.email}');
@@ -68,6 +86,7 @@ class AuthService {
       print('Photo URL: ${account.photoUrl}');
       return account;
     } else {
+      // TODO: Clear any stale local data
       print('No user is signed in.');
       return null;
     }
