@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-// Fix the imports to match your project name
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/core/services/auth_service.dart';
@@ -26,8 +25,17 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
       if (account != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully signed in with Google'),
+            content: Text(
+              TextStrings.successfulLoginWithGoogle,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: Colors.white),
+            ),
             backgroundColor: ThemeConstants.primaryColor,
+            margin: EdgeInsets.all(10.0),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 1),
           ),
         );
         Navigator.pushReplacement(
@@ -39,7 +47,11 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to sign in with Google'),
+            content: Text(TextStrings.failedToLoginWithGoogle,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: Colors.white)),
             backgroundColor: ThemeConstants.red,
           ),
         );
@@ -111,7 +123,7 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
                               ),
                               Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('OR'),
+                                child: Text(TextStrings.or),
                               ),
                               Expanded(
                                 child: Divider(

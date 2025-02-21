@@ -1,31 +1,51 @@
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class AuthService {
-  final GoogleSignIn googleSignIn = kIsWeb
-      ? GoogleSignIn(
-          clientId:
-              '160030236932-i37bjgcbpobam70f24d0a8f2hf5124tl.apps.googleusercontent.com',
-          scopes: ['email', 'profile'],
-        )
-      : GoogleSignIn(
-          serverClientId:
-              '160030236932-8h4jb9sddepmh7hi7jdkkr5p57hgsvvb.apps.googleusercontent.com',
-          scopes: ['email', 'profile'],
-        );
+  final GoogleSignIn googleSignIn = _getGoogleSignIn();
+
+  static GoogleSignIn _getGoogleSignIn() {
+    if (kIsWeb) {
+      //web
+      return GoogleSignIn(
+        clientId:
+            '160030236932-i37bjgcbpobam70f24d0a8f2hf5124tl.apps.googleusercontent.com',
+        scopes: ['email', 'profile'],
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      //ios
+      return GoogleSignIn(
+        clientId:
+            '160030236932-v1fqu2qitgnlivemngb5h1uq92fgr8mq.apps.googleusercontent.com',
+        scopes: ['email', 'profile'],
+      );
+    } else {
+      return GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+    }
+  }
 
   Future<GoogleSignInAccount?> signInWithGoogle() async {
     try {
-      if (kIsWeb) {
-        return signInSilently();
+      GoogleSignInAccount? account = await googleSignIn.signIn();
+      if (account != null) {
+        print('==== Google Sign In Success ====');
+        print('Email: ${account.email}');
+        print('Display Name: ${account.displayName}');
+        print('Photo URL: ${account.photoUrl}');
+        print('ID: ${account.id}');
+        print('Server Auth Code: ${account.serverAuthCode}');
+        print('============================');
       } else {
-        GoogleSignInAccount? account = await googleSignIn.signInSilently();
-        account ??= await googleSignIn.signIn();
-        print('Successfully signed in: ${account?.email}');
-        return account;
+        print('Sign in failed - account is null');
       }
+      return account;
     } catch (error) {
-      print('Google sign in error: $error');
+      print('==== Google Sign In Error ====');
+      print('Error details: $error');
+      print('============================');
       return null;
     }
   }

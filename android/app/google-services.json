@@ -12,7 +12,16 @@
           "package_name": "com.example.flutter_application_2"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "160030236932-8h4jb9sddepmh7hi7jdkkr5p57hgsvvb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.flutter_application_2",
+            "certificate_hash": "5C:DF:AC:E3:DD:A3:2D:0D:AF:41:89:E4:17:F8:8F:80:AD:2A:10:A5"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAqJRKJ3mFY0C7onZdDzW1pX-SYB4ts-rA"

@@ -12,6 +12,11 @@ class TextStrings {
       'My App Description and Details to be added here';
   static const String iAlreadyHaveAnAccount = 'I already have an account';
   static const String letsGetStarted = 'Let\'s get started';
+  static const String or = 'OR';
+  static const String loginWithGoogle = 'Login with Google';
+  static const String successfulLoginWithGoogle =
+      'Successfully logged in with Google';
+  static const String failedToLoginWithGoogle = 'Failed to sign in with Google';
 
   //!create account and login screens
   static const String confirmPassword = 'Confirm Password';
@@ -22,6 +27,9 @@ class TextStrings {
   static const String email = 'Email';
   static const String password = 'Password';
   static const String forgotPassword = 'Forgot password?';
+  static const String loginDescription = 'Login to your account';
+  static String loginSucessful = 'Login successful!';
+  static String invalidCredentials = 'Invalid credentials';
 
   //! Validation messages
   static const String emailRequired = 'Email is required';
@@ -53,12 +61,4 @@ class TextStrings {
       'Please wait for the timer or try requesting a new code.';
   static const String goBack = 'Go Back';
   static const String requestNewCode = 'Request New Code';
-
-  //! Login
-  static const String loginTitle = 'Login';
-  static const String loginDescription = 'Login to your account';
-  static const String loginButton = 'Login';
-  static const String loginWithGoogle = 'Login with Google';
-  static const String loginWithFacebook = 'Login with Facebook';
-  static const String loginWithApple = 'Login with Apple';
 }

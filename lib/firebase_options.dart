@@ -5,12 +5,12 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      // Web configuration
       return const FirebaseOptions(
-        apiKey: "YOUR_WEB_API_KEY",
-        appId: "YOUR_WEB_APP_ID",
-        messagingSenderId: "YOUR_WEB_MESSAGING_SENDER_ID",
-        projectId: "YOUR_WEB_PROJECT_ID",
+        apiKey: "AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE",
+        appId: "1:813529293309:web:YOUR_WEB_APP_ID",
+        messagingSenderId: "813529293309",
+        projectId: "livespot-b1eb4",
+        authDomain: "livespot-b1eb4.firebaseapp.com",
       );
     } else {
       switch (defaultTargetPlatform) {

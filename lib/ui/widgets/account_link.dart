@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/ui/auth/login/login_screen.dart';
 import 'package:flutter_application_2/ui/widgets/custom_buttons.dart';
 
 class AccountLink extends StatelessWidget {
@@ -15,7 +16,12 @@ class AccountLink extends StatelessWidget {
           style: Theme.of(context).textTheme.labelMedium,
         ),
         CricleButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => LoginScreen()),
+            );
+          },
           icon: Icons.arrow_forward,
         ),
       ],

@@ -73,7 +73,7 @@ class LoginScreenState extends State<LoginScreen>
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Login successful!'),
+              content: Text(TextStrings.loginSucessful),
               backgroundColor: ThemeConstants.primaryColor,
               margin: EdgeInsets.all(10.0),
               behavior: SnackBarBehavior.floating,
@@ -96,7 +96,7 @@ class LoginScreenState extends State<LoginScreen>
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Invalid credentials'),
+              content: Text(TextStrings.invalidCredentials),
               backgroundColor: ThemeConstants.red,
               margin: EdgeInsets.all(10.0),
               behavior: SnackBarBehavior.floating,
