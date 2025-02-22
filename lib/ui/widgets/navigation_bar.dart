@@ -1,10 +1,77 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import '../theme/navigation_theme.dart';
-import '../pages/home.dart';
-import '../pages/map_page.dart';
 import '../pages/camera_page.dart';
-import '../pages/notifications_page.dart';
-import '../pages/profile_page.dart';
+import '../../core/utils/navigation_service.dart';
+import '../../routes/app_routes.dart';
+
+class AnimatedIconButton extends StatefulWidget {
+  final IconData selectedIcon;
+  final IconData unselectedIcon;
+  final bool isSelected;
+  final VoidCallback onPressed;
+  final Color color;
+  final double size;
+
+  const AnimatedIconButton({
+    super.key,
+    required this.selectedIcon,
+    required this.unselectedIcon,
+    required this.isSelected,
+    required this.onPressed,
+    required this.color,
+    required this.size,
+  });
+
+  @override
+  State<AnimatedIconButton> createState() => _AnimatedIconButtonState();
+}
+
+class _AnimatedIconButtonState extends State<AnimatedIconButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 1, end: 1.1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      padding: EdgeInsets.zero,
+      onPressed: () {
+        _controller.forward().then((_) => _controller.reverse());
+        widget.onPressed();
+      },
+      icon: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) => Transform.scale(
+          scale: _animation.value,
+          child: Icon(
+            widget.isSelected ? widget.selectedIcon : widget.unselectedIcon,
+            size: widget.size,
+            color: widget.color,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class CustomNavigationBar extends StatelessWidget {
   final int currentIndex;
@@ -18,43 +85,60 @@ class CustomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return BottomAppBar(
-      shape: CircularNotchedRectangle(),
+      height: 50,
       notchMargin: 8.0,
-      color: NavigationTheme.navigationBarTheme.color,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          IconButton(
-            icon: Icon(Icons.home),
-            color: currentIndex == 0
-                ? NavigationTheme.navigationBarItemTheme.color
-                : Colors.grey,
-            onPressed: () => onTap(0),
-          ),
-          IconButton(
-            icon: Icon(Icons.map),
-            color: currentIndex == 1
-                ? NavigationTheme.navigationBarItemTheme.color
-                : Colors.grey,
-            onPressed: () => onTap(1),
-          ),
-          SizedBox(width: 40), // The dummy child for the notch
-          IconButton(
-            icon: Icon(Icons.notifications),
-            color: currentIndex == 3
-                ? NavigationTheme.navigationBarItemTheme.color
-                : Colors.grey,
-            onPressed: () => onTap(3),
-          ),
-          IconButton(
-            icon: Icon(Icons.person),
-            color: currentIndex == 4
-                ? NavigationTheme.navigationBarItemTheme.color
-                : Colors.grey,
-            onPressed: () => onTap(4),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(5, 10, 5, 0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            AnimatedIconButton(
+              selectedIcon: Icons.home,
+              unselectedIcon: Icons.home_outlined,
+              isSelected: currentIndex == 0,
+              color: currentIndex == 0
+                  ? ThemeConstants.primaryColor
+                  : theme.iconTheme.color!,
+              size: theme.iconTheme.size!,
+              onPressed: () => onTap(0),
+            ),
+            AnimatedIconButton(
+              selectedIcon: Icons.map,
+              unselectedIcon: Icons.map_outlined,
+              isSelected: currentIndex == 1,
+              color: currentIndex == 1
+                  ? ThemeConstants.primaryColor
+                  : theme.iconTheme.color!,
+              size: theme.iconTheme.size!,
+              onPressed: () => onTap(1),
+            ),
+            const SizedBox(width: 40),
+            AnimatedIconButton(
+              selectedIcon: Icons.notifications,
+              unselectedIcon: Icons.notifications_outlined,
+              isSelected: currentIndex == 3,
+              color: currentIndex == 3
+                  ? ThemeConstants.primaryColor
+                  : theme.iconTheme.color!,
+              size: theme.iconTheme.size!,
+              onPressed: () => onTap(3),
+              // Colors.grey.shade500
+            ),
+            AnimatedIconButton(
+              selectedIcon: Icons.person,
+              unselectedIcon: Icons.person_outline,
+              isSelected: currentIndex == 4,
+              color: currentIndex == 4
+                  ? ThemeConstants.primaryColor
+                  : theme.iconTheme.color!,
+              size: theme.iconTheme.size!,
+              onPressed: () => onTap(4),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -77,23 +161,16 @@ class CustomScaffold extends StatelessWidget {
     return Scaffold(
       bottomNavigationBar: CustomNavigationBar(
         currentIndex: currentIndex,
-        onTap: onTap,
+        onTap: onTap, // Change this to any desired height
       ),
       floatingActionButton: SizedBox(
-        width: 70,
-        height: 70,
+        width: 65,
+        height: 65,
         child: FloatingActionButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => CameraPage()),
-          ),
+          onPressed: () => NavigationService().navigateTo(AppRoutes.camera),
           tooltip: 'Camera',
-          shape: CircleBorder(),
-          backgroundColor: NavigationTheme.cameraButtonTheme.backgroundColor,
-          elevation: NavigationTheme.cameraButtonTheme.elevation,
-          hoverColor: NavigationTheme.cameraButtonTheme.hoverColor,
-          focusColor: NavigationTheme.cameraButtonTheme.focusColor,
-          child: Icon(Icons.camera_alt, size: 35),
+          shape: const CircleBorder(),
+          child: const Icon(Icons.camera_alt_outlined, size: 35),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

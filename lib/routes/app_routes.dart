@@ -5,7 +5,9 @@ import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart'
 import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:flutter_application_2/ui/auth/password/forgot_password_screen.dart';
 import 'package:flutter_application_2/ui/auth/password/reset_password_screen.dart';
+import 'package:flutter_application_2/ui/pages/camera_page.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
+import 'package:flutter_application_2/ui/pages/map_page.dart';
 
 class AppRoutes {
   // Route names
@@ -16,11 +18,12 @@ class AppRoutes {
   static const String verifyEmail = '/verify-email';
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
+  static const String camera = '/camera';
+  static const String map = '/map';
 
   // Route map
   static Map<String, WidgetBuilder> get routes => {
-        // initial: (_) => const GetStartedScreen(), // Initial route handler
-        initial: (_) => const Home(), // Initial route handler
+        initial: (_) => const GetStartedScreen(), // Initial route handler
         home: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
@@ -39,5 +42,7 @@ class AppRoutes {
               as Map<String, dynamic>;
           return ResetPasswordScreen(email: args['email']);
         },
+        camera: (_) => const CameraPage(),
+        map: (_) => const MapPage(),
       };
 }

@@ -12,7 +12,7 @@ class NotificationsPage extends StatelessWidget {
             showModalBottomSheet(
               context: context,
               builder: (BuildContext context) {
-                return Container(
+                return SizedBox(
                   height: 200,
                   child: Center(
                     child: Text('Notifications'),
