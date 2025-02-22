@@ -16,11 +16,12 @@ class ThemeConstants {
   static const Color greyLight = Color.fromARGB(255, 245, 245, 245);
   static const Color darkBackgroundColor = Color(0xFF121212);
   static const Color darkCardColor = Color(0xFF1E1E1E);
+  static const Color lightCardColor = Color(0xFFE1E1E1);
   static const Color lightBackgroundColor = Color.fromARGB(255, 255, 255, 255);
 
   static const Color navigationPressColor = Color(0xFF004CFF);
-  static const Color navigationActiveColor = Color(0xFF1E90FF);
-  static const Color navigationHoverColor = Color(0xFF87CEFA);
+  static const Color navigationActiveColor = Color(0xFF004CFF);
+  static const Color navigationHoverColor = Color.fromARGB(73, 0, 76, 255);
   static const Color navigationCameraColor = Color(0xFF004CFF);
 
   static const textFieldFillColorLight = greyLight;

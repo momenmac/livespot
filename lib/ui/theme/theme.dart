@@ -6,6 +6,7 @@ import 'package:flutter_application_2/ui/theme/elevated_button_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_button_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_form_field_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_theme.dart';
+import 'package:flutter_application_2/ui/theme/navigation_theme.dart';
 
 class TAppTheme {
   TAppTheme._();
@@ -24,20 +25,25 @@ class TAppTheme {
     bottomSheetTheme: TBottomSheetTheme.lightBottomSheetTheme,
     inputDecorationTheme: TTextFormFieldTheme.lightTextFormFieldTheme,
     textButtonTheme: TTextButtonTheme.lightTextButtonTheme,
+    bottomAppBarTheme: TNavigationTheme.navigationBarTheme,
+    iconTheme: TNavigationTheme.navigationBarItemThemeLight,
+    floatingActionButtonTheme: TNavigationTheme.floatingActionButtonLight,
   );
 
   static ThemeData darkTheme = ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-        seedColor: ThemeConstants.primaryColor, brightness: Brightness.dark),
-    fontFamily: 'Poppins',
-    primaryColor: ThemeConstants.primaryColor,
-    scaffoldBackgroundColor: ThemeConstants.darkBackgroundColor,
-    useMaterial3: true,
-    textTheme: TTextTheme.darkTextTheme,
-    elevatedButtonTheme: TElevatedButtonTheme.darkElevatedButtonTheme,
-    appBarTheme: TAppBarTheme.darkAppBarTheme,
-    bottomSheetTheme: TBottomSheetTheme.darkBottomSheetTheme,
-    inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
-    textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
-  );
+      colorScheme: ColorScheme.fromSeed(
+          seedColor: ThemeConstants.primaryColor, brightness: Brightness.dark),
+      fontFamily: 'Poppins',
+      primaryColor: ThemeConstants.primaryColor,
+      scaffoldBackgroundColor: ThemeConstants.darkBackgroundColor,
+      useMaterial3: true,
+      textTheme: TTextTheme.darkTextTheme,
+      elevatedButtonTheme: TElevatedButtonTheme.darkElevatedButtonTheme,
+      appBarTheme: TAppBarTheme.darkAppBarTheme,
+      bottomSheetTheme: TBottomSheetTheme.darkBottomSheetTheme,
+      inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
+      textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
+      bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
+      iconTheme: TNavigationTheme.navigationBarItemThemeDark,
+      floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke);
 }

@@ -58,5 +58,19 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>160030236932-v1fqu2qitgnlivemngb5h1uq92fgr8mq.apps.googleusercontent.com</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>baidumap</string>
+		<string>waze</string>
+		<string>yandexmaps</string>
+		<string>yandexnavi</string>
+		<string>citymapper</string>
+		<string>mapswithme</string>
+		<string>osmandmaps</string>
+		<string>dgis</string>
+		<string>qqmap</string>
+		<string>here-location</string>
+	</array>
 </dict>
 </plist>
