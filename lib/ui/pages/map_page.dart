@@ -3,7 +3,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key});
+  final VoidCallback? onBackPress;
+  final bool showBackButton;
+
+  const MapPage({
+    super.key,
+    this.onBackPress,
+    this.showBackButton = true,
+  });
 
   @override
   State<MapPage> createState() => _MapPageState();
@@ -15,11 +22,21 @@ class _MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        foregroundColor: Colors.white,
-        title: const Text('Map'),
-        backgroundColor: Colors.blue,
-      ),
+      appBar: widget.showBackButton
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  if (widget.onBackPress != null) {
+                    widget.onBackPress!();
+                  } else {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+              title: const Text('Map'),
+            )
+          : null,
       body: Stack(
         children: [
           FlutterMap(
