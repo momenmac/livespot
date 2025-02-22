@@ -39,7 +39,7 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 700;
+    final isLargeScreen = MediaQuery.of(context).size.width > 900;
 
     if (isLargeScreen) {
       return Row(
@@ -50,10 +50,16 @@ class _HomeState extends State<Home> {
           ),
           Container(
             constraints: const BoxConstraints(maxWidth: 450),
-            child: CustomScaffold(
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
-              body: _pages[_selectedIndex],
+            child: Navigator(
+              onGenerateRoute: (settings) {
+                return MaterialPageRoute(
+                  builder: (context) => CustomScaffold(
+                    currentIndex: _selectedIndex,
+                    onTap: _onItemTapped,
+                    body: _pages[_selectedIndex],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -115,14 +121,14 @@ class HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 700;
+    final isLargeScreen = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Home'),
-        leading: isLargeScreen
-            ? null
-            : IconButton(
+      appBar: isLargeScreen
+          ? null
+          : AppBar(
+              title: const Text('Home'),
+              leading: IconButton(
                 onPressed: () {
                   final homeState =
                       context.findAncestorStateOfType<_HomeState>();
@@ -130,7 +136,8 @@ class HomeContent extends StatelessWidget {
                 },
                 icon: const Icon(Icons.location_on_outlined),
               ),
-      ),
+              automaticallyImplyLeading: false,
+            ),
       body: const Center(
         child: Text('Home Page'),
       ),
