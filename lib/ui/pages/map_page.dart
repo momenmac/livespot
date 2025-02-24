@@ -1,13 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_map/flutter_map.dart' as flutter_map;
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_application_2/ui/widgets/custom_marker.dart';
 import 'package:flutter_application_2/ui/theme/floating_action_button_theme.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;
@@ -139,7 +142,15 @@ class _MapPageState extends State<MapPage> {
 
   void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 100,
+          left: 20,
+          right: 20,
+        ),
+      ),
     );
   }
 
@@ -170,6 +181,9 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: widget.showBackButton
           ? AppBar(
@@ -195,19 +209,16 @@ class _MapPageState extends State<MapPage> {
               initialZoom: 4,
               minZoom: 2,
               maxZoom: 18,
-
               cameraConstraint: flutter_map.CameraConstraint.contain(
                 bounds: _mapBounds,
               ),
-
-              // enableRotation: _isRotationEnabled,
-              // interactiveFlags: _isMapInteractive
-              //     ? flutter_map.InteractiveFlag.all
-              //     : flutter_map.InteractiveFlag.none,
             ),
             children: [
               flutter_map.TileLayer(
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                tileProvider: kIsWeb
+                    ? CancellableNetworkTileProvider()
+                    : flutter_map.NetworkTileProvider(),
               ),
               if (_showMarkersAndRoute && _currentLocation != null)
                 flutter_map.MarkerLayer(
@@ -275,7 +286,9 @@ class _MapPageState extends State<MapPage> {
                       controller: _locationController,
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: isDarkMode
+                            ? ThemeConstants.darkBackgroundColor
+                            : ThemeConstants.lightBackgroundColor,
                         hintText: 'Enter your location',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
@@ -287,16 +300,26 @@ class _MapPageState extends State<MapPage> {
                       onSubmitted: (value) => _onSearch(),
                     ),
                   ),
-                  IconButton(
-                    onPressed: _onSearch,
-                    icon: const Icon(Icons.search),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 50,
+                    height: 50,
+                    child: FloatingActionButton(
+                      elevation: 0,
+                      onPressed: _onSearch,
+                      child: const Icon(
+                        Icons.search,
+                        size: 30,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           Positioned(
-            bottom: 10,
+            bottom: MediaQuery.of(context).padding.bottom + 20,
             left: 10,
             child: Column(
               children: [
@@ -305,113 +328,121 @@ class _MapPageState extends State<MapPage> {
                     floatingActionButtonTheme:
                         FloatingActionButtonTheme.zoomButtonTheme,
                   ),
-                  child: Container(
+                  child: SizedBox(
                     width: 40,
                     height: 40,
                     child: FloatingActionButton(
+                      backgroundColor: isDarkMode
+                          ? ThemeConstants.darkBackgroundColor
+                          : ThemeConstants.lightBackgroundColor,
                       onPressed: _toggleMarkersAndRoute,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Icon(
                         _showMarkersAndRoute
                             ? Icons.visibility
                             : Icons.visibility_off,
                         size: 20,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 15),
-                Theme(
-                  data: Theme.of(context).copyWith(
-                    floatingActionButtonTheme:
-                        FloatingActionButtonTheme.zoomButtonTheme,
-                  ),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      onPressed: _zoomIn,
-                      child: const Icon(Icons.add, size: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Theme(
-                  data: Theme.of(context).copyWith(
-                    floatingActionButtonTheme:
-                        FloatingActionButtonTheme.zoomButtonTheme,
-                  ),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      onPressed: _zoomOut,
-                      child: const Icon(Icons.remove, size: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        color: !isDarkMode
+                            ? ThemeConstants.darkBackgroundColor
+                            : ThemeConstants.lightBackgroundColor,
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 10),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme:
+                        FloatingActionButtonTheme.zoomButtonTheme,
+                  ),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      backgroundColor: isDarkMode
+                          ? ThemeConstants.darkBackgroundColor
+                          : ThemeConstants.lightBackgroundColor,
+                      onPressed: _zoomIn,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.add,
+                        size: 20,
+                        color: !isDarkMode
+                            ? ThemeConstants.darkBackgroundColor
+                            : ThemeConstants.lightBackgroundColor,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme:
+                        FloatingActionButtonTheme.zoomButtonTheme,
+                  ),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      backgroundColor: isDarkMode
+                          ? ThemeConstants.darkBackgroundColor
+                          : ThemeConstants.lightBackgroundColor,
+                      onPressed: _zoomOut,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.remove,
+                        size: 20,
+                        color: !isDarkMode
+                            ? ThemeConstants.darkBackgroundColor
+                            : ThemeConstants.lightBackgroundColor,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            elevation: 0,
-            onPressed: () async {
-              await _centerOnUserLocation();
-            },
-            backgroundColor: Colors.blue,
-            child: const Icon(
-              Icons.my_location,
-              size: 30,
-              color: Colors.white,
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(bottom: 0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              elevation: 0,
+              onPressed: () async {
+                await _centerOnUserLocation();
+              },
+              child: const Icon(
+                Icons.my_location,
+                size: 30,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            elevation: 0,
-            onPressed: () {
-              setState(() {
-                _isMapInteractive = !_isMapInteractive;
-              });
-            },
-            // backgroundColor: Colors.blue,
-            child: Icon(
-              _isMapInteractive ? Icons.lock_open : Icons.lock,
-              size: 30,
-              color: Colors.white,
+            const SizedBox(height: 10),
+            FloatingActionButton(
+              elevation: 0,
+              onPressed: () {
+                setState(() {
+                  _isMapInteractive = !_isMapInteractive;
+                });
+              },
+              // backgroundColor: Colors.blue,
+              child: Icon(
+                _isMapInteractive ? Icons.lock_open : Icons.lock,
+                size: 30,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            elevation: 0,
-            onPressed: () {
-              setState(() {
-                _isRotationEnabled = !_isRotationEnabled;
-              });
-            },
-            // backgroundColor: Colors.blue,
-            child: Icon(
-              _isRotationEnabled
-                  ? Icons.screen_rotation
-                  : Icons.screen_lock_rotation,
-              size: 30,
-              color: Colors.white,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
