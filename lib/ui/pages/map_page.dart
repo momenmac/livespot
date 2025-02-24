@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/flutter_map.dart' as flutter_map;
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_application_2/ui/widgets/custom_marker.dart';
+import 'package:flutter_application_2/ui/theme/floating_action_button_theme.dart';
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;
@@ -17,7 +24,149 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  final MapController _mapController = MapController();
+  final flutter_map.MapController _mapController = flutter_map.MapController();
+  final TextEditingController _locationController = TextEditingController();
+  LatLng? _currentLocation;
+  LatLng? _destination;
+  List<LatLng> _route = [];
+  bool _isMapInteractive = false;
+  bool _isLoading = true;
+  bool _showMarkersAndRoute = true;
+  bool _isRotationEnabled = false;
+
+  final flutter_map.LatLngBounds _mapBounds = flutter_map.LatLngBounds(
+    LatLng(-85.0, -180.0),
+    LatLng(85.0, 180.0),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    if (!await _checkPermissions()) return;
+
+    Geolocator.getPositionStream().listen((Position position) {
+      setState(() {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _isLoading = false;
+      });
+    });
+  }
+
+  Future<bool> _checkPermissions() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Location permissions are denied")),
+        );
+        return false;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Location permissions are permanently denied")),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _fetchCoordinatesPoints(String location) async {
+    final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=$location&format=json&limit=1');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data.isNotEmpty) {
+        final lat = double.parse(data[0]['lat']);
+        final lon = double.parse(data[0]['lon']);
+        setState(() {
+          _destination = LatLng(lat, lon);
+        });
+        await _fetchRoute();
+      } else {
+        _showErrorMessage('Location not found. Please try another search.');
+      }
+    } else {
+      _showErrorMessage('Failed to fetch location. Try again later.');
+    }
+  }
+
+  Future<void> _fetchRoute() async {
+    if (_currentLocation == null || _destination == null) return;
+    final url = Uri.parse("http://router.project-osrm.org/route/v1/driving/"
+        "${_currentLocation!.longitude},${_currentLocation!.latitude};"
+        "${_destination!.longitude},${_destination!.latitude}?overview=full&geometries=polyline");
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final geometry = data['routes'][0]['geometry'];
+      _decodePolyline(geometry);
+    } else {
+      _showErrorMessage('Failed to fetch route. Try again later.');
+    }
+  }
+
+  void _decodePolyline(String encodedPolyline) {
+    PolylinePoints polylinePoints = PolylinePoints();
+    List<PointLatLng> decodedPoints =
+        polylinePoints.decodePolyline(encodedPolyline);
+
+    setState(() {
+      _route = decodedPoints
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList();
+    });
+  }
+
+  Future<void> _centerOnUserLocation() async {
+    if (_currentLocation != null) {
+      _mapController.move(_currentLocation!, 15.0);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Current location not available.")),
+      );
+    }
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _onSearch() {
+    final location = _locationController.text.trim();
+    if (location.isNotEmpty) {
+      _fetchCoordinatesPoints(location);
+    }
+  }
+
+  void _zoomIn() {
+    final currentCenter = _mapController.camera.center;
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(currentCenter, currentZoom + 1);
+  }
+
+  void _zoomOut() {
+    final currentCenter = _mapController.camera.center;
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(currentCenter, currentZoom - 1);
+  }
+
+  void _toggleMarkersAndRoute() {
+    setState(() {
+      _showMarkersAndRoute = !_showMarkersAndRoute;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,19 +188,228 @@ class _MapPageState extends State<MapPage> {
           : null,
       body: Stack(
         children: [
-          FlutterMap(
+          flutter_map.FlutterMap(
             mapController: _mapController,
-            options: MapOptions(
-              initialCenter: LatLng(0, 0),
-              initialZoom: 2,
-              minZoom: 0,
-              maxZoom: 100,
+            options: flutter_map.MapOptions(
+              initialCenter: const LatLng(0, 0),
+              initialZoom: 4,
+              minZoom: 2,
+              maxZoom: 18,
+
+              cameraConstraint: flutter_map.CameraConstraint.contain(
+                bounds: _mapBounds,
+              ),
+
+              // enableRotation: _isRotationEnabled,
+              // interactiveFlags: _isMapInteractive
+              //     ? flutter_map.InteractiveFlag.all
+              //     : flutter_map.InteractiveFlag.none,
             ),
             children: [
-              TileLayer(
-                  urlTemplate:
-                      "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+              flutter_map.TileLayer(
+                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+              ),
+              if (_showMarkersAndRoute && _currentLocation != null)
+                flutter_map.MarkerLayer(
+                  markers: [
+                    flutter_map.Marker(
+                      point: _currentLocation!,
+                      width: 50,
+                      height: 50,
+                      child: CustomMarker(
+                        location: _currentLocation!,
+                        icon: Icons.home,
+                        description: 'Current Location',
+                        timestamp: DateTime.now(),
+                        withCircle: true,
+                        circleSize: 35,
+                        iconSize: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              if (_showMarkersAndRoute && _destination != null)
+                flutter_map.MarkerLayer(
+                  markers: [
+                    flutter_map.Marker(
+                      point: _destination!,
+                      width: 50,
+                      height: 50,
+                      child: CustomMarker(
+                        location: _destination!,
+                        icon: Icons.location_on,
+                        description: 'Destination',
+                        timestamp: DateTime.now(),
+                        withCircle: true,
+                        circleSize: 35,
+                        iconSize: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              if (_showMarkersAndRoute &&
+                  _currentLocation != null &&
+                  _destination != null &&
+                  _route.isNotEmpty)
+                flutter_map.PolylineLayer(
+                  polylines: [
+                    flutter_map.Polyline(
+                      points: _route,
+                      strokeWidth: 5,
+                      color: Colors.red,
+                    ),
+                  ],
+                ),
             ],
+          ),
+          Positioned(
+            top: 10,
+            left: 10,
+            right: 10,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _locationController,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        hintText: 'Enter your location',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      onSubmitted: (value) => _onSearch(),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _onSearch,
+                    icon: const Icon(Icons.search),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 10,
+            left: 10,
+            child: Column(
+              children: [
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme:
+                        FloatingActionButtonTheme.zoomButtonTheme,
+                  ),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      onPressed: _toggleMarkersAndRoute,
+                      child: Icon(
+                        _showMarkersAndRoute
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        size: 20,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme:
+                        FloatingActionButtonTheme.zoomButtonTheme,
+                  ),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      onPressed: _zoomIn,
+                      child: const Icon(Icons.add, size: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme:
+                        FloatingActionButtonTheme.zoomButtonTheme,
+                  ),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      onPressed: _zoomOut,
+                      child: const Icon(Icons.remove, size: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            elevation: 0,
+            onPressed: () async {
+              await _centerOnUserLocation();
+            },
+            backgroundColor: Colors.blue,
+            child: const Icon(
+              Icons.my_location,
+              size: 30,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            elevation: 0,
+            onPressed: () {
+              setState(() {
+                _isMapInteractive = !_isMapInteractive;
+              });
+            },
+            // backgroundColor: Colors.blue,
+            child: Icon(
+              _isMapInteractive ? Icons.lock_open : Icons.lock,
+              size: 30,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            elevation: 0,
+            onPressed: () {
+              setState(() {
+                _isRotationEnabled = !_isRotationEnabled;
+              });
+            },
+            // backgroundColor: Colors.blue,
+            child: Icon(
+              _isRotationEnabled
+                  ? Icons.screen_rotation
+                  : Icons.screen_lock_rotation,
+              size: 30,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
