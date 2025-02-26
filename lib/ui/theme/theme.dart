@@ -12,8 +12,28 @@ class TAppTheme {
   TAppTheme._();
 
   static ThemeData lightTheme = ThemeData(
+    // Ensure the color scheme uses our primary color as the seed for all components
     colorScheme: ColorScheme.fromSeed(
-        seedColor: ThemeConstants.primaryColor, brightness: Brightness.light),
+      seedColor: ThemeConstants.primaryColor,
+      brightness: Brightness.light,
+      primary: ThemeConstants.primaryColor,
+      // Explicitly set common colors to ensure consistency
+      secondary: ThemeConstants.primaryColor,
+      error: ThemeConstants.red,
+    ),
+    // Set primarySwatch for older components that don't use ColorScheme
+    primarySwatch: MaterialColor(ThemeConstants.primaryColor.toARGB32(), {
+      50: ThemeConstants.primaryColor.withAlpha(26),
+      100: ThemeConstants.primaryColor.withAlpha(51),
+      200: ThemeConstants.primaryColor.withAlpha(77),
+      300: ThemeConstants.primaryColor.withAlpha(102),
+      400: ThemeConstants.primaryColor.withAlpha(128),
+      500: ThemeConstants.primaryColor.withAlpha(153),
+      600: ThemeConstants.primaryColor.withAlpha(179),
+      700: ThemeConstants.primaryColor.withAlpha(204),
+      800: ThemeConstants.primaryColor.withAlpha(230),
+      900: ThemeConstants.primaryColor,
+    }),
     fontFamily: 'Poppins',
     brightness: Brightness.light,
     primaryColor: ThemeConstants.primaryColor,
@@ -28,22 +48,86 @@ class TAppTheme {
     bottomAppBarTheme: TNavigationTheme.navigationBarTheme,
     iconTheme: TNavigationTheme.navigationBarItemThemeLight,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonLight,
+    // Configure date picker theme to use primary color
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: ThemeConstants.lightBackgroundColor,
+      headerBackgroundColor: ThemeConstants.primaryColor,
+      headerForegroundColor: Colors.white,
+      todayBackgroundColor:
+          WidgetStateProperty.all(ThemeConstants.primaryColor.withAlpha(38)),
+      todayForegroundColor:
+          WidgetStateProperty.all(ThemeConstants.primaryColor),
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return ThemeConstants.primaryColor;
+        }
+        return null;
+      }),
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return null;
+      }),
+    ),
   );
 
   static ThemeData darkTheme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-          seedColor: ThemeConstants.primaryColor, brightness: Brightness.dark),
-      fontFamily: 'Poppins',
-      primaryColor: ThemeConstants.primaryColor,
-      scaffoldBackgroundColor: ThemeConstants.darkBackgroundColor,
-      useMaterial3: true,
-      textTheme: TTextTheme.darkTextTheme,
-      elevatedButtonTheme: TElevatedButtonTheme.darkElevatedButtonTheme,
-      appBarTheme: TAppBarTheme.darkAppBarTheme,
-      bottomSheetTheme: TBottomSheetTheme.darkBottomSheetTheme,
-      inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
-      textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
-      bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
-      iconTheme: TNavigationTheme.navigationBarItemThemeDark,
-      floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke);
+    // Same approach for dark theme
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: ThemeConstants.primaryColor,
+      brightness: Brightness.dark,
+      primary: ThemeConstants.primaryColor,
+      secondary: ThemeConstants.primaryColor,
+      error: ThemeConstants.red,
+    ),
+    // Set primarySwatch for older components
+    primarySwatch: MaterialColor(ThemeConstants.primaryColor.toARGB32(), {
+      50: ThemeConstants.primaryColor.withAlpha(25),
+      100: ThemeConstants.primaryColor.withAlpha(51),
+      200: ThemeConstants.primaryColor.withAlpha(77),
+      300: ThemeConstants.primaryColor.withAlpha(102),
+      400: ThemeConstants.primaryColor.withAlpha(127),
+      500: ThemeConstants.primaryColor.withAlpha(153),
+      600: ThemeConstants.primaryColor.withAlpha(179),
+      700: ThemeConstants.primaryColor.withAlpha(204),
+      800: ThemeConstants.primaryColor.withAlpha(229),
+      900: ThemeConstants.primaryColor,
+    }),
+    fontFamily: 'Poppins',
+    primaryColor: ThemeConstants.primaryColor,
+    scaffoldBackgroundColor: ThemeConstants.darkBackgroundColor,
+    useMaterial3: true,
+    textTheme: TTextTheme.darkTextTheme,
+    elevatedButtonTheme: TElevatedButtonTheme.darkElevatedButtonTheme,
+    appBarTheme: TAppBarTheme.darkAppBarTheme,
+    bottomSheetTheme: TBottomSheetTheme.darkBottomSheetTheme,
+    inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
+    textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
+    bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
+    iconTheme: TNavigationTheme.navigationBarItemThemeDark,
+    floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke,
+    // Dark mode date picker theme
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: ThemeConstants.darkBackgroundColor,
+      headerBackgroundColor: ThemeConstants.primaryColor,
+      headerForegroundColor: Colors.white,
+      todayBackgroundColor:
+          WidgetStateProperty.all(ThemeConstants.primaryColor.withAlpha(77)),
+      todayForegroundColor:
+          WidgetStateProperty.all(ThemeConstants.primaryColor),
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return ThemeConstants.primaryColor;
+        }
+        return null;
+      }),
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return null;
+      }),
+    ),
+  );
 }

@@ -90,4 +90,54 @@ class TextStrings {
   static const String updatePassword = 'Update Password';
   static const String passwordUpdateSuccess = 'Password updated successfully';
   static const String passwordResetCancelled = 'Password reset cancelled';
+
+  //! Map Categories
+  static const String allCategories = 'All Categories';
+  static const String clearAll = 'Clear All';
+  static const String apply = 'Apply';
+  static const String applyFilters = 'Apply Filters (%d)';
+  static const String more = 'More';
+
+  // Category Names
+  static const String following = 'Following';
+  static const String events = 'Events';
+  static const String food = 'Food';
+  static const String shopping = 'Shopping';
+  static const String hotels = 'Hotels';
+  static const String entertainment = 'Entertainment';
+  static const String mainCategories = 'Main Categories';
+  static const String activities = 'Activities';
+  static const String sports = 'Sports';
+  static const String arts = 'Arts';
+  static const String music = 'Music';
+  static const String places = 'Places';
+  static const String parks = 'Parks';
+  static const String museums = 'Museums';
+  static const String libraries = 'Libraries';
+
+  //! Map Page
+  static const String map = 'Map';
+  static const String enterYourLocation = 'Enter your location';
+  static const String locationPermissionsRequired =
+      'Please enable location permissions to use the map features.';
+  static const String locationPermissionsDenied =
+      'Location permissions are required for full functionality.';
+  static const String locationPermissionsDeniedPermanently =
+      'Location permissions are permanently denied. Please enable them in your browser settings.';
+  static const String locationServicesDisabled =
+      'Location services are disabled. Please enable them to use location features.';
+  static const String errorCheckingLocationPermissions =
+      'Error checking location permissions: ';
+  static const String unableToGetCurrentLocation =
+      'Unable to get current location. Please check your location permissions.';
+  static const String locationNotFound =
+      'Location not found. Please try another search.';
+  static const String failedToFetchLocation =
+      'Failed to fetch location. Try again later.';
+  static const String failedToFetchRoute =
+      'Failed to fetch route. Try again later.';
+  static const String errorGettingLocation = 'Error getting location: ';
+  static const String failedToInitializeLocationServices =
+      'Failed to initialize location services: ';
+  static const String showingDataForDate = 'Showing data for %s';
 }

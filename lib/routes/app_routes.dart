@@ -23,8 +23,8 @@ class AppRoutes {
 
   // Route map
   static Map<String, WidgetBuilder> get routes => {
-        initial: (_) => const GetStartedScreen(), // Initial route handler
-        // initial: (_) => const Home(), // Initial route handler
+        // initial: (_) => const GetStartedScreen(), // Initial route handler
+        initial: (_) => const Home(), // Initial route handler
         home: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
