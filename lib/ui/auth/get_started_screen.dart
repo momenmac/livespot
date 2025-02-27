@@ -8,6 +8,7 @@ import 'package:flutter_application_2/ui/widgets/account_link.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/google_sign_in_button.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class GetStartedScreen extends StatefulWidget {
   const GetStartedScreen({super.key});
@@ -23,37 +24,29 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
     try {
       final account = await _authService.signInWithGoogle();
       if (account != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              TextStrings.successfulLoginWithGoogle,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: Colors.white),
-            ),
-            backgroundColor: ThemeConstants.primaryColor,
-            margin: EdgeInsets.all(10.0),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 1),
-          ),
+        // Show success message with longer duration
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: TextStrings.successfulLoginWithGoogle,
+          duration: Duration(seconds: 2), // Increased from 1 to 2 seconds
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => Home()),
-        );
+
+        // Delay navigation slightly to ensure the toast is visible
+        await Future.delayed(Duration(milliseconds: 500));
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => Home()),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(TextStrings.failedToLoginWithGoogle,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: Colors.white)),
-            backgroundColor: ThemeConstants.red,
-          ),
+        // Replace SnackBar with TopToast via ResponsiveSnackBar
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: TextStrings.failedToLoginWithGoogle,
         );
       }
     }

@@ -555,7 +555,15 @@ class _MapPageState extends State<MapPage> {
                 ),
             ],
           ),
-
+          // Categories
+          Positioned(
+            top: 70,
+            left: 0,
+            right: 0,
+            child: MapCategories(
+              onCategorySelected: _handleCategorySelected,
+            ),
+          ),
           // Search bar positioned at top
           Positioned(
             top: 10,
@@ -573,7 +581,7 @@ class _MapPageState extends State<MapPage> {
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: isDarkMode
-                                ? ThemeConstants.darkBackgroundColor
+                                ? ThemeConstants.darkCardColor
                                 : ThemeConstants.lightBackgroundColor,
                             hintText: TextStrings.enterYourLocation,
                             border: OutlineInputBorder(
@@ -595,7 +603,7 @@ class _MapPageState extends State<MapPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
+                      SizedBox(
                         width: 50,
                         height: 50,
                         child: FloatingActionButton(
@@ -616,7 +624,7 @@ class _MapPageState extends State<MapPage> {
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: isDarkMode
-                          ? ThemeConstants.darkBackgroundColor
+                          ? ThemeConstants.darkCardColor
                           : ThemeConstants.lightBackgroundColor,
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: [
@@ -648,16 +656,6 @@ class _MapPageState extends State<MapPage> {
             ),
           ),
 
-          // Categories
-          Positioned(
-            top: _showSuggestions ? null : 80,
-            left: 0,
-            right: 0,
-            child: MapCategories(
-              onCategorySelected: _handleCategorySelected,
-            ),
-          ),
-
           // Map controls on left side
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -674,7 +672,7 @@ class _MapPageState extends State<MapPage> {
                     height: 40,
                     child: FloatingActionButton(
                       backgroundColor: isDarkMode
-                          ? ThemeConstants.darkBackgroundColor
+                          ? ThemeConstants.darkCardColor
                           : ThemeConstants.lightBackgroundColor,
                       onPressed: _toggleMarkersAndRoute,
                       shape: RoundedRectangleBorder(
@@ -686,7 +684,7 @@ class _MapPageState extends State<MapPage> {
                             : Icons.visibility_off,
                         size: 20,
                         color: !isDarkMode
-                            ? ThemeConstants.darkBackgroundColor
+                            ? ThemeConstants.darkCardColor
                             : ThemeConstants.lightBackgroundColor,
                       ),
                     ),
@@ -703,7 +701,7 @@ class _MapPageState extends State<MapPage> {
                     height: 40,
                     child: FloatingActionButton(
                       backgroundColor: isDarkMode
-                          ? ThemeConstants.darkBackgroundColor
+                          ? ThemeConstants.darkCardColor
                           : ThemeConstants.lightBackgroundColor,
                       onPressed: _zoomIn,
                       shape: RoundedRectangleBorder(
@@ -713,7 +711,7 @@ class _MapPageState extends State<MapPage> {
                         Icons.add,
                         size: 20,
                         color: !isDarkMode
-                            ? ThemeConstants.darkBackgroundColor
+                            ? ThemeConstants.darkCardColor
                             : ThemeConstants.lightBackgroundColor,
                       ),
                     ),
@@ -730,7 +728,7 @@ class _MapPageState extends State<MapPage> {
                     height: 40,
                     child: FloatingActionButton(
                       backgroundColor: isDarkMode
-                          ? ThemeConstants.darkBackgroundColor
+                          ? ThemeConstants.darkCardColor
                           : ThemeConstants.lightBackgroundColor,
                       onPressed: _zoomOut,
                       shape: RoundedRectangleBorder(
@@ -740,7 +738,7 @@ class _MapPageState extends State<MapPage> {
                         Icons.remove,
                         size: 20,
                         color: !isDarkMode
-                            ? ThemeConstants.darkBackgroundColor
+                            ? ThemeConstants.darkCardColor
                             : ThemeConstants.lightBackgroundColor,
                       ),
                     ),
@@ -758,7 +756,7 @@ class _MapPageState extends State<MapPage> {
               child: Container(
                   decoration: BoxDecoration(
                     color: isDarkMode
-                        ? ThemeConstants.darkBackgroundColor
+                        ? ThemeConstants.darkCardColor
                         : ThemeConstants.lightBackgroundColor,
                     borderRadius: BorderRadius.circular(18),
                   ),

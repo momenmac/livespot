@@ -5,12 +5,14 @@ import 'package:flutter_application_2/core/constants/text_strings.dart';
 class CategoryItem {
   final String name;
   final IconData icon;
-  final List<CategoryItem>? subCategories;
+  bool isSelected;
+  List<CategoryItem>? subCategories; // Add this missing property
 
-  const CategoryItem({
+  CategoryItem({
     required this.name,
     required this.icon,
-    this.subCategories,
+    this.isSelected = false,
+    this.subCategories, // Add this parameter
   });
 
   // Override equals to compare category items properly
@@ -28,6 +30,7 @@ class CategoryItem {
 
 class MapCategories extends StatefulWidget {
   final Function(List<CategoryItem>) onCategorySelected;
+  final bool alwaysVisible;
 
   // Sample categories - using text constants
   static final List<CategoryItem> mainCategories = [
@@ -79,6 +82,7 @@ class MapCategories extends StatefulWidget {
   const MapCategories({
     super.key,
     required this.onCategorySelected,
+    this.alwaysVisible = true,
   });
 
   @override
@@ -301,114 +305,135 @@ class _MapCategoriesState extends State<MapCategories> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 32, // Reduced height
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          ..._visibleCategories.map((category) {
-            final isSelected = _selectedCategories.contains(category);
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ElevatedButton.icon(
-                onPressed: () => _toggleCategorySelection(category),
-                icon: Icon(
-                  category.icon,
-                  size: 14,
-                  color: isSelected ? Colors.white : null,
-                ),
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      category.name,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isSelected ? Colors.white : null,
+    // Define better colors for dark mode
+    final unselectedBackgroundColor =
+        isDarkMode ? ThemeConstants.darkCardColor : theme.cardColor;
+
+    final unselectedTextColor = isDarkMode
+        ? Colors.white.withOpacity(0.9) // More visible text in dark mode
+        : theme.textTheme.bodyLarge?.color;
+
+    final unselectedBorderColor = isDarkMode
+        ? Colors.white.withOpacity(0.2) // More visible border in dark mode
+        : Colors.grey.withOpacity(0.2);
+
+    return Opacity(
+      opacity: widget.alwaysVisible ? 1.0 : 0.9,
+      child: Container(
+        height: 32,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            ..._visibleCategories.map((category) {
+              final isSelected = _selectedCategories.contains(category);
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: () => _toggleCategorySelection(category),
+                  icon: Icon(category.icon,
+                      size: 14, color: isSelected ? Colors.white : null),
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        category.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              isSelected ? Colors.white : unselectedTextColor,
+                        ),
+                      ),
+                      if (isSelected) const SizedBox(width: 4),
+                      if (isSelected)
+                        const Icon(Icons.check, size: 12, color: Colors.white),
+                    ],
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSelected
+                        ? ThemeConstants.primaryColor
+                        : unselectedBackgroundColor,
+                    foregroundColor:
+                        isSelected ? Colors.white : unselectedTextColor,
+                    elevation: 2,
+                    shadowColor: isDarkMode ? Colors.black38 : Colors.black26,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 0,
+                    ),
+                    minimumSize: const Size(0, 28),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                        color: isSelected
+                            ? ThemeConstants.primaryColor
+                            : unselectedBorderColor,
                       ),
                     ),
-                    if (isSelected) const SizedBox(width: 4),
-                    if (isSelected)
-                      const Icon(Icons.check, size: 12, color: Colors.white),
-                  ],
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isSelected
-                      ? ThemeConstants.primaryColor
-                      : Theme.of(context).cardColor,
-                  foregroundColor: isSelected
-                      ? Colors.white
-                      : Theme.of(context).textTheme.bodyLarge?.color,
-                  elevation: 2,
-                  shadowColor: Colors.black26,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 0,
-                  ),
-                  minimumSize: const Size(0, 28),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(
-                      color: isSelected
-                          ? ThemeConstants.primaryColor
-                          : Colors.grey.withOpacity(0.2),
-                    ),
                   ),
                 ),
-              ),
-            );
-          }),
-          ElevatedButton.icon(
-            onPressed: () => _showCategoriesSheet(context),
-            icon: Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _selectedCategories.isNotEmpty
-                    ? ThemeConstants.primaryColor
-                    : null,
-              ),
-              child: _selectedCategories.isNotEmpty
-                  ? Center(
-                      child: Text(
-                        _selectedCategories.length.toString(),
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    )
-                  : const Icon(Icons.more_horiz, size: 14),
-            ),
-            label: Text(
-              TextStrings.more,
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).cardColor,
-              foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
-              elevation: 2,
-              shadowColor: Colors.black26,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 0,
-              ),
-              minimumSize: const Size(0, 28),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: BorderSide(
+              );
+            }),
+            ElevatedButton.icon(
+              onPressed: () => _showCategoriesSheet(context),
+              icon: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
                   color: _selectedCategories.isNotEmpty
-                      ? ThemeConstants.primaryColor.withOpacity(0.5)
-                      : Colors.grey.withOpacity(0.2),
+                      ? ThemeConstants.primaryColor
+                      : null,
+                ),
+                child: _selectedCategories.isNotEmpty
+                    ? Center(
+                        child: Text(
+                          _selectedCategories.length.toString(),
+                          style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    : Icon(Icons.more_horiz,
+                        size: 14,
+                        color:
+                            isDarkMode ? Colors.white.withOpacity(0.9) : null),
+              ),
+              label: Text(
+                TextStrings.more,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDarkMode ? Colors.white.withOpacity(0.9) : null,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: unselectedBackgroundColor,
+                foregroundColor: unselectedTextColor,
+                elevation: 2,
+                shadowColor: isDarkMode ? Colors.black38 : Colors.black26,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 0,
+                ),
+                minimumSize: const Size(0, 28),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(
+                    color: _selectedCategories.isNotEmpty
+                        ? ThemeConstants.primaryColor.withOpacity(0.5)
+                        : unselectedBorderColor,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

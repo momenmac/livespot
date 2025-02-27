@@ -19,7 +19,7 @@ class TBottomSheetTheme {
 
   static final darkBottomSheetTheme = BottomSheetThemeData(
     backgroundColor: ThemeConstants.darkBackgroundColor,
-    modalBackgroundColor: ThemeConstants.darkBackgroundColor,
+    modalBackgroundColor: ThemeConstants.darkCardColor,
     elevation: 0,
     constraints: const BoxConstraints(minWidth: double.infinity),
     shape: RoundedRectangleBorder(
