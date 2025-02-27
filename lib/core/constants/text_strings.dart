@@ -1,3 +1,5 @@
+import 'package:flutter/src/widgets/framework.dart';
+
 class TextStrings {
   TextStrings._();
   //! General
@@ -191,4 +193,6 @@ class TextStrings {
   static const String unarchive = 'Unarchive';
   static const String noMessage = 'No message';
   static const String archive = 'Archive';
+
+  static const String holdToRecord = 'Hold to record voice message';
 }

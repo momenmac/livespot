@@ -4,6 +4,7 @@ import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
 
 class ConversationList extends StatelessWidget {
@@ -73,12 +74,17 @@ class ConversationList extends StatelessWidget {
             itemCount: controller.conversations.length,
             itemBuilder: (context, index) {
               final conversation = controller.conversations[index];
+
+              // Make sure conversation has a reference to controller
+              conversation.controller = controller;
+
               final isSelected =
                   controller.selectedConversation?.id == conversation.id;
 
               return _ConversationTile(
                 conversation: conversation,
                 isSelected: isSelected,
+                controller: controller,
                 onTap: () => onConversationSelected(conversation),
                 onLongPress: () =>
                     _showConversationActions(context, conversation),
@@ -181,12 +187,14 @@ class _ConversationTile extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final MessagesController controller;
 
   const _ConversationTile({
     required this.conversation,
     required this.isSelected,
     required this.onTap,
     required this.onLongPress,
+    required this.controller,
   });
 
   @override
@@ -203,20 +211,25 @@ class _ConversationTile extends StatelessWidget {
           : Colors.transparent,
       child: ListTile(
         onTap: () {
-          // Instead of just calling the passed onTap handler,
-          // navigate to the full-screen chat detail page
+          // Set the controller reference before navigating
+          conversation.controller = controller;
+
+          // Navigate to the chat detail page
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => ChatDetailPage(
-                controller: conversation.controller ??
-                    // If conversation somehow doesn't have controller reference
-                    // Try to get it through closure
-                    MessagesController(),
+                controller: controller,
                 conversation: conversation,
               ),
             ),
-          );
+          ).then((_) {
+            // Force refresh when returning to ensure we have latest data
+            if (controller.selectedConversation?.id == conversation.id) {
+              controller.selectConversation(conversation);
+            }
+            controller.notifyListeners();
+          });
         },
         onLongPress: onLongPress,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -309,7 +322,7 @@ class _ConversationTile extends StatelessWidget {
                 ),
                 child: Text(
                   conversation.unreadCount.toString(),
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -347,6 +360,13 @@ class _ConversationTile extends StatelessWidget {
       return conversation.isGroup
           ? '${message.senderName}: ${TextStrings.noMessage}'
           : TextStrings.noMessage;
+    }
+
+    // Handle voice messages
+    if (message.messageType == MessageType.voice) {
+      return conversation.isGroup && message.senderId != 'current'
+          ? '${message.senderName}: 🎤 Voice message'
+          : '$sender🎤 Voice message';
     }
 
     return conversation.isGroup && message.senderId != 'current'

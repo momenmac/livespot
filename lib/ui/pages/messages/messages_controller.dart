@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:core';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
@@ -20,7 +21,18 @@ class MessagesController extends ChangeNotifier {
   FilterMode _filterMode = FilterMode.all;
 
   List<Conversation> get conversations => _filteredConversations;
-  Conversation? get selectedConversation => _selectedConversation;
+  Conversation? get selectedConversation {
+    if (_selectedConversation == null) return null;
+
+    final index =
+        _conversations.indexWhere((c) => c.id == _selectedConversation!.id);
+    if (index != -1) {
+      _selectedConversation = _conversations[index];
+      return _conversations[index];
+    }
+    return _selectedConversation;
+  }
+
   bool get isSearchMode => _isSearchMode;
   FilterMode get filterMode => _filterMode;
 
@@ -49,14 +61,13 @@ class MessagesController extends ChangeNotifier {
     //     .get();
 
     // Mock data for now
-    // await Future.delayed(const Duration(seconds: 1));
     _conversations = _generateMockConversations();
     _applyFilters();
   }
 
   List<Conversation> _generateMockConversations() {
     final currentUser = User(
-      id: 'current',
+      id: 'current', // Important: This ID is what identifies messages as sent by the current user
       name: 'Me',
       avatarUrl: 'https://ui-avatars.com/api/?name=Me',
       isOnline: true,
@@ -66,7 +77,7 @@ class MessagesController extends ChangeNotifier {
 
     for (int i = 1; i <= 15; i++) {
       final otherUser = User(
-        id: 'user$i',
+        id: 'user$i', // Any ID other than 'current' will be treated as messages from others
         name: 'User $i',
         avatarUrl: 'https://ui-avatars.com/api/?name=User+$i',
         isOnline: i % 3 == 0,
@@ -75,24 +86,46 @@ class MessagesController extends ChangeNotifier {
       final messages = <Message>[];
       final isGroup = i % 5 == 0;
 
-      // Add some messages
+      // Add some messages with clearer sender identification
       for (int j = 1; j <= 20; j++) {
         final isFromCurrentUser = j % 2 == 0;
         final sender = isFromCurrentUser ? currentUser : otherUser;
         final time = DateTime.now().subtract(Duration(minutes: j * 5));
 
-        messages.add(
-          Message(
-            id: 'msg${i}_$j',
-            senderId: sender.id,
-            senderName: sender.name,
-            content:
-                'This is message $j in conversation $i. Adding some more text to make it longer and more realistic.',
-            timestamp: time,
-            status: isFromCurrentUser ? MessageStatus.values[j % 3] : null,
-            isRead: j > 3,
-          ),
-        );
+        // Voice message every 5th message
+        if (j % 5 == 0) {
+          messages.add(
+            Message(
+              id: 'vmsg${i}_$j',
+              senderId: sender.id,
+              senderName: sender.name,
+              content: 'Voice message',
+              timestamp: time,
+              status: isFromCurrentUser ? MessageStatus.values[j % 3] : null,
+              isRead: j > 3,
+              messageType: MessageType.voice,
+              voiceDuration: 15 + j % 45,
+              mediaUrl: 'voice_message_mock_${i}_${j}.mp3',
+            ),
+          );
+        } else {
+          // Regular text messages with clear identification of sender
+          final text = isFromCurrentUser
+              ? "This is my message #$j. It should appear on the right."
+              : "This is a message #$j from ${sender.name}. It should appear on the left.";
+
+          messages.add(
+            Message(
+              id: 'msg${i}_$j',
+              senderId: sender.id,
+              senderName: sender.name,
+              content: text,
+              timestamp: time,
+              status: isFromCurrentUser ? MessageStatus.values[j % 3] : null,
+              isRead: j > 3,
+            ),
+          );
+        }
       }
 
       mockConversations.add(
@@ -185,7 +218,13 @@ class MessagesController extends ChangeNotifier {
   }
 
   void selectConversation(Conversation conversation) {
+    final prevController = _selectedConversation?.controller;
+
     _selectedConversation = conversation;
+
+    if (_selectedConversation != null) {
+      _selectedConversation!.controller = prevController ?? this;
+    }
 
     // Mark messages as read
     if (conversation.unreadCount > 0) {
@@ -227,7 +266,7 @@ class MessagesController extends ChangeNotifier {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (messageScrollController.hasClients) {
         messageScrollController.animateTo(
-          messageScrollController.position.maxScrollExtent,
+          0.0, // Scroll to the newest message
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -237,13 +276,25 @@ class MessagesController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearSelectedConversation() {
+  void clearSelection() {
+    // Clear the selection but preserve the conversation object itself
+    // for when we need to send messages to it later
     _selectedConversation = null;
+  }
+
+  void clearSelectedConversationUI() {
+    // Don't set _selectedConversation to null anymore
+    // This helps maintain conversation state when navigating
     notifyListeners();
   }
 
   Future<void> sendMessage(String content) async {
-    if (content.isEmpty || _selectedConversation == null) return;
+    if (content.isEmpty) return;
+
+    if (_selectedConversation == null) {
+      print("Warning: Trying to send message without selected conversation");
+      return;
+    }
 
     final currentUserId = 'current'; // TODO: Get from authentication
     final currentUser = _selectedConversation!.participants
@@ -276,22 +327,17 @@ class MessagesController extends ChangeNotifier {
     if (index != -1) {
       _conversations[index] = updatedConversation;
       _selectedConversation = updatedConversation;
-      _applyFilters();
+      _applyFilters(); // This refreshes filteredConversations
     }
 
     messageController.clear();
+
+    // Immediately notify listeners to update UI
     notifyListeners();
 
-    // Scroll to bottom after adding message
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (messageScrollController.hasClients) {
-        messageScrollController.animateTo(
-          messageScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    // Fixed: Scroll after a very short delay to ensure the ListView has updated
+    await Future.delayed(const Duration(milliseconds: 10));
+    _scrollToNewestMessage();
 
     // TODO: Send to Firebase
     // await FirebaseFirestore.instance
@@ -459,6 +505,90 @@ class MessagesController extends ChangeNotifier {
     //    .delete();
 
     notifyListeners();
+  }
+
+  void sendVoiceMessage(int durationSeconds) {
+    if (_selectedConversation == null) {
+      print(
+          "Warning: Trying to send voice message without selected conversation");
+      return;
+    }
+
+    final now = DateTime.now();
+    final newMessage = Message(
+      id: 'msg_${now.millisecondsSinceEpoch}',
+      content: 'Voice message (${_formatDuration(durationSeconds)})',
+      senderId: 'current', // Assuming current user
+      senderName: 'You',
+      timestamp: now,
+      isRead: true,
+      isSent: true,
+      messageType: MessageType.voice,
+      voiceDuration: durationSeconds,
+      // In a real app, you would save the file path or URL here
+      mediaUrl: 'voice_message_${now.millisecondsSinceEpoch}.mp3',
+      status: MessageStatus.sent, // Set an initial status
+    );
+
+    final updatedMessages = [newMessage, ..._selectedConversation!.messages];
+
+    final updatedConversation = _selectedConversation!.copyWith(
+      messages: updatedMessages,
+      lastMessage: newMessage,
+    );
+
+    // Update the conversation in the list
+    final index =
+        _conversations.indexWhere((c) => c.id == updatedConversation.id);
+    if (index >= 0) {
+      _conversations[index] = updatedConversation;
+      _selectedConversation = updatedConversation;
+
+      // Move this conversation to the top of the list
+      if (index > 0) {
+        _conversations.removeAt(index);
+        _conversations.insert(0, updatedConversation);
+      }
+
+      // Apply filters to refresh filteredConversations
+      _applyFilters();
+    }
+
+    // Immediately notify listeners to update UI
+    notifyListeners();
+
+    // Fixed: Scroll after a very short delay to ensure the ListView has updated
+    Future.delayed(const Duration(milliseconds: 10), _scrollToNewestMessage);
+
+    // TODO: Upload voice recording to Firebase Storage
+    // 1. Create a Firebase Storage reference
+    // final storageRef = FirebaseStorage.instance.ref();
+    // final voiceMessageRef = storageRef.child('voice_messages/${conversation.id}/${DateTime.now().millisecondsSinceEpoch}.m4a');
+    //
+    // 2. Upload the file
+    // final uploadTask = voiceMessageRef.putFile(File(recordingPath));
+    //
+    // 3. Get the download URL
+    // final downloadUrl = await (await uploadTask).ref.getDownloadURL();
+    //
+    // 4. Create message with URL
+    // final message = Message(..., mediaUrl: downloadUrl)
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = (seconds / 60).floor();
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  void _scrollToNewestMessage() {
+    if (messageScrollController.hasClients) {
+      messageScrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override

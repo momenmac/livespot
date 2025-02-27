@@ -114,6 +114,7 @@ class _MessagesPageState extends State<MessagesPage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'messagesPageFAB', // Add this unique hero tag
         backgroundColor: ThemeConstants.primaryColor,
         child: const Icon(Icons.add_comment, color: Colors.white),
         onPressed: () {

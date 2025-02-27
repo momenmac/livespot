@@ -95,9 +95,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
 
     return AppBar(
       shape: RoundedRectangleBorder(
-        borderRadius: rounded
-            ? BorderRadius.vertical(bottom: Radius.circular(25))
-            : BorderRadius.zero,
+        borderRadius: BorderRadius.zero,
       ),
       backgroundColor: theme.scaffoldBackgroundColor, // You can change this
       elevation: 1, // Add shadow

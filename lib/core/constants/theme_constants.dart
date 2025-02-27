@@ -5,7 +5,7 @@ class ThemeConstants {
   static const Color primaryColor = Color(0xFF004CFF);
   static const Color primaryColorLight = Color(0xffd9e4ff);
   static const Color primaryColorVeryLight = Color(0xffF2F5FE);
-  static const Color green = Color(0xff9DEB44);
+  static const Color green = Color.fromARGB(255, 137, 227, 34);
   static const Color orange = Color(0xFFFE7F00);
   static const Color pink = Color(0xFFF34D75);
   static const Color pinkLight = Color(0xFFFFEBEB);
@@ -16,7 +16,7 @@ class ThemeConstants {
   static const Color greyLight = Color.fromARGB(255, 245, 245, 245);
   static const Color darkBackgroundColor = Color(0xFF121212);
   static const Color darkCardColor = Color(0xFF1E1E1E);
-  static const Color lightCardColor = Color(0xFFE1E1E1);
+  static const Color lightCardColor = Color.fromARGB(255, 237, 237, 237);
   static const Color lightBackgroundColor = Color.fromARGB(255, 255, 255, 255);
 
   static const Color navigationPressColor = Color(0xFF004CFF);
