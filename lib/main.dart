@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 
 // Import the correct file for hero tag management
 import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package path
@@ -40,7 +41,10 @@ class MyApp extends StatelessWidget {
       darkTheme: TAppTheme.darkTheme,
       navigatorKey: NavigationService().navigatorKey,
       initialRoute: AppRoutes.initial,
-      routes: AppRoutes.routes,
+      routes: {
+        ...AppRoutes.routes,
+        AppRoutes.messages: (context) => const MessagesPage(),
+      },
       builder: (context, child) {
         // This ensures overlay entries work correctly
         return MediaQuery(

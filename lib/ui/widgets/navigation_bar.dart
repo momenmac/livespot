@@ -135,8 +135,8 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     : Colors.transparent,
               ),
               child: AnimatedIconButton(
-                selectedIcon: Icons.map,
-                unselectedIcon: Icons.map_outlined,
+                selectedIcon: Icons.message,
+                unselectedIcon: Icons.message_outlined,
                 isSelected: currentIndex == 1,
                 color: currentIndex == 1
                     ? ThemeConstants.primaryColor
@@ -221,13 +221,13 @@ class CustomNavigationBar extends StatelessWidget {
               onPressed: () => onTap(0),
             ),
             AnimatedIconButton(
-              selectedIcon: Icons.map,
-              unselectedIcon: Icons.map_outlined,
+              selectedIcon: Icons.chat,
+              unselectedIcon: Icons.chat_outlined,
               isSelected: currentIndex == 1,
               color: currentIndex == 1
                   ? ThemeConstants.primaryColor
                   : theme.iconTheme.color!,
-              size: theme.iconTheme.size!,
+              size: 28,
               onPressed: () => onTap(1),
             ),
             const SizedBox(width: 40),

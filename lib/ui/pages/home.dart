@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import '../widgets/navigation_bar.dart';
 import 'map/map_page.dart';
 import 'camera_page.dart';
@@ -19,7 +20,7 @@ class _HomeState extends State<Home> {
 
   static const List<Widget> _pages = <Widget>[
     HomeContent(),
-    MapPage(),
+    MessagesPage(),
     CameraPage(),
     NotificationsPage(),
     ProfilePage(),

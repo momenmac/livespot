@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
-import 'package:flutter_application_2/ui/widgets/social_login_button.dart';
+import 'package:flutter_application_2/ui/auth/widgets/social_login_button.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_application_2/core/constants/text_strings.dart';

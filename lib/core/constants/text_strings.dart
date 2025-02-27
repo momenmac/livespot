@@ -154,4 +154,41 @@ class TextStrings {
   static const String showingDataForDate = 'Showing data for %s';
   static const String destinationSet = 'Destination set, calculating route...';
   static const String mapInitialized = 'Map initialized successfully';
+
+  //! Messages
+  static const String messages = 'Messages';
+  static const String searchMessages = 'Search messages';
+  static const String searchConversations = 'Search conversations';
+  static const String filterMessages = 'Filter messages';
+  static const String allMessages = 'All Messages';
+  static const String unreadOnly = 'Unread Only';
+  static const String archived = 'Archived';
+  static const String groups = 'Groups';
+  static const String newConversation = 'New Conversation';
+  static const String searchUsers = 'Search users';
+  static const String recentContacts = 'Recent Contacts';
+  static const String startingConversationWith = 'Starting conversation with';
+  static const String selectConversationToStart =
+      'Select a conversation to start messaging';
+  static const String noConversationsYet = 'No conversations yet';
+  static const String noConversationsMatchFilter =
+      'No conversations match the current filter';
+  static const String errorLoadingConversations = 'Error loading conversations';
+  static const String today = 'Today';
+  static const String yesterday = 'Yesterday';
+  static const String online = 'Online';
+  static const String typeMessage = 'Type a message...';
+  static const String copy = 'Copy';
+  static const String edit = 'Edit';
+  static const String delete = 'Delete';
+  static const String deleteConversation = 'Delete Conversation';
+  static const String deleteConversationConfirm =
+      'Are you sure you want to delete this conversation? This action cannot be undone.';
+  static const String mute = 'Mute';
+  static const String unmute = 'Unmute';
+  static const String searchInConversation = 'Search in conversation';
+  static const String viewGroupMembers = 'View group members';
+  static const String unarchive = 'Unarchive';
+  static const String noMessage = 'No message';
+  static const String archive = 'Archive';
 }

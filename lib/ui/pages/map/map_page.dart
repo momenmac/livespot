@@ -6,8 +6,7 @@ import 'package:flutter_application_2/ui/pages/map/widgets/map_search_bar.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_controls.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_date_picker.dart';
-import 'package:flutter_application_2/ui/widgets/map_categories.dart';
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/ui/pages/map/widgets/map_categories.dart';
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;

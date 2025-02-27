@@ -6,7 +6,7 @@ import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart'
 import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/widgets/account_link.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
-import 'package:flutter_application_2/ui/widgets/google_sign_in_button.dart';
+import 'package:flutter_application_2/ui/auth/widgets/google_sign_in_button.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 

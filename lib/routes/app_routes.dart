@@ -8,6 +8,7 @@ import 'package:flutter_application_2/ui/auth/password/reset_password_screen.dar
 import 'package:flutter_application_2/ui/pages/camera_page.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 
 class AppRoutes {
   // Route names
@@ -20,11 +21,12 @@ class AppRoutes {
   static const String resetPassword = '/reset-password';
   static const String camera = '/camera';
   static const String map = '/map';
+  static const String messages = '/messages';
 
   // Route map
   static Map<String, WidgetBuilder> get routes => {
-        initial: (_) => const GetStartedScreen(), // Initial route handler
-        // initial: (_) => const Home(), // Initial route handler
+        // initial: (_) => const GetStartedScreen(), // Initial route handler
+        initial: (_) => const Home(), // Initial route handler
         home: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
@@ -45,5 +47,6 @@ class AppRoutes {
         },
         camera: (_) => const CameraPage(),
         map: (_) => const MapPage(),
+        messages: (_) => const MessagesPage(),
       };
 }

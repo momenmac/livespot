@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/reg_exp_constants.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';

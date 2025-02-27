@@ -138,7 +138,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withAlpha(26),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),

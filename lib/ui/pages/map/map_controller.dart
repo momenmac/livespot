@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/ui/widgets/map_categories.dart';
+import 'package:flutter_application_2/ui/pages/map/widgets/map_categories.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,7 +39,9 @@ class MapPageController extends ChangeNotifier {
     _context = context;
   }
 
+  @override
   void dispose() {
+    super.dispose();
     positionStreamSubscription?.cancel();
     debounce?.cancel();
     mapController.dispose();
