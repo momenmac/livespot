@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
@@ -8,6 +7,7 @@ import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -75,14 +75,10 @@ class LoginScreenState extends State<LoginScreen>
             _passwordController.text == _tempPassword) {
           if (!mounted) return;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(TextStrings.loginSucessful),
-              backgroundColor: ThemeConstants.primaryColor,
-              margin: EdgeInsets.all(10.0),
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 1),
-            ),
+          ResponsiveSnackBar.showSuccess(
+            context: context,
+            message: TextStrings.loginSucessful,
+            duration: const Duration(seconds: 1),
           );
 
           // Add a small delay before navigation
@@ -95,13 +91,9 @@ class LoginScreenState extends State<LoginScreen>
         } else {
           if (!mounted) return;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(TextStrings.invalidCredentials),
-              backgroundColor: ThemeConstants.red,
-              margin: EdgeInsets.all(10.0),
-              behavior: SnackBarBehavior.floating,
-            ),
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: TextStrings.invalidCredentials,
           );
         }
       }

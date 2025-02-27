@@ -8,6 +8,9 @@ class CustomTextField extends StatefulWidget {
   final String? Function(String?)? validator;
   final bool validateOnType;
   final double? maxWidth;
+  final FocusNode? focusNode;
+  final Function(String)? onFieldSubmitted;
+  final TextInputAction? textInputAction;
 
   const CustomTextField({
     super.key,
@@ -18,6 +21,9 @@ class CustomTextField extends StatefulWidget {
     this.validator,
     this.validateOnType = false,
     this.maxWidth = 400,
+    this.focusNode,
+    this.onFieldSubmitted,
+    this.textInputAction,
   });
 
   @override
@@ -80,6 +86,9 @@ class CustomTextFieldState extends State<CustomTextField>
           controller: widget.controller,
           obscureText: widget.obscureText,
           keyboardType: widget.keyboardType,
+          focusNode: widget.focusNode,
+          onFieldSubmitted: widget.onFieldSubmitted,
+          textInputAction: widget.textInputAction,
           validator: (value) {
             if (_isDirty) {
               return widget.validator?.call(value);

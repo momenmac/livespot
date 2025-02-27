@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/core/utils/email_utils.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
@@ -12,6 +11,7 @@ import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/ui/widgets/verification_code_field.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String? email;
@@ -70,6 +70,11 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       _attemptCount = 0;
     });
     _startResendTimer();
+
+    ResponsiveSnackBar.showInfo(
+      context: context,
+      message: TextStrings.verificationCodeResent,
+    );
   }
 
   void _handleCodeCompletion(String code) {
@@ -77,14 +82,9 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     // TODO: Update user record to mark email as verified
     // TODO: Handle verification timeout
     if (_attemptCount >= _maxAttempts) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(TextStrings.tooManyAttempts,
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: ThemeConstants.red,
-          margin: EdgeInsets.all(10.0),
-          behavior: SnackBarBehavior.floating,
-        ),
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: TextStrings.tooManyAttempts,
       );
       return;
     }
@@ -94,16 +94,9 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     });
 
     if (code == _tempVerificationCode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            TextStrings.verificationSuccessful,
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: ThemeConstants.primaryColor,
-          margin: EdgeInsets.all(10.0),
-          behavior: SnackBarBehavior.floating,
-        ),
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: TextStrings.verificationSuccessful,
       );
       NavigationService().replaceUntilHome(AppRoutes.home);
     } else {
@@ -112,17 +105,10 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       if (_attemptCount >= _maxAttempts) {
         _showTooManyAttemptsDialog();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              TextStrings.invalidCode
-                  .replaceAll('%d', '${_maxAttempts - _attemptCount}'),
-              style: TextStyle(color: Colors.white),
-            ),
-            backgroundColor: ThemeConstants.red,
-            margin: EdgeInsets.all(10.0),
-            behavior: SnackBarBehavior.floating,
-          ),
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: TextStrings.invalidCode
+              .replaceAll('%d', '${_maxAttempts - _attemptCount}'),
         );
       }
     }

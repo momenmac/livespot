@@ -44,7 +44,7 @@ class VerificationCodeFieldState extends State<VerificationCodeField> {
         // Last digit entered, trigger completion
         final code = _controllers.map((c) => c.text).join();
         if (code.length == 6) {
-          widget.onCompleted(code);
+          _handleCompletion(code);
         }
       }
     }
@@ -52,6 +52,13 @@ class VerificationCodeFieldState extends State<VerificationCodeField> {
     if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
     }
+  }
+
+  // Make sure onCompleted is called with keyboard dismissal
+  void _handleCompletion(String code) {
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
+    widget.onCompleted(code);
   }
 
   @override

@@ -45,7 +45,8 @@ class MyApp extends StatelessWidget {
         // This ensures overlay entries work correctly
         return MediaQuery(
           // Prevent text scaling to avoid layout issues
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(1.0)),
           // Wrap with GestureDetector to dismiss keyboard on tap outside input fields
           child: GestureDetector(
             onTap: () {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/navigation_bar.dart';
-import 'map_page.dart';
+import 'map/map_page.dart';
 import 'camera_page.dart';
 import 'notifications_page.dart';
 import 'profile_page.dart';

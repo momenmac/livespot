@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'package:flutter_application_2/core/utils/validation_helper.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -70,6 +71,11 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
     }
 
     if (_formKey.currentState!.validate()) {
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: TextStrings.accountCreationStarted,
+      );
+
       NavigationService().navigateTo(
         AppRoutes.verifyEmail,
         arguments: {
@@ -77,6 +83,11 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
           'profileImage': _imageBytes,
           'censorEmail': false,
         },
+      );
+    } else {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: TextStrings.pleaseFixValidationErrors,
       );
     }
   }
@@ -89,6 +100,11 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
       setState(() {
         _imageBytes = bytes;
       });
+
+      ResponsiveSnackBar.showInfo(
+        context: context,
+        message: TextStrings.profileImageSelected,
+      );
     }
   }
 

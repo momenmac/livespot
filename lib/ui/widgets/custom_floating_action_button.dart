@@ -21,7 +21,7 @@ class CustomFloatingActionButton extends StatelessWidget {
   final String? tooltip;
 
   const CustomFloatingActionButton({
-    Key? key,
+    super.key,
     required this.heroTag,
     required this.onPressed,
     required this.child,
@@ -39,7 +39,7 @@ class CustomFloatingActionButton extends StatelessWidget {
     this.splashColor,
     this.isExtended,
     this.tooltip,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -49,12 +49,12 @@ class CustomFloatingActionButton extends StatelessWidget {
       backgroundColor: backgroundColor,
       elevation: elevation,
       shape: shape,
-      child: child,
       foregroundColor: foregroundColor,
       focusColor: focusColor,
       hoverColor: hoverColor,
       splashColor: splashColor,
       tooltip: tooltip,
+      child: child,
     );
   }
 
@@ -71,12 +71,12 @@ class CustomFloatingActionButton extends StatelessWidget {
     return CustomFloatingActionButton(
       heroTag: heroTag,
       onPressed: onPressed,
-      child: child,
       backgroundColor: backgroundColor,
       elevation: elevation,
       foregroundColor: foregroundColor,
       shape: shape,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      child: child,
     );
   }
 }

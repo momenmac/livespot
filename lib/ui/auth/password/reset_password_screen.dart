@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
@@ -9,6 +8,7 @@ import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/core/utils/validation_helper.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
@@ -57,31 +57,18 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
     }
 
     if (_formKey.currentState!.validate()) {
-      // TODO: Hash new password before sending to backend
-      // TODO: Update password in database
-      // TODO: Invalidate all existing sessions
-      // TODO: Log password change for security audit
-      // TODO: Send password change notification email
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(TextStrings.passwordUpdateSuccess,
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: ThemeConstants.primaryColor,
-          behavior: SnackBarBehavior.floating,
-        ),
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: TextStrings.passwordUpdateSuccess,
       );
       NavigationService().replaceUntilHome(AppRoutes.login);
     }
   }
 
   void _handleCancel() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(TextStrings.passwordResetCancelled,
-            style: TextStyle(color: Colors.white)),
-        backgroundColor: ThemeConstants.red,
-        behavior: SnackBarBehavior.floating,
-      ),
+    ResponsiveSnackBar.showInfo(
+      context: context,
+      message: TextStrings.passwordResetCancelled,
     );
     NavigationService().replaceUntilHome(AppRoutes.login);
   }

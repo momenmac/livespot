@@ -37,6 +37,12 @@ class TextStrings {
   static const String loginDescription = 'Login to your account';
   static const String loginSucessful = 'Login successful!';
   static const String invalidCredentials = 'Invalid credentials';
+  static const String accountCreationStarted = 'Account creation started';
+  static const String profileUpdatedSuccessfully =
+      'Profile updated successfully';
+  static const String profileImageSelected = 'Profile image selected';
+  static const String pleaseFixValidationErrors =
+      'Please fix the errors in the form';
 
   //! Validation messages
   static const String firstNameRequied = 'First Name is required';
@@ -70,6 +76,12 @@ class TextStrings {
       'Please wait for the timer or try requesting a new code.';
   static const String goBack = 'Go Back';
   static const String requestNewCode = 'Request New Code';
+  static const String pleaseEnterVerificationCode =
+      'Please enter the verification code';
+  static const String verificationCodeResent =
+      'Verification code has been resent';
+  static const String maxAttemptsReached =
+      'Maximum verification attempts reached';
 
   static const String newPassword = 'New Password';
 
@@ -140,4 +152,6 @@ class TextStrings {
   static const String failedToInitializeLocationServices =
       'Failed to initialize location services: ';
   static const String showingDataForDate = 'Showing data for %s';
+  static const String destinationSet = 'Destination set, calculating route...';
+  static const String mapInitialized = 'Map initialized successfully';
 }

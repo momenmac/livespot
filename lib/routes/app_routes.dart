@@ -7,7 +7,7 @@ import 'package:flutter_application_2/ui/auth/password/forgot_password_screen.da
 import 'package:flutter_application_2/ui/auth/password/reset_password_screen.dart';
 import 'package:flutter_application_2/ui/pages/camera_page.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
-import 'package:flutter_application_2/ui/pages/map_page.dart';
+import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 
 class AppRoutes {
   // Route names

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/reg_exp_constants.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
@@ -10,6 +11,7 @@ import 'package:flutter_application_2/ui/widgets/verification_code_field.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/core/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -30,6 +32,14 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     GlobalKey<CustomTextFieldState>(),
   ];
 
+  // Add focus node for keyboard control
+  final FocusNode _emailFocusNode = FocusNode();
+
+  // Add resend timer functionality
+  bool _isResendEnabled = false;
+  int _resendTimer = 30;
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
@@ -45,38 +55,66 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   void dispose() {
     _controller.dispose();
     _emailController.dispose();
+    _emailFocusNode.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
+  void _startResendTimer() {
+    setState(() {
+      _isResendEnabled = false;
+      _resendTimer = 30;
+    });
+
+    _timer?.cancel();
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_resendTimer > 0) {
+          _resendTimer--;
+        } else {
+          _isResendEnabled = true;
+          timer.cancel();
+        }
+      });
+    });
+  }
+
   void _handleSubmit() {
+    // Dismiss keyboard first
+    FocusScope.of(context).unfocus();
+
     _textFieldKeys[0].currentState?.triggerValidation();
 
     if (_formKey.currentState!.validate()) {
-      // TODO: Check if email exists in database
-      // TODO: Generate and store verification code
-      // TODO: Send verification email through backend
-      // TODO: Set expiration time for verification code
       setState(() {
         _codeSent = true;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            TextStrings.codeSentTo.replaceAll('%s', _emailController.text),
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: ThemeConstants.primaryColor,
-          behavior: SnackBarBehavior.floating,
-        ),
+      // Start the resend timer
+      _startResendTimer();
+
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: TextStrings.codeSentTo.replaceAll('%s', _emailController.text),
       );
     }
   }
 
+  void _handleResendCode() {
+    if (!_isResendEnabled) return;
+
+    // TODO: Actual code resend logic here
+
+    // Reset the timer
+    _startResendTimer();
+
+    ResponsiveSnackBar.showInfo(
+      context: context,
+      message: TextStrings.verificationCodeResent,
+    );
+  }
+
   void _handleCodeVerification(String code) {
-    // TODO: Verify code against stored code in database
-    // TODO: Check if code has expired
-    // TODO: Track failed attempts in database
     if (code == "123456") {
       NavigationService().replaceTo(
         AppRoutes.resetPassword,
@@ -84,18 +122,13 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       );
     } else {
       _verificationKey.currentState?.clearFields();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(TextStrings.invalidVerificationCode,
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: ThemeConstants.red,
-          behavior: SnackBarBehavior.floating,
-        ),
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: TextStrings.invalidVerificationCode,
       );
     }
   }
 
-  // Add email validation
   String? _validateEmail(String? value) {
     if (value == null || value.isEmpty) {
       return TextStrings.emailRequired;
@@ -103,93 +136,160 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     if (!RegExpConstants.emailRegex.hasMatch(value)) {
       return TextStrings.invalidEmail;
     }
-    // TODO: Add database check for email existence
     return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          return Stack(
-            children: [
-              Positioned(
-                top: -20,
-                left: -20,
-                child: CustomPaint(
-                  size: Size(457.0, 450.0),
-                  painter: Bubble1(),
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: OrientationBuilder(
+          builder: (context, orientation) {
+            return Stack(
+              children: [
+                Positioned(
+                  top: -20,
+                  left: -20,
+                  child: CustomPaint(
+                    size: Size(457.0, 450.0),
+                    painter: Bubble1(),
+                  ),
                 ),
-              ),
-              Positioned(
-                right: -135,
-                top: 30,
-                child: CustomPaint(
-                  size: Size(274.0, 270.0),
-                  painter: Bubble2(),
+                Positioned(
+                  right: -135,
+                  top: 30,
+                  child: CustomPaint(
+                    size: Size(274.0, 270.0),
+                    painter: Bubble2(),
+                  ),
                 ),
-              ),
-              Center(
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: ResponsiveContainer(
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                TextStrings.forgotPasswordTitle,
-                                style: Theme.of(context).textTheme.displayLarge,
+                SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    bottom: bottomInset > 0 ? bottomInset : 20,
+                  ),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height,
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: ResponsiveContainer(
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    TextStrings.forgotPasswordTitle,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .displayLarge,
+                                  ),
+                                  SizedBox(height: 16),
+                                  if (!_codeSent)
+                                    Text(
+                                      TextStrings.enterEmailForCode,
+                                      textAlign: TextAlign.center,
+                                      style:
+                                          Theme.of(context).textTheme.bodyLarge,
+                                    )
+                                  else
+                                    Column(
+                                      children: [
+                                        Text(
+                                          TextStrings.verificationCodeSent,
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge,
+                                        ),
+                                        Text(
+                                          _emailController.text,
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  SizedBox(height: 37),
+                                  if (!_codeSent) ...[
+                                    CustomTextField(
+                                      key: _textFieldKeys[0],
+                                      controller: _emailController,
+                                      focusNode: _emailFocusNode,
+                                      label: 'Email',
+                                      keyboardType: TextInputType.emailAddress,
+                                      validator: _validateEmail,
+                                      textInputAction: TextInputAction.done,
+                                      onFieldSubmitted: (_) => _handleSubmit(),
+                                    ),
+                                    SizedBox(height: 24),
+                                    AnimatedButton(
+                                      onPressed: _handleSubmit,
+                                      text: TextStrings.sendCode,
+                                    ),
+                                  ] else ...[
+                                    VerificationCodeField(
+                                      key: _verificationKey,
+                                      onCompleted: (code) {
+                                        FocusScope.of(context).unfocus();
+                                        _handleCodeVerification(code);
+                                      },
+                                    ),
+                                    SizedBox(height: 20),
+                                    // Add resend option with timer
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(TextStrings.didntReceiveCode),
+                                        TextButton(
+                                          onPressed: _isResendEnabled
+                                              ? _handleResendCode
+                                              : null,
+                                          child: Text(
+                                            _isResendEnabled
+                                                ? TextStrings.resend
+                                                : TextStrings.resendTimer
+                                                    .replaceAll(
+                                                    '%d',
+                                                    _resendTimer.toString(),
+                                                  ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                  SizedBox(height: 24),
+                                  TextButton(
+                                    onPressed: () {
+                                      FocusScope.of(context).unfocus();
+                                      NavigationService().goBack();
+                                    },
+                                    child: Text(TextStrings.backToLogin),
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 16),
-                              Text(
-                                _codeSent
-                                    ? TextStrings.enterVerificationCode
-                                    : TextStrings.enterEmailForCode,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              SizedBox(height: 37),
-                              if (!_codeSent) ...[
-                                CustomTextField(
-                                  key: _textFieldKeys[0],
-                                  controller: _emailController,
-                                  label: 'Email',
-                                  keyboardType: TextInputType.emailAddress,
-                                  validator: _validateEmail,
-                                ),
-                                SizedBox(height: 24),
-                                AnimatedButton(
-                                  onPressed: _handleSubmit,
-                                  text: TextStrings.sendCode,
-                                ),
-                              ] else ...[
-                                VerificationCodeField(
-                                  key: _verificationKey,
-                                  onCompleted: _handleCodeVerification,
-                                ),
-                              ],
-                              SizedBox(height: 24),
-                              TextButton(
-                                onPressed: () => NavigationService().goBack(),
-                                child: Text(TextStrings.backToLogin),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
