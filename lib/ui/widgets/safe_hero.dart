@@ -39,14 +39,14 @@ class SafeHero extends StatefulWidget {
   final bool transitionOnUserGestures;
 
   const SafeHero({
-    Key? key,
+    super.key,
     required this.baseTag,
     required this.child,
     this.createRectTween,
     this.flightShuttleBuilder,
     this.placeholderBuilder,
     this.transitionOnUserGestures = false,
-  }) : super(key: key);
+  });
 
   @override
   State<SafeHero> createState() => _SafeHeroState();
@@ -66,11 +66,11 @@ class _SafeHeroState extends State<SafeHero> {
   Widget build(BuildContext context) {
     return Hero(
       tag: _uniqueTag,
-      child: widget.child,
       createRectTween: widget.createRectTween,
       flightShuttleBuilder: widget.flightShuttleBuilder,
       placeholderBuilder: widget.placeholderBuilder,
       transitionOnUserGestures: widget.transitionOnUserGestures,
+      child: widget.child,
     );
   }
 }
@@ -86,7 +86,7 @@ class IdBasedHero extends StatelessWidget {
   final bool transitionOnUserGestures;
 
   const IdBasedHero({
-    Key? key,
+    super.key,
     required this.baseTag,
     required this.uniqueId,
     required this.child,
@@ -94,17 +94,17 @@ class IdBasedHero extends StatelessWidget {
     this.flightShuttleBuilder,
     this.placeholderBuilder,
     this.transitionOnUserGestures = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Hero(
       tag: HeroTagRegistry.createWithId(baseTag, uniqueId),
-      child: child,
       createRectTween: createRectTween,
       flightShuttleBuilder: flightShuttleBuilder,
       placeholderBuilder: placeholderBuilder,
       transitionOnUserGestures: transitionOnUserGestures,
+      child: child,
     );
   }
 }

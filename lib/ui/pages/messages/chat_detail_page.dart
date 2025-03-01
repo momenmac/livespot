@@ -10,10 +10,10 @@ class ChatDetailPage extends StatefulWidget {
   final Conversation conversation;
 
   const ChatDetailPage({
-    Key? key,
+    super.key,
     required this.controller,
     required this.conversation,
-  }) : super(key: key);
+  });
 
   @override
   State<ChatDetailPage> createState() => _ChatDetailPageState();

@@ -105,7 +105,7 @@ class MessagesController extends ChangeNotifier {
               isRead: j > 3,
               messageType: MessageType.voice,
               voiceDuration: 15 + j % 45,
-              mediaUrl: 'voice_message_mock_${i}_${j}.mp3',
+              mediaUrl: 'voice_message_mock_${i}_$j.mp3',
             ),
           );
         } else {

@@ -185,7 +185,7 @@ class _MessagesPageState extends State<MessagesPage> {
     showDialog(
       context: context,
       builder: (context) {
-        final TextEditingController _searchController = TextEditingController();
+        final TextEditingController searchController = TextEditingController();
         return AlertDialog(
           title: Text(TextStrings.newConversation),
           content: SizedBox(
@@ -194,7 +194,7 @@ class _MessagesPageState extends State<MessagesPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: _searchController,
+                  controller: searchController,
                   decoration: InputDecoration(
                     hintText: TextStrings.searchUsers,
                     prefixIcon: const Icon(Icons.search),
