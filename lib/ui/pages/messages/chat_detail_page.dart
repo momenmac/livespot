@@ -23,8 +23,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    // Pass controller reference
+    // Set controller reference on conversation
     widget.conversation.controller = widget.controller;
+
+    // Also set controller reference on all messages in the conversation
+    for (final message in widget.conversation.messages) {
+      message.controller = widget.controller;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {

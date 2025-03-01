@@ -268,6 +268,23 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
+    // Add controller reference to messages
+    final updatedMessages = _selectedConversation!.messages.map((message) {
+      return message.copyWith(controller: this);
+    }).toList();
+
+    final updatedConversation = _selectedConversation!.copyWith(
+      messages: updatedMessages,
+    );
+
+    // Update in our lists
+    final updatedIndex =
+        _conversations.indexWhere((c) => c.id == updatedConversation.id);
+    if (updatedIndex != -1) {
+      _conversations[updatedIndex] = updatedConversation;
+      _selectedConversation = updatedConversation;
+    }
+
     // Scroll to bottom of messages after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (messageScrollController.hasClients) {
@@ -378,6 +395,7 @@ class MessagesController extends ChangeNotifier {
       replyToSenderName: _replyToMessage?.senderName,
       replyToContent: _replyToMessage?.content,
       replyToMessageType: _replyToMessage?.messageType,
+      controller: this, // Add controller reference
     );
 
     // Clear reply state

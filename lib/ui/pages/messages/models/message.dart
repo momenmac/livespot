@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart'; // Add this import
 
 enum MessageType {
   text,
@@ -40,7 +41,10 @@ class Message {
   final bool? isEdited; // Flag to indicate if message was edited
   final String? forwardedFrom; // Name of original sender if forwarded
 
-  const Message({
+  // Add a reference to the controller (not final so we can set it later)
+  MessagesController? controller;
+
+  Message({
     required this.id,
     required this.content,
     required this.senderId,
@@ -60,6 +64,7 @@ class Message {
     this.replyToMessageType,
     this.isEdited = false,
     this.forwardedFrom,
+    this.controller, // Add controller to constructor
   });
 
   bool get isVoiceMessage => messageType == MessageType.voice;
@@ -116,6 +121,7 @@ class Message {
     MessageType? replyToMessageType,
     bool? isEdited,
     String? forwardedFrom,
+    MessagesController? controller,
   }) {
     return Message(
       id: id ?? this.id,
@@ -137,6 +143,8 @@ class Message {
       replyToMessageType: replyToMessageType ?? this.replyToMessageType,
       isEdited: isEdited ?? this.isEdited,
       forwardedFrom: forwardedFrom ?? this.forwardedFrom,
+      controller:
+          controller ?? this.controller, // Include controller in copyWith
     );
   }
 
