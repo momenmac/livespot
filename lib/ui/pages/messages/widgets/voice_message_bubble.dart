@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
@@ -7,11 +6,13 @@ import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 class VoiceMessageBubble extends StatefulWidget {
   final Message message;
   final bool isSent;
+  final VoidCallback? onLongPress; // Add this to handle long-press actions
 
   const VoiceMessageBubble({
     super.key,
     required this.message,
     required this.isSent,
+    this.onLongPress,
   });
 
   @override
@@ -61,8 +62,6 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         });
       }
     });
-
-    // Here you would add actual audio playback code
   }
 
   void _stopPlayback() {
@@ -72,8 +71,6 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       _progress = 0.0;
       _elapsedSeconds = 0;
     });
-
-    // Here you would stop the actual audio playback
   }
 
   String _formatDuration(int seconds) {
@@ -101,64 +98,92 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         ? _formatDuration(_elapsedSeconds)
         : _formatDuration(totalDuration);
 
-    return Container(
-      constraints: const BoxConstraints(
-        maxWidth: 300,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              _isPlaying ? Icons.pause : Icons.play_arrow,
-              color: textColor,
-              size: 28,
+    // Make the entire container long-pressable for action menu
+    return InkWell(
+      onLongPress: widget.onLongPress, // Use the callback passed from parent
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 300,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
-            onPressed: _togglePlayback,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                color: textColor,
+                size: 28,
+              ),
+              onPressed: _togglePlayback,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 40,
+                minHeight: 40,
+              ),
             ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(
-                  value: _progress,
-                  backgroundColor: textColor?.withOpacity(0.3),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    textColor ?? Colors.white,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(
+                    value: _progress,
+                    backgroundColor: textColor?.withOpacity(0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      textColor ?? Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      displayDuration,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: textColor?.withOpacity(0.7),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        displayDuration,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: textColor?.withOpacity(0.7),
+                        ),
                       ),
-                    ),
-                    Icon(
-                      Icons.mic,
-                      size: 16,
-                      color: textColor?.withOpacity(0.7),
-                    ),
-                  ],
-                ),
-              ],
+                      Row(
+                        children: [
+                          if (widget.message.isForwarded)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Icon(
+                                Icons.forward,
+                                size: 12,
+                                // Use higher contrast color
+                                color: widget.isSent
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          Icon(
+                            Icons.mic,
+                            size: 16,
+                            color: textColor?.withOpacity(0.7),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -12,7 +12,7 @@ class Conversation {
   final String? groupName;
   final bool isMuted;
   final bool isArchived;
-  // Non-serialized property to hold the controller reference
+  // Add reference to controller to maintain state
   MessagesController? controller;
 
   Conversation({
@@ -49,6 +49,7 @@ class Conversation {
       groupName: groupName ?? this.groupName,
       isMuted: isMuted ?? this.isMuted,
       isArchived: isArchived ?? this.isArchived,
+      controller: this.controller, // Preserve the controller reference
     );
   }
 

@@ -7,6 +7,21 @@ import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
 
+// Simple class to hold action button data
+class ActionItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  ActionItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+}
+
 class ConversationList extends StatelessWidget {
   final MessagesController controller;
   final Function(Conversation) onConversationSelected;
@@ -78,16 +93,125 @@ class ConversationList extends StatelessWidget {
               // Make sure conversation has a reference to controller
               conversation.controller = controller;
 
-              final isSelected =
-                  controller.selectedConversation?.id == conversation.id;
+              // Wrap the conversation tile in a Dismissible widget
+              return Dismissible(
+                key: Key(conversation.id),
+                // Allow swipes in both directions
+                direction: DismissDirection.horizontal,
 
-              return _ConversationTile(
-                conversation: conversation,
-                isSelected: isSelected,
-                controller: controller,
-                onTap: () => onConversationSelected(conversation),
-                onLongPress: () =>
-                    _showConversationActions(context, conversation),
+                // Background for left-to-right swipe (mark read/unread)
+                background: Container(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.only(left: 20.0),
+                  color: ThemeConstants.green,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        conversation.unreadCount > 0
+                            ? Icons.done_all
+                            : Icons.mark_email_unread,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        conversation.unreadCount > 0
+                            ? TextStrings.markAsRead
+                            : TextStrings.markAsUnread,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Background for right-to-left swipe (archive)
+                secondaryBackground: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20.0),
+                  color: ThemeConstants.orange,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        conversation.isArchived
+                            ? Icons.unarchive
+                            : Icons.archive,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        conversation.isArchived
+                            ? TextStrings.unarchive
+                            : TextStrings.archive,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Confirmation thresholds
+                confirmDismiss: (direction) async {
+                  if (direction == DismissDirection.endToStart) {
+                    // Archive/unarchive (right to left swipe)
+                    controller.toggleArchive(conversation);
+
+                    // Show a snackbar confirmation
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          conversation.isArchived
+                              ? TextStrings.conversationArchived
+                              : TextStrings.conversationUnarchived,
+                        ),
+                        action: SnackBarAction(
+                          label: TextStrings.undo,
+                          textColor: ThemeConstants.primaryColor,
+                          onPressed: () {
+                            controller.toggleArchive(conversation);
+                          },
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+
+                    // Return false to keep the item in the list
+                    return false;
+                  } else if (direction == DismissDirection.startToEnd) {
+                    // Mark as read/unread (left to right swipe)
+                    if (conversation.unreadCount > 0) {
+                      // Mark as read
+                      controller.markConversationAsRead(conversation);
+                    } else {
+                      // Mark as unread
+                      controller.markConversationAsUnread(conversation);
+                    }
+
+                    // Show a snackbar confirmation
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(conversation.unreadCount > 0
+                            ? TextStrings.markedAsUnread
+                            : TextStrings.markedAsRead),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+
+                    // Return false to keep the item in the list
+                    return false;
+                  }
+                  return false;
+                },
+
+                child: _ConversationTile(
+                  conversation: conversation,
+                  isSelected: false,
+                  controller: controller,
+                  onTap: () => onConversationSelected(conversation),
+                  onLongPress: () =>
+                      _showConversationActions(context, conversation),
+                ),
               );
             },
           ),
@@ -100,57 +224,252 @@ class ConversationList extends StatelessWidget {
       BuildContext context, Conversation conversation) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  conversation.isMuted ? Icons.volume_up : Icons.volume_off,
-                  color: ThemeConstants.primaryColor,
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+        // Create list of actions
+        final List<ActionItem> actions = [
+          // Mute/Unmute action
+          ActionItem(
+            icon: conversation.isMuted ? Icons.volume_up : Icons.volume_off,
+            label: conversation.isMuted ? TextStrings.unmute : TextStrings.mute,
+            color: ThemeConstants.primaryColor,
+            onTap: () {
+              controller.toggleMute(conversation);
+              Navigator.pop(context);
+            },
+          ),
+
+          // Mark as read/unread
+          ActionItem(
+            icon: conversation.unreadCount > 0
+                ? Icons.done_all
+                : Icons.mark_email_unread,
+            label: conversation.unreadCount > 0
+                ? TextStrings.markAsRead
+                : TextStrings.markAsUnread,
+            color: ThemeConstants.green,
+            onTap: () {
+              if (conversation.unreadCount > 0) {
+                controller.markConversationAsRead(conversation);
+              } else {
+                controller.markConversationAsUnread(conversation);
+              }
+              Navigator.pop(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(conversation.unreadCount > 0
+                      ? TextStrings.markedAsRead
+                      : TextStrings.markedAsUnread),
+                  duration: const Duration(seconds: 1),
                 ),
-                title: Text(
-                  conversation.isMuted ? TextStrings.unmute : TextStrings.mute,
+              );
+            },
+          ),
+
+          // Archive/Unarchive action
+          ActionItem(
+            icon: conversation.isArchived ? Icons.unarchive : Icons.archive,
+            label: conversation.isArchived
+                ? TextStrings.unarchive
+                : TextStrings.archive,
+            color: ThemeConstants.orange,
+            onTap: () {
+              controller.toggleArchive(conversation);
+              Navigator.pop(context);
+
+              // Show a snackbar confirmation
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    conversation.isArchived
+                        ? TextStrings.conversationUnarchived
+                        : TextStrings.conversationArchived,
+                  ),
+                  action: SnackBarAction(
+                    label: TextStrings.undo,
+                    textColor: ThemeConstants.primaryColor,
+                    onPressed: () {
+                      controller.toggleArchive(conversation);
+                    },
+                  ),
+                  duration: const Duration(seconds: 2),
                 ),
-                onTap: () {
-                  controller.toggleMute(conversation);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  conversation.isArchived ? Icons.unarchive : Icons.archive,
-                  color: ThemeConstants.orange,
+              );
+            },
+          ),
+
+          // Delete action
+          ActionItem(
+            icon: Icons.delete_outline,
+            label: TextStrings.delete,
+            color: ThemeConstants.red,
+            onTap: () {
+              Navigator.pop(context);
+              _confirmDeleteConversation(context, conversation);
+            },
+          ),
+        ];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isDarkMode ? Color(0xFF2D2D2D) : Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          margin: EdgeInsets.only(left: 10, right: 10, top: 10),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar at top
+                Container(
+                  margin: EdgeInsets.symmetric(vertical: 10),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                title: Text(
-                  conversation.isArchived
-                      ? TextStrings.unarchive
-                      : TextStrings.archive,
+
+                // Conversation preview
+                Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundImage: NetworkImage(conversation.avatarUrl),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              conversation.displayName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (!conversation.isGroup && conversation.isOnline)
+                              Text(
+                                TextStrings.online,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: ThemeConstants.green,
+                                ),
+                              )
+                            else if (conversation.isGroup)
+                              Text(
+                                '${conversation.participants.length} participants',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDarkMode
+                                      ? Colors.grey[300]
+                                      : Colors.grey[600],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                onTap: () {
-                  controller.toggleArchive(conversation);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: ThemeConstants.red,
+
+                // Action buttons grid
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Calculate how many actions to show per row
+                      final double screenWidth = constraints.maxWidth;
+                      final int itemsPerRow = screenWidth > 300 ? 3 : 2;
+
+                      // Create rows of actions
+                      final List<Widget> actionRows = [];
+                      for (int i = 0; i < actions.length; i += itemsPerRow) {
+                        final rowItems = actions.sublist(
+                            i,
+                            i + itemsPerRow > actions.length
+                                ? actions.length
+                                : i + itemsPerRow);
+
+                        actionRows.add(
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: rowItems
+                                  .map((action) => _buildCircularAction(
+                                        icon: action.icon,
+                                        label: action.label,
+                                        color: action.color,
+                                        onTap: action.onTap,
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Column(children: actionRows);
+                    },
+                  ),
                 ),
-                title: Text(TextStrings.delete),
-                onTap: () {
-                  Navigator.pop(context);
-                  _confirmDeleteConversation(context, conversation);
-                },
-              ),
-            ],
+                const SizedBox(height: 10),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  // Helper method to build circular action buttons
+  Widget _buildCircularAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(35),
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Icon(icon, color: color, size: 28),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -206,9 +525,7 @@ class _ConversationTile extends StatelessWidget {
         _formatMessageTime(conversation.lastMessage.timestamp);
 
     return Container(
-      color: isSelected
-          ? ThemeConstants.primaryColor.withOpacity(0.1)
-          : Colors.transparent,
+      color: Colors.transparent,
       child: ListTile(
         onTap: () {
           // Set the controller reference before navigating
@@ -301,12 +618,12 @@ class _ConversationTile extends StatelessWidget {
               child: Text(
                 _formatLastMessage(conversation),
                 style: TextStyle(
-                  color: conversation.unreadCount > 0
-                      ? theme.textTheme.bodyLarge?.color
-                      : theme.textTheme.bodySmall?.color,
                   fontWeight: conversation.unreadCount > 0
                       ? FontWeight.bold
                       : FontWeight.normal,
+                  color: conversation.unreadCount > 0
+                      ? theme.textTheme.bodyLarge?.color
+                      : theme.textTheme.bodySmall?.color,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -323,8 +640,8 @@ class _ConversationTile extends StatelessWidget {
                 child: Text(
                   conversation.unreadCount.toString(),
                   style: const TextStyle(
-                    color: Colors.white,
                     fontSize: 12,
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -354,10 +671,10 @@ class _ConversationTile extends StatelessWidget {
 
   String _formatLastMessage(Conversation conversation) {
     final message = conversation.lastMessage;
-    final sender = message.senderId == 'current' ? 'You: ' : '';
+    final sender = message.senderId == 'current' ? TextStrings.sentByYou : '';
 
     if (message.content.isEmpty) {
-      return conversation.isGroup
+      return conversation.isGroup && message.senderId != 'current'
           ? '${message.senderName}: ${TextStrings.noMessage}'
           : TextStrings.noMessage;
     }
@@ -365,8 +682,8 @@ class _ConversationTile extends StatelessWidget {
     // Handle voice messages
     if (message.messageType == MessageType.voice) {
       return conversation.isGroup && message.senderId != 'current'
-          ? '${message.senderName}: 🎤 Voice message'
-          : '$sender🎤 Voice message';
+          ? '${message.senderName}: ${TextStrings.voiceMessage}'
+          : '$sender${TextStrings.voiceMessage}';
     }
 
     return conversation.isGroup && message.senderId != 'current'

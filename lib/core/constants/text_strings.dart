@@ -191,6 +191,36 @@ class TextStrings {
   static const String unarchive = 'Unarchive';
   static const String noMessage = 'No message';
   static const String archive = 'Archive';
-
+  static const String markAsRead = 'Mark as read';
+  static const String markAsUnread = 'Mark as unread';
+  static const String conversationArchived = 'Conversation archived';
+  static const String conversationUnarchived = 'Conversation unarchived';
+  static const String undo = 'Undo';
+  static const String markedAsUnread = 'Marked as unread';
+  static const String markedAsRead = 'Marked as read';
+  static const String voiceMessage = '🎤 Voice message';
+  static const String recording = 'Recording...';
   static const String holdToRecord = 'Hold to record voice message';
+  static const String send = 'Send';
+  static const String sentByYou = 'You: ';
+  static const String deleteMessageConfirm =
+      'Are you sure you want to delete this message?';
+  static const String messageDeleted = 'Message deleted';
+  static const String recordingCancelled = 'Recording cancelled';
+  static const String searchInMessages = 'Search in messages';
+  static const String viewProfile = 'View profile';
+  static const String reply = 'Reply';
+  static const String replyingTo = 'Replying to';
+  static const String swipeToReply = 'Swipe to reply';
+  static const String swipeToEdit = 'Swipe to edit';
+  static const String forward = 'Forward';
+  static const String forwardMessage = 'Forward Message';
+  static const String selectConversation = 'Select conversation';
+  static const String forwarded = 'Forwarded';
+  static const String editMessage = 'Edit Message';
+  static const String messageEdited = 'Edited';
+  static const String messageSaved = 'Message saved';
+  static const String cancelReply = 'Cancel reply';
+  static const String cancelEdit = 'Cancel edit';
+  static const String noConversationsForward = 'No conversations to forward to';
 }

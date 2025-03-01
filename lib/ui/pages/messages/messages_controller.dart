@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:core';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
@@ -19,6 +21,14 @@ class MessagesController extends ChangeNotifier {
   bool _isSearchMode = false;
   String _searchQuery = '';
   FilterMode _filterMode = FilterMode.all;
+
+  // Add state variables for reply functionality
+  Message? _replyToMessage;
+  Message? get replyToMessage => _replyToMessage;
+
+  // Add state variables for editing
+  Message? _editingMessage;
+  Message? get editingMessage => _editingMessage;
 
   List<Conversation> get conversations => _filteredConversations;
   Conversation? get selectedConversation {
@@ -218,48 +228,44 @@ class MessagesController extends ChangeNotifier {
   }
 
   void selectConversation(Conversation conversation) {
-    final prevController = _selectedConversation?.controller;
-
-    _selectedConversation = conversation;
-
+    // Store the previous conversation in our list if we had one selected
     if (_selectedConversation != null) {
-      _selectedConversation!.controller = prevController ?? this;
+      // Find and update the conversation in our main list to ensure persistence
+      final prevIndex =
+          _conversations.indexWhere((c) => c.id == _selectedConversation!.id);
+      if (prevIndex != -1) {
+        _conversations[prevIndex] = _selectedConversation!;
+      }
+    }
+
+    // Find the most updated version of the conversation from our list
+    final index = _conversations.indexWhere((c) => c.id == conversation.id);
+    if (index != -1) {
+      _selectedConversation = _conversations[index];
+    } else {
+      _selectedConversation = conversation;
     }
 
     // Mark messages as read
-    if (conversation.unreadCount > 0) {
-      final updatedMessages = conversation.messages.map((message) {
+    if (_selectedConversation!.unreadCount > 0) {
+      final updatedMessages = _selectedConversation!.messages.map((message) {
         return message.copyWith(isRead: true);
       }).toList();
 
-      final updatedConversation = conversation.copyWith(
+      final updatedConversation = _selectedConversation!.copyWith(
         messages: updatedMessages,
         unreadCount: 0,
       );
 
-      // Update conversation in the list
-      final index = _conversations.indexWhere((c) => c.id == conversation.id);
-      if (index != -1) {
-        _conversations[index] = updatedConversation;
+      // Update in our lists
+      final updatedIndex =
+          _conversations.indexWhere((c) => c.id == updatedConversation.id);
+      if (updatedIndex != -1) {
+        _conversations[updatedIndex] = updatedConversation;
         _selectedConversation = updatedConversation;
-        _applyFilters();
       }
 
-      // TODO: Update read status in Firebase
-      // FirebaseFirestore.instance
-      //    .collection('conversations')
-      //    .doc(conversation.id)
-      //    .collection('messages')
-      //    .where('isRead', isEqualTo: false)
-      //    .where('senderId', isNotEqualTo: 'current')
-      //    .get()
-      //    .then((snapshot) {
-      //      final batch = FirebaseFirestore.instance.batch();
-      //      for (var doc in snapshot.docs) {
-      //        batch.update(doc.reference, {'isRead': true});
-      //      }
-      //      return batch.commit();
-      //    });
+      _applyFilters();
     }
 
     // Scroll to bottom of messages after frame is built
@@ -283,8 +289,18 @@ class MessagesController extends ChangeNotifier {
   }
 
   void clearSelectedConversationUI() {
-    // Don't set _selectedConversation to null anymore
-    // This helps maintain conversation state when navigating
+    // IMPORTANT: Don't set _selectedConversation to null anymore
+    // This ensures we maintain the conversation data
+
+    // Instead, ensure the selected conversation is saved in our main list
+    if (_selectedConversation != null) {
+      final index =
+          _conversations.indexWhere((c) => c.id == _selectedConversation!.id);
+      if (index != -1) {
+        _conversations[index] = _selectedConversation!;
+      }
+    }
+
     notifyListeners();
   }
 
@@ -300,6 +316,55 @@ class MessagesController extends ChangeNotifier {
     final currentUser = _selectedConversation!.participants
         .firstWhere((p) => p.id == currentUserId);
 
+    // Check if we're editing a message
+    if (_editingMessage != null) {
+      // Create an edited version of the message
+      final editedMessage = _editingMessage!.copyWith(
+        content: content,
+        isEdited: true,
+      );
+
+      // Find the message in the conversation and replace it
+      final updatedMessages = _selectedConversation!.messages.map((m) {
+        return m.id == editedMessage.id ? editedMessage : m;
+      }).toList();
+
+      final updatedConversation = _selectedConversation!.copyWith(
+        messages: updatedMessages,
+        // Only update lastMessage if we're editing the last message
+        lastMessage: _selectedConversation!.lastMessage.id == editedMessage.id
+            ? editedMessage
+            : _selectedConversation!.lastMessage,
+      );
+
+      // Update in our lists
+      final index =
+          _conversations.indexWhere((c) => c.id == updatedConversation.id);
+      if (index != -1) {
+        _conversations[index] = updatedConversation;
+        _selectedConversation = updatedConversation;
+        _applyFilters();
+      }
+
+      // TODO: Update in Firebase
+      // FirebaseFirestore.instance
+      //    .collection('conversations')
+      //    .doc(_selectedConversation!.id)
+      //    .collection('messages')
+      //    .doc(editedMessage.id)
+      //    .update({
+      //      'content': content,
+      //      'isEdited': true,
+      //    });
+
+      // Clear editing state
+      _editingMessage = null;
+      messageController.clear();
+      notifyListeners();
+      return;
+    }
+
+    // Normal message send, but check for reply
     final newMessage = Message(
       id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
       senderId: currentUserId,
@@ -308,7 +373,15 @@ class MessagesController extends ChangeNotifier {
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
       isRead: false,
+      // Add reply metadata if this is a reply
+      replyToId: _replyToMessage?.id,
+      replyToSenderName: _replyToMessage?.senderName,
+      replyToContent: _replyToMessage?.content,
+      replyToMessageType: _replyToMessage?.messageType,
     );
+
+    // Clear reply state
+    _replyToMessage = null;
 
     // Add message locally first (optimistic update)
     final updatedMessages = [
@@ -517,7 +590,8 @@ class MessagesController extends ChangeNotifier {
     final now = DateTime.now();
     final newMessage = Message(
       id: 'msg_${now.millisecondsSinceEpoch}',
-      content: 'Voice message (${_formatDuration(durationSeconds)})',
+      content:
+          '${TextStrings.voiceMessage} (${_formatDuration(durationSeconds)})',
       senderId: 'current', // Assuming current user
       senderName: 'You',
       timestamp: now,
@@ -589,6 +663,237 @@ class MessagesController extends ChangeNotifier {
         curve: Curves.easeOut,
       );
     }
+  }
+
+  void markConversationAsRead(Conversation conversation) {
+    if (conversation.unreadCount > 0) {
+      final updatedMessages = conversation.messages.map((message) {
+        return message.copyWith(isRead: true);
+      }).toList();
+
+      final updatedConversation = conversation.copyWith(
+        messages: updatedMessages,
+        unreadCount: 0,
+      );
+
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index] = updatedConversation;
+        if (_selectedConversation?.id == conversation.id) {
+          _selectedConversation = updatedConversation;
+        }
+        _applyFilters();
+      }
+
+      // TODO: Update in Firebase
+      // FirebaseFirestore.instance
+      //    .collection('conversations')
+      //    .doc(conversation.id)
+      //    .update({'unreadCount': 0});
+
+      notifyListeners();
+    }
+  }
+
+  void markConversationAsUnread(Conversation conversation) {
+    // Find the latest message not from the current user
+    final latestOtherUserMessage = conversation.messages.firstWhere(
+      (message) => message.senderId != 'current',
+      orElse: () => conversation.messages.first,
+    );
+
+    // Mark it as unread
+    final updatedMessages = conversation.messages.map((message) {
+      if (message.id == latestOtherUserMessage.id) {
+        return message.copyWith(isRead: false);
+      }
+      return message;
+    }).toList();
+
+    final updatedConversation = conversation.copyWith(
+      messages: updatedMessages,
+      unreadCount: 1, // We're marking just one message as unread
+    );
+
+    final index = _conversations.indexWhere((c) => c.id == conversation.id);
+    if (index != -1) {
+      _conversations[index] = updatedConversation;
+      if (_selectedConversation?.id == conversation.id) {
+        _selectedConversation = updatedConversation;
+      }
+      _applyFilters();
+    }
+
+    // TODO: Update in Firebase
+    // FirebaseFirestore.instance
+    //   .collection('conversations')
+    //   .doc(conversation.id)
+    //   .update({'unreadCount': 1});
+
+    notifyListeners();
+  }
+
+  void setReplyToMessage(Message message) {
+    _replyToMessage = message;
+    notifyListeners();
+  }
+
+  void cancelReply() {
+    _replyToMessage = null;
+    notifyListeners();
+  }
+
+  void setEditingMessage(Message message) {
+    _editingMessage = message;
+    // Set the message text in the input field for editing
+    messageController.text = message.content;
+    notifyListeners();
+  }
+
+  void cancelEditing() {
+    _editingMessage = null;
+    messageController.clear();
+    notifyListeners();
+  }
+
+  Future<void> forwardMessage(
+      Message message, Conversation targetConversation) async {
+    // Create a forwarded version of the message with appropriate fields
+    final forwardedMessage = Message(
+      id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: 'current',
+      senderName: 'You',
+      content: message.content,
+      timestamp: DateTime.now(),
+      messageType: message.messageType,
+      mediaUrl: message.mediaUrl,
+      voiceDuration: message.voiceDuration,
+      status: MessageStatus.sending,
+      isRead: false,
+      // Simply mark as forwarded without reference to original sender
+      forwardedFrom: message.senderId == 'current' ? null : message.senderName,
+    );
+
+    // Add to target conversation
+    final updatedMessages = [
+      forwardedMessage,
+      ...targetConversation.messages,
+    ];
+
+    final updatedConversation = targetConversation.copyWith(
+      messages: updatedMessages,
+      lastMessage: forwardedMessage,
+    );
+
+    // Update in our lists
+    final index =
+        _conversations.indexWhere((c) => c.id == targetConversation.id);
+    if (index != -1) {
+      _conversations[index] = updatedConversation;
+      _applyFilters();
+    }
+
+    // The first notify is needed to update the UI immediately
+    notifyListeners();
+
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    // Update status to delivered
+    final deliveredMessage =
+        forwardedMessage.copyWith(status: MessageStatus.delivered);
+    final updatedMessagesDelivered = updatedMessages.map((m) {
+      return m.id == forwardedMessage.id ? deliveredMessage : m;
+    }).toList();
+
+    final deliveredConversation = updatedConversation.copyWith(
+      messages: updatedMessagesDelivered,
+      lastMessage: deliveredMessage,
+    );
+
+    // Update in lists
+    final deliveredIndex =
+        _conversations.indexWhere((c) => c.id == deliveredConversation.id);
+    if (deliveredIndex != -1) {
+      _conversations[deliveredIndex] = deliveredConversation;
+      _applyFilters();
+    }
+
+    // The second notify is needed to update status changes
+    notifyListeners();
+
+    // Return success to allow the caller to show a snackbar if needed
+    return;
+  }
+
+  // Method to copy message content to clipboard
+  Future<void> copyToClipboard(String text, BuildContext context) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+
+      // Safely show a snackbar if context is still valid
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Text copied to clipboard"),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      print("Failed to copy text: $e");
+    }
+  }
+
+  // Method to find and scroll to a message by ID
+  Future<void> scrollToMessage(String messageId) async {
+    if (_selectedConversation == null) return;
+
+    // Find the message in the conversation
+    final index =
+        _selectedConversation!.messages.indexWhere((m) => m.id == messageId);
+
+    if (index == -1) return; // Message not found
+
+    // Calculate approximate position
+    // Since ListView is reversed with newest at top, we need to calculate position from the bottom
+    final totalMessages = _selectedConversation!.messages.length;
+    final approxItemHeight =
+        80.0; // Approximate height of each message in pixels
+
+    // Wait for the next frame to ensure the ListView is built
+    await Future.delayed(Duration.zero);
+
+    if (messageScrollController.hasClients) {
+      // Calculate position (reverse order since newest at top)
+      final position = (totalMessages - 1 - index) * approxItemHeight;
+
+      // Scroll to the position
+      messageScrollController.animateTo(
+        position,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+
+      // Highlight the message (you'd need to implement a highlighting mechanism)
+      _highlightMessage(messageId);
+    }
+  }
+
+  // Message ID that should be highlighted
+  String? _highlightedMessageId;
+  String? get highlightedMessageId => _highlightedMessageId;
+
+  // Highlight a message temporarily
+  void _highlightMessage(String messageId) {
+    _highlightedMessageId = messageId;
+    notifyListeners();
+
+    // Remove the highlight after a delay
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      _highlightedMessageId = null;
+      notifyListeners();
+    });
   }
 
   @override

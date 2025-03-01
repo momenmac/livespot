@@ -23,21 +23,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    // Pass controller reference to conversation object
+    // Pass controller reference
     widget.conversation.controller = widget.controller;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // Always reselect conversation when page opens
+        // Always reselect conversation when page opens to ensure we have latest data
         widget.controller.selectConversation(widget.conversation);
       }
     });
   }
 
+  // Don't clear the selected conversation when leaving the page anymore
   @override
   void dispose() {
-    // Don't clear the selected conversation when leaving the page
-    // This allows the conversation to remain selected for seamless return
+    // Remove the call to clearSelection or similar method here
     super.dispose();
   }
 

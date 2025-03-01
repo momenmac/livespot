@@ -11,7 +11,6 @@ enum MessageType {
   system,
 }
 
-// Add MessageStatus enum
 enum MessageStatus {
   sending,
   sent,
@@ -30,8 +29,16 @@ class Message {
   final bool isDelivered;
   final MessageType messageType;
   final String? mediaUrl;
-  final int? voiceDuration; // Duration in seconds for voice messages
-  final MessageStatus? status; // Add status property
+  final int? voiceDuration;
+  final MessageStatus? status;
+
+  // Add these new fields for reply functionality
+  final String? replyToId; // ID of the message this is replying to
+  final String? replyToSenderName; // Name of the sender of the original message
+  final String? replyToContent; // Content of the original message
+  final MessageType? replyToMessageType; // Type of original message
+  final bool? isEdited; // Flag to indicate if message was edited
+  final String? forwardedFrom; // Name of original sender if forwarded
 
   const Message({
     required this.id,
@@ -45,10 +52,24 @@ class Message {
     this.messageType = MessageType.text,
     this.mediaUrl,
     this.voiceDuration,
-    this.status, // Make it optional for now
+    this.status,
+    // Add the new fields to constructor
+    this.replyToId,
+    this.replyToSenderName,
+    this.replyToContent,
+    this.replyToMessageType,
+    this.isEdited = false,
+    this.forwardedFrom,
   });
 
   bool get isVoiceMessage => messageType == MessageType.voice;
+
+  // Add helper method to check if this is a reply
+  bool get isReply => replyToId != null;
+
+  // Add helper method to check if this is forwarded
+  // Update to make it simpler - just check if forwardedFrom exists
+  bool get isForwarded => forwardedFrom != null;
 
   Map<String, dynamic> toJson() {
     return {
@@ -63,8 +84,15 @@ class Message {
       'messageType': describeEnum(messageType),
       'mediaUrl': mediaUrl,
       'voiceDuration': voiceDuration,
-      'status':
-          status != null ? describeEnum(status!) : null, // Add status to JSON
+      'status': status != null ? describeEnum(status!) : null,
+      // Add new fields to JSON
+      'replyToId': replyToId,
+      'replyToSenderName': replyToSenderName,
+      'replyToContent': replyToContent,
+      'replyToMessageType':
+          replyToMessageType != null ? describeEnum(replyToMessageType!) : null,
+      'isEdited': isEdited,
+      'forwardedFrom': forwardedFrom,
     };
   }
 
@@ -80,7 +108,14 @@ class Message {
     MessageType? messageType,
     String? mediaUrl,
     int? voiceDuration,
-    MessageStatus? status, // Add status to copyWith
+    MessageStatus? status,
+    // Add new fields to copyWith
+    String? replyToId,
+    String? replyToSenderName,
+    String? replyToContent,
+    MessageType? replyToMessageType,
+    bool? isEdited,
+    String? forwardedFrom,
   }) {
     return Message(
       id: id ?? this.id,
@@ -94,7 +129,14 @@ class Message {
       messageType: messageType ?? this.messageType,
       mediaUrl: mediaUrl ?? this.mediaUrl,
       voiceDuration: voiceDuration ?? this.voiceDuration,
-      status: status ?? this.status, // Include status in copyWith
+      status: status ?? this.status,
+      // Include new fields in copyWith
+      replyToId: replyToId ?? this.replyToId,
+      replyToSenderName: replyToSenderName ?? this.replyToSenderName,
+      replyToContent: replyToContent ?? this.replyToContent,
+      replyToMessageType: replyToMessageType ?? this.replyToMessageType,
+      isEdited: isEdited ?? this.isEdited,
+      forwardedFrom: forwardedFrom ?? this.forwardedFrom,
     );
   }
 
@@ -111,9 +153,17 @@ class Message {
       messageType: _parseMessageType(json['messageType']),
       mediaUrl: json['mediaUrl'],
       voiceDuration: json['voiceDuration'],
-      status: json['status'] != null
-          ? _parseMessageStatus(json['status'])
-          : null, // Parse status
+      status:
+          json['status'] != null ? _parseMessageStatus(json['status']) : null,
+      // Parse new fields from JSON
+      replyToId: json['replyToId'],
+      replyToSenderName: json['replyToSenderName'],
+      replyToContent: json['replyToContent'],
+      replyToMessageType: json['replyToMessageType'] != null
+          ? _parseMessageType(json['replyToMessageType'])
+          : null,
+      isEdited: json['isEdited'] ?? false,
+      forwardedFrom: json['forwardedFrom'],
     );
   }
 
@@ -140,7 +190,6 @@ class Message {
     }
   }
 
-  // Add helper method to parse MessageStatus from string
   static MessageStatus _parseMessageStatus(String status) {
     switch (status) {
       case 'sending':
