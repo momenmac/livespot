@@ -62,6 +62,9 @@ class MessagesController extends ChangeNotifier {
     if (_isSearchMode) {
       _searchQuery = searchController.text;
       _applyFilters();
+
+      // Always notify listeners to ensure UI updates even when results are empty
+      notifyListeners();
     }
   }
 

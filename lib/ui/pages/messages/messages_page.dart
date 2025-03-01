@@ -85,20 +85,26 @@ class _MessagesPageState extends State<MessagesPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
+            icon: Icon(_controller.isSearchMode ? Icons.close : Icons.search),
             onPressed: () {
-              _controller.toggleSearchMode();
-              setState(() {});
+              // Toggle search mode and refresh the UI
+              setState(() {
+                _controller.toggleSearchMode();
+              });
             },
-            tooltip: TextStrings.searchMessages,
+            tooltip: _controller.isSearchMode
+                ? TextStrings.cancel
+                : TextStrings.searchMessages,
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              _showFilterOptions(context);
-            },
-            tooltip: TextStrings.filterMessages,
-          ),
+          // Only show filter when not in search mode
+          if (!_controller.isSearchMode)
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: () {
+                _showFilterOptions(context);
+              },
+              tooltip: TextStrings.filterMessages,
+            ),
         ],
       ),
       body: AnimatedBuilder(
@@ -114,14 +120,17 @@ class _MessagesPageState extends State<MessagesPage> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'messagesPageFAB', // Add this unique hero tag
-        backgroundColor: ThemeConstants.primaryColor,
-        child: const Icon(Icons.add_comment, color: Colors.white),
-        onPressed: () {
-          _showNewConversationDialog(context);
-        },
-      ),
+      // Only show FAB when not in search mode
+      floatingActionButton: _controller.isSearchMode
+          ? null
+          : FloatingActionButton(
+              heroTag: 'messagesPageFAB', // Add this unique hero tag
+              backgroundColor: ThemeConstants.primaryColor,
+              child: const Icon(Icons.add_comment, color: Colors.white),
+              onPressed: () {
+                _showNewConversationDialog(context);
+              },
+            ),
     );
   }
 
@@ -183,70 +192,232 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   void _showNewConversationDialog(BuildContext context) {
+    final TextEditingController searchController = TextEditingController();
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Create a mock list of users
+    final allUsers = List.generate(
+        10,
+        (index) => {
+              'id': 'user${index + 1}',
+              'name': 'User ${index + 1}',
+              'email': 'user${index + 1}@example.com',
+            });
+
+    // Define a separate widget to handle the search functionality
+    // This ensures proper state management
     showDialog(
       context: context,
       builder: (context) {
-        final TextEditingController searchController = TextEditingController();
-        return AlertDialog(
-          title: Text(TextStrings.newConversation),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: searchController,
-                  decoration: InputDecoration(
-                    hintText: TextStrings.searchUsers,
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+        return _SearchableContactsDialog(
+          allUsers: allUsers,
+          searchController: searchController,
+          theme: theme,
+          isDarkMode: isDarkMode,
+        );
+      },
+    );
+  }
+}
+
+class _SearchableContactsDialog extends StatefulWidget {
+  final List<Map<String, String>> allUsers;
+  final TextEditingController searchController;
+  final ThemeData theme;
+  final bool isDarkMode;
+
+  const _SearchableContactsDialog({
+    required this.allUsers,
+    required this.searchController,
+    required this.theme,
+    required this.isDarkMode,
+  });
+
+  @override
+  State<_SearchableContactsDialog> createState() =>
+      _SearchableContactsDialogState();
+}
+
+class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
+  late List<Map<String, String>> filteredUsers;
+
+  @override
+  void initState() {
+    super.initState();
+    filteredUsers = List.from(widget.allUsers);
+
+    // Add listener to the controller for immediate search response
+    widget.searchController.addListener(_handleSearchChange);
+  }
+
+  @override
+  void dispose() {
+    // Remove listener to prevent memory leaks
+    widget.searchController.removeListener(_handleSearchChange);
+    super.dispose();
+  }
+
+  // Search handler triggered by controller changes
+  void _handleSearchChange() {
+    final query = widget.searchController.text;
+    _filterUsers(query);
+  }
+
+  // Explicit method to filter users
+  void _filterUsers(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredUsers = List.from(widget.allUsers);
+      } else {
+        filteredUsers = widget.allUsers.where((user) {
+          final name = user['name']!.toLowerCase();
+          final email = user['email']!.toLowerCase();
+          final searchLower = query.toLowerCase();
+          return name.contains(searchLower) || email.contains(searchLower);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16.0),
+      ),
+      // Apply constraints for better responsive width
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 500, // Maximum width for the dialog
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title with theme-adaptive color
+              Text(
+                TextStrings.newConversation,
+                style: widget.theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: widget.theme.textTheme.titleLarge?.color,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Search field - using both onChanged and controller
+              TextField(
+                controller: widget.searchController,
+                decoration: InputDecoration(
+                  hintText: TextStrings.searchUsers,
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: widget.searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            widget.searchController.clear();
+                            // This will trigger the listener
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onChanged:
+                    _filterUsers, // Direct connection for web compatibility
+                autofocus: true,
+              ),
+
+              const SizedBox(height: 20),
+
+              // Header with count
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    filteredUsers.length == widget.allUsers.length
+                        ? TextStrings.recentContacts
+                        : '${filteredUsers.length} ${TextStrings.recentContacts}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: widget.theme.textTheme.titleMedium?.color,
+                    ),
+                  ),
+                  if (filteredUsers.length != widget.allUsers.length)
+                    TextButton(
+                      onPressed: () {
+                        widget.searchController.clear();
+                      },
+                      child: const Text('Show All'),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // Results list
+              Flexible(
+                child: filteredUsers.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text(
+                            'No users found matching "${widget.searchController.text}"',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filteredUsers.length,
+                        itemBuilder: (context, index) {
+                          final user = filteredUsers[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: ThemeConstants.primaryColor,
+                              child: Text(user['name']![0]),
+                            ),
+                            title: Text(user['name']!),
+                            subtitle: Text(user['email']!),
+                            onTap: () {
+                              ResponsiveSnackBar.showInfo(
+                                context: context,
+                                message:
+                                    "${TextStrings.startingConversationWith} ${user['name']}",
+                              );
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Cancel button
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    TextStrings.cancel,
+                    style: TextStyle(
+                      color: widget.isDarkMode
+                          ? Colors.white70
+                          : ThemeConstants.primaryColor,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  TextStrings.recentContacts,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                // Mock recent contacts list
-                SizedBox(
-                  height: 200,
-                  child: ListView.builder(
-                    itemCount: 5,
-                    itemBuilder: (context, index) {
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: ThemeConstants.primaryColor,
-                          child: Text("U${index + 1}"),
-                        ),
-                        title: Text("User ${index + 1}"),
-                        subtitle: Text("user${index + 1}@example.com"),
-                        onTap: () {
-                          // TODO: Create new conversation with this user
-                          ResponsiveSnackBar.showInfo(
-                            context: context,
-                            message:
-                                "${TextStrings.startingConversationWith} User ${index + 1}",
-                          );
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(TextStrings.cancel),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 }

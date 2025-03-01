@@ -38,31 +38,9 @@ class ConversationList extends StatelessWidget {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    if (controller.conversations.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.forum_outlined,
-              size: 60,
-              color: ThemeConstants.grey.withOpacity(0.6),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              controller.filterMode == FilterMode.all
-                  ? TextStrings.noConversationsYet
-                  : TextStrings.noConversationsMatchFilter,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
-            ),
-          ],
-        ),
-      );
-    }
-
     return Column(
       children: [
+        // Always show search bar when search mode is active
         if (controller.isSearchMode)
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -75,6 +53,16 @@ class ConversationList extends StatelessWidget {
                     : ThemeConstants.lightCardColor,
                 hintText: TextStrings.searchConversations,
                 prefixIcon: const Icon(Icons.search),
+                // Add a clear button for easier search resetting
+                suffixIcon: controller.searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          controller.searchController.clear();
+                          // This will trigger the listener and refresh results
+                        },
+                      )
+                    : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -84,127 +72,174 @@ class ConversationList extends StatelessWidget {
               autofocus: true,
             ),
           ),
+
+        // Expanded widget for the list (or empty state)
         Expanded(
-          child: ListView.builder(
-            controller: controller.listScrollController,
-            itemCount: controller.conversations.length,
-            itemBuilder: (context, index) {
-              final conversation = controller.conversations[index];
-
-              // Make sure conversation has a reference to controller
-              conversation.controller = controller;
-
-              // Wrap the conversation tile in a Dismissible widget
-              return Dismissible(
-                key: Key(conversation.id),
-                // Allow swipes in both directions
-                direction: DismissDirection.horizontal,
-
-                // Background for left-to-right swipe (mark read/unread)
-                background: Container(
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.only(left: 20.0),
-                  color: ThemeConstants.green,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        conversation.unreadCount > 0
-                            ? Icons.done_all
-                            : Icons.mark_email_unread,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        conversation.unreadCount > 0
-                            ? TextStrings.markAsRead
-                            : TextStrings.markAsUnread,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Background for right-to-left swipe (archive)
-                secondaryBackground: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20.0),
-                  color: ThemeConstants.orange,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        conversation.isArchived
-                            ? Icons.unarchive
-                            : Icons.archive,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        conversation.isArchived
-                            ? TextStrings.unarchive
-                            : TextStrings.archive,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Confirmation thresholds
-                confirmDismiss: (direction) async {
-                  if (direction == DismissDirection.endToStart) {
-                    // Archive/unarchive (right to left swipe)
-                    controller.toggleArchive(conversation);
-
-                    // Show a snackbar confirmation
-                    ResponsiveSnackBar.showInfo(
-                      context: context,
-                      message: conversation.isArchived
-                          ? TextStrings.conversationArchived
-                          : TextStrings.conversationUnarchived,
-                    );
-
-                    // Return false to keep the item in the list
-                    return false;
-                  } else if (direction == DismissDirection.startToEnd) {
-                    // Mark as read/unread (left to right swipe)
-                    if (conversation.unreadCount > 0) {
-                      // Mark as read
-                      controller.markConversationAsRead(conversation);
-                    } else {
-                      // Mark as unread
-                      controller.markConversationAsUnread(conversation);
-                    }
-
-                    // Show a snackbar confirmation
-                    ResponsiveSnackBar.showInfo(
-                      context: context,
-                      message: conversation.unreadCount > 0
-                          ? TextStrings.markedAsUnread
-                          : TextStrings.markedAsRead,
-                    );
-
-                    // Return false to keep the item in the list
-                    return false;
-                  }
-                  return false;
-                },
-
-                child: _ConversationTile(
-                  conversation: conversation,
-                  isSelected: false,
-                  controller: controller,
-                  onTap: () => onConversationSelected(conversation),
-                  onLongPress: () =>
-                      _showConversationActions(context, conversation),
-                ),
-              );
-            },
-          ),
+          child: _buildConversationListContent(context, theme, isDarkMode),
         ),
       ],
+    );
+  }
+
+  // Helper method to build the appropriate content based on state
+  Widget _buildConversationListContent(
+      BuildContext context, ThemeData theme, bool isDarkMode) {
+    // If there are no conversations (either in general or after filtering)
+    if (controller.conversations.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.forum_outlined,
+              size: 60,
+              color: ThemeConstants.grey.withOpacity(0.6),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              // Show different messages based on whether we're searching or not
+              controller.isSearchMode
+                  ? "No conversations match your search"
+                  : controller.filterMode == FilterMode.all
+                      ? TextStrings.noConversationsYet
+                      : TextStrings.noConversationsMatchFilter,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge,
+            ),
+            // Add a button to clear search if we're in search mode with no results
+            if (controller.isSearchMode &&
+                controller.searchController.text.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.clear),
+                  label: const Text("Clear search"),
+                  onPressed: () {
+                    controller.searchController.clear();
+                    // This will trigger the listener and refresh results
+                  },
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // Otherwise, show the conversation list
+    return ListView.builder(
+      controller: controller.listScrollController,
+      itemCount: controller.conversations.length,
+      itemBuilder: (context, index) {
+        final conversation = controller.conversations[index];
+
+        // Make sure conversation has a reference to controller
+        conversation.controller = controller;
+
+        // Wrap the conversation tile in a Dismissible widget
+        return Dismissible(
+          key: Key(conversation.id),
+          // Allow swipes in both directions
+          direction: DismissDirection.horizontal,
+
+          // Background for left-to-right swipe (mark read/unread)
+          background: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 20.0),
+            color: ThemeConstants.green,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  conversation.unreadCount > 0
+                      ? Icons.done_all
+                      : Icons.mark_email_unread,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  conversation.unreadCount > 0
+                      ? TextStrings.markAsRead
+                      : TextStrings.markAsUnread,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+
+          // Background for right-to-left swipe (archive)
+          secondaryBackground: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20.0),
+            color: ThemeConstants.orange,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  conversation.isArchived ? Icons.unarchive : Icons.archive,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  conversation.isArchived
+                      ? TextStrings.unarchive
+                      : TextStrings.archive,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+
+          // Confirmation thresholds
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.endToStart) {
+              // Archive/unarchive (right to left swipe)
+              controller.toggleArchive(conversation);
+
+              // Show a snackbar confirmation
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: conversation.isArchived
+                    ? TextStrings.conversationArchived
+                    : TextStrings.conversationUnarchived,
+              );
+
+              // Return false to keep the item in the list
+              return false;
+            } else if (direction == DismissDirection.startToEnd) {
+              // Mark as read/unread (left to right swipe)
+              if (conversation.unreadCount > 0) {
+                // Mark as read
+                controller.markConversationAsRead(conversation);
+              } else {
+                // Mark as unread
+                controller.markConversationAsUnread(conversation);
+              }
+
+              // Show a snackbar confirmation
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: conversation.unreadCount > 0
+                    ? TextStrings.markedAsUnread
+                    : TextStrings.markedAsRead,
+              );
+
+              // Return false to keep the item in the list
+              return false;
+            }
+            return false;
+          },
+
+          child: _ConversationTile(
+            conversation: conversation,
+            isSelected: false,
+            controller: controller,
+            onTap: () => onConversationSelected(conversation),
+            onLongPress: () => _showConversationActions(context, conversation),
+          ),
+        );
+      },
     );
   }
 
