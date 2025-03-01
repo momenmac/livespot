@@ -219,8 +219,9 @@ class TextStrings {
   static const String forwarded = 'Forwarded';
   static const String editMessage = 'Edit Message';
   static const String messageEdited = 'Edited';
-  static const String messageSaved = 'Message saved';
+  static const String messageSaved = 'Message forwareded';
   static const String cancelReply = 'Cancel reply';
   static const String cancelEdit = 'Cancel edit';
   static const String noConversationsForward = 'No conversations to forward to';
+  static const String copiedToClipboard = 'Text copied to clipboard';
 }

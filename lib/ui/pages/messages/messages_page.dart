@@ -21,16 +21,17 @@ class _MessagesPageState extends State<MessagesPage> {
     super.initState();
     _controller = MessagesController();
     _loadMessages();
+
+    // Ensure all messages have controller references
+    _controller.ensureMessageControllerReferences();
   }
 
   Future<void> _loadMessages() async {
     try {
       await _controller.loadConversations();
 
-      // Add the controller reference to each conversation
-      for (final conversation in _controller.conversations) {
-        conversation.controller = _controller;
-      }
+      // Ensure all messages have controller references
+      _controller.ensureMessageControllerReferences();
 
       if (mounted) {
         setState(() {

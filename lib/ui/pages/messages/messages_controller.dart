@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:core';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +5,7 @@ import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 enum FilterMode {
   all,
@@ -53,6 +53,9 @@ class MessagesController extends ChangeNotifier {
 
   MessagesController() {
     searchController.addListener(_onSearchChanged);
+
+    // Ensure all controllers are set
+    ensureMessageControllerReferences();
   }
 
   void _onSearchChanged() {
@@ -73,6 +76,9 @@ class MessagesController extends ChangeNotifier {
     // Mock data for now
     _conversations = _generateMockConversations();
     _applyFilters();
+
+    // Set controller references on all messages
+    ensureMessageControllerReferences();
   }
 
   List<Conversation> _generateMockConversations() {
@@ -849,13 +855,12 @@ class MessagesController extends ChangeNotifier {
     try {
       await Clipboard.setData(ClipboardData(text: text));
 
-      // Safely show a snackbar if context is still valid
+      // Replace standard SnackBar with ResponsiveSnackbar
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Text copied to clipboard"),
-            duration: Duration(seconds: 1),
-          ),
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: TextStrings
+              .copiedToClipboard, // You may need to add this to TextStrings
         );
       }
     } catch (e) {
@@ -912,6 +917,27 @@ class MessagesController extends ChangeNotifier {
       _highlightedMessageId = null;
       notifyListeners();
     });
+  }
+
+  // Add this method to ensure all messages have controller references
+  void ensureMessageControllerReferences() {
+    for (final conversation in _conversations) {
+      conversation.controller = this;
+
+      for (final message in conversation.messages) {
+        message.controller = this;
+      }
+    }
+
+    if (_selectedConversation != null) {
+      _selectedConversation!.controller = this;
+
+      for (final message in _selectedConversation!.messages) {
+        message.controller = this;
+      }
+    }
+
+    notifyListeners();
   }
 
   @override

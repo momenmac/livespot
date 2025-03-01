@@ -1287,8 +1287,9 @@ class _MessageDetailState extends State<MessageDetail>
                                 final conversation =
                                     filteredConversations[index];
                                 // Don't show current conversation in the list
-                                if (conversation.id == widget.conversation.id)
+                                if (conversation.id == widget.conversation.id) {
                                   return const SizedBox.shrink();
+                                }
 
                                 return ListTile(
                                   leading: CircleAvatar(

@@ -6,6 +6,7 @@ import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 // Simple class to hold action button data
 class ActionItem {
@@ -158,22 +159,11 @@ class ConversationList extends StatelessWidget {
                     controller.toggleArchive(conversation);
 
                     // Show a snackbar confirmation
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          conversation.isArchived
-                              ? TextStrings.conversationArchived
-                              : TextStrings.conversationUnarchived,
-                        ),
-                        action: SnackBarAction(
-                          label: TextStrings.undo,
-                          textColor: ThemeConstants.primaryColor,
-                          onPressed: () {
-                            controller.toggleArchive(conversation);
-                          },
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
+                    ResponsiveSnackBar.showInfo(
+                      context: context,
+                      message: conversation.isArchived
+                          ? TextStrings.conversationArchived
+                          : TextStrings.conversationUnarchived,
                     );
 
                     // Return false to keep the item in the list
@@ -189,13 +179,11 @@ class ConversationList extends StatelessWidget {
                     }
 
                     // Show a snackbar confirmation
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(conversation.unreadCount > 0
-                            ? TextStrings.markedAsUnread
-                            : TextStrings.markedAsRead),
-                        duration: const Duration(seconds: 1),
-                      ),
+                    ResponsiveSnackBar.showInfo(
+                      context: context,
+                      message: conversation.unreadCount > 0
+                          ? TextStrings.markedAsUnread
+                          : TextStrings.markedAsRead,
                     );
 
                     // Return false to keep the item in the list
@@ -259,13 +247,11 @@ class ConversationList extends StatelessWidget {
               }
               Navigator.pop(context);
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(conversation.unreadCount > 0
-                      ? TextStrings.markedAsRead
-                      : TextStrings.markedAsUnread),
-                  duration: const Duration(seconds: 1),
-                ),
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: conversation.unreadCount > 0
+                    ? TextStrings.markedAsRead
+                    : TextStrings.markedAsUnread,
               );
             },
           ),
@@ -282,22 +268,11 @@ class ConversationList extends StatelessWidget {
               Navigator.pop(context);
 
               // Show a snackbar confirmation
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    conversation.isArchived
-                        ? TextStrings.conversationUnarchived
-                        : TextStrings.conversationArchived,
-                  ),
-                  action: SnackBarAction(
-                    label: TextStrings.undo,
-                    textColor: ThemeConstants.primaryColor,
-                    onPressed: () {
-                      controller.toggleArchive(conversation);
-                    },
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: conversation.isArchived
+                    ? TextStrings.conversationUnarchived
+                    : TextStrings.conversationArchived,
               );
             },
           ),
@@ -528,10 +503,15 @@ class _ConversationTile extends StatelessWidget {
       color: Colors.transparent,
       child: ListTile(
         onTap: () {
-          // Set the controller reference before navigating
+          // Set controller on conversation and all its messages before navigating
           conversation.controller = controller;
 
-          // Navigate to the chat detail page
+          // Set controller on ALL messages in the conversation
+          for (final message in conversation.messages) {
+            message.controller = controller;
+          }
+
+          // Now navigate to the chat detail page
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -541,7 +521,7 @@ class _ConversationTile extends StatelessWidget {
               ),
             ),
           ).then((_) {
-            // Force refresh when returning to ensure we have latest data
+            // Force refresh when returning
             if (controller.selectedConversation?.id == conversation.id) {
               controller.selectConversation(conversation);
             }

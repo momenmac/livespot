@@ -49,7 +49,7 @@ class Conversation {
       groupName: groupName ?? this.groupName,
       isMuted: isMuted ?? this.isMuted,
       isArchived: isArchived ?? this.isArchived,
-      controller: this.controller, // Preserve the controller reference
+      controller: controller, // Preserve the controller reference
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -10,7 +11,15 @@ import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package path
 
 Future<void> main() async {
+  // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Set preferred orientations if needed
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

@@ -62,48 +62,54 @@ class _MapSearchBarState extends State<MapSearchBar> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: widget.controller.locationController,
-                      focusNode: _focusNode,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: isDarkMode
-                            ? ThemeConstants.darkCardColor
-                            : ThemeConstants.lightBackgroundColor,
-                        hintText: TextStrings.enterYourLocation,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 20),
-                        // Add a clear button to the text field
-                        suffixIcon: widget
-                                .controller.locationController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  widget.controller.locationController.clear();
-                                  widget.controller.showSuggestions = false;
-                                  widget.controller.notifyListeners();
-                                },
-                              )
-                            : null,
+                    child: Container(
+                      constraints: BoxConstraints(
+                        minHeight: 40, // Use a positive minimum height
                       ),
-                      onChanged: (value) {
-                        if (widget.controller.debounce?.isActive ?? false) {
-                          widget.controller.debounce!.cancel();
-                        }
-                        widget.controller.debounce =
-                            Timer(const Duration(milliseconds: 500), () {
-                          widget.controller.fetchSuggestions(value);
-                        });
-                      },
-                      onSubmitted: (value) {
-                        widget.controller.onSearch();
-                        // Hide keyboard after search submission
-                        FocusScope.of(context).unfocus();
-                      },
+                      child: TextField(
+                        controller: widget.controller.locationController,
+                        focusNode: _focusNode,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: isDarkMode
+                              ? ThemeConstants.darkCardColor
+                              : ThemeConstants.lightBackgroundColor,
+                          hintText: TextStrings.enterYourLocation,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 20),
+                          // Add a clear button to the text field
+                          suffixIcon: widget
+                                  .controller.locationController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    widget.controller.locationController
+                                        .clear();
+                                    widget.controller.showSuggestions = false;
+                                    widget.controller.notifyListeners();
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          if (widget.controller.debounce?.isActive ?? false) {
+                            widget.controller.debounce!.cancel();
+                          }
+                          widget.controller.debounce =
+                              Timer(const Duration(milliseconds: 500), () {
+                            widget.controller.fetchSuggestions(value);
+                          });
+                        },
+                        onSubmitted: (value) {
+                          widget.controller.onSearch();
+                          // Hide keyboard after search submission
+                          FocusScope.of(context).unfocus();
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),

@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final Message message;
@@ -13,12 +15,12 @@ class VoiceMessageBubble extends StatefulWidget {
   final Function(Message)? onReply;
 
   const VoiceMessageBubble({
-    Key? key,
+    super.key,
     required this.message,
     required this.isSent,
     this.onLongPress,
     this.onReply,
-  }) : super(key: key);
+  });
 
   @override
   State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
@@ -241,119 +243,361 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   }
 
   Widget _buildOptionsButton(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      margin: const EdgeInsets.only(top: 4, right: 4, left: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF383838)
-            : const Color(0xFFFFFFFF),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () {
+          _showOptionsPopup(context);
+        },
+        child: Container(
+          width: 32,
+          height: 32,
+          margin: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF383838)
+                : const Color(0xFFFFFFFF),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: PopupMenuButton<String>(
-          key: _popupMenuKey,
-          padding: EdgeInsets.zero,
-          tooltip: "Message options",
-          icon: Icon(
+          child: Icon(
             Icons.more_horiz,
             color: Theme.of(context).brightness == Brightness.dark
                 ? Colors.white70
                 : const Color(0xFF444444),
             size: 18,
           ),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          position: PopupMenuPosition.under,
-          onCanceled: () {
-            if (mounted) setState(() {});
-          },
-          itemBuilder: (context) => [
-            // Reply option
-            PopupMenuItem<String>(
-              value: 'reply',
-              child: Row(
-                children: [
-                  Icon(Icons.reply,
-                      color: ThemeConstants.primaryColor, size: 18),
-                  const SizedBox(width: 8),
-                  Text(TextStrings.reply),
-                ],
-              ),
-            ),
-
-            // Forward option
-            PopupMenuItem<String>(
-              value: 'forward',
-              child: Row(
-                children: [
-                  Icon(Icons.forward,
-                      color: ThemeConstants.primaryColor, size: 18),
-                  const SizedBox(width: 8),
-                  Text(TextStrings.forward),
-                ],
-              ),
-            ),
-
-            // Delete option
-            PopupMenuItem<String>(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline,
-                      color: ThemeConstants.red, size: 18),
-                  const SizedBox(width: 8),
-                  Text(TextStrings.delete),
-                ],
-              ),
-            ),
-          ],
-          onSelected: (value) {
-            if (!mounted) return; // Skip if widget is unmounted
-
-            // Get controller from message for direct actions
-            final controller = widget.message.controller;
-
-            switch (value) {
-              case 'reply':
-                // First try to use direct controller method
-                if (controller != null) {
-                  controller.setReplyToMessage(widget.message);
-                }
-                // Fallback to the callback if controller isn't available
-                else if (widget.onReply != null) {
-                  widget.onReply!(widget.message);
-                }
-                break;
-              case 'forward':
-                if (controller != null) {
-                  // Direct use of _showForwardOptions with the message
-                  _showForwardOptions(context, widget.message);
-                } else if (widget.onLongPress != null) {
-                  widget.onLongPress!();
-                }
-                break;
-              case 'delete':
-                if (controller != null) {
-                  controller.deleteMessage(widget.message);
-                } else if (widget.onLongPress != null) {
-                  widget.onLongPress!();
-                }
-                break;
-            }
-          },
         ),
       ),
+    );
+  }
+
+  void _showOptionsPopup(BuildContext context) {
+    // Create menu options
+    final List<PopupMenuEntry<String>> items = [
+      PopupMenuItem<String>(
+        value: 'reply',
+        child: Row(
+          children: [
+            Icon(Icons.reply, color: ThemeConstants.primaryColor, size: 18),
+            const SizedBox(width: 8),
+            Text(TextStrings.reply),
+          ],
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'forward',
+        child: Row(
+          children: [
+            Icon(Icons.forward, color: ThemeConstants.primaryColor, size: 18),
+            const SizedBox(width: 8),
+            Text(TextStrings.forward),
+          ],
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'delete',
+        child: Row(
+          children: [
+            Icon(Icons.delete_outline, color: ThemeConstants.red, size: 18),
+            const SizedBox(width: 8),
+            Text(TextStrings.delete),
+          ],
+        ),
+      ),
+    ];
+
+    // Show the popup at the current pointer position
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(
+            widget.isSent ? Offset.zero : button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    // Show the popup and handle selection
+    showMenu<String>(
+      context: context,
+      position: position,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 8,
+      items: items,
+    ).then((value) {
+      // Handle selection
+      if (value == null) return;
+
+      print("Selected voice option: $value"); // Debug log
+
+      // Get the controller from the message
+      final controller = widget.message.controller;
+
+      switch (value) {
+        case 'reply':
+          print("Replying to voice message: ${widget.message.id}");
+          if (controller != null) {
+            controller.setReplyToMessage(widget.message);
+          } else if (widget.onReply != null) {
+            widget.onReply!(widget.message);
+          }
+          break;
+
+        case 'forward':
+          print("Forwarding voice message: ${widget.message.id}");
+          if (controller != null) {
+            _showForwardSheet(context, widget.message, controller);
+          }
+          break;
+
+        case 'delete':
+          print("Deleting voice message: ${widget.message.id}");
+          if (controller != null) {
+            controller.deleteMessage(widget.message);
+          }
+          break;
+      }
+    });
+  }
+
+  void _showForwardSheet(
+      BuildContext context, Message message, MessagesController controller) {
+    // Get the current context which will be used to show the bottom sheet
+    final currentContext = context;
+
+    // Create a controller for the search field
+    final TextEditingController searchController = TextEditingController();
+
+    // Track filtered conversations
+    List<Conversation> filteredConversations =
+        List.from(controller.conversations);
+
+    if (controller.conversations.isEmpty) {
+      // Replace with ResponsiveSnackbar
+      ResponsiveSnackBar.showInfo(
+        context: context,
+        message: TextStrings.noConversationsForward,
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: currentContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return StatefulBuilder(
+          builder: (builderContext, setState) {
+            // Safe filter function
+            void filterConversations(String query) {
+              setState(() {
+                if (query.isEmpty) {
+                  filteredConversations = List.from(controller.conversations);
+                } else {
+                  filteredConversations =
+                      controller.conversations.where((convo) {
+                    return convo.displayName
+                        .toLowerCase()
+                        .contains(query.toLowerCase());
+                  }).toList();
+                }
+              });
+            }
+
+            return GestureDetector(
+              onTap: () => FocusScope.of(builderContext).unfocus(),
+              child: Container(
+                height: MediaQuery.of(builderContext).size.height * 0.7,
+                decoration: BoxDecoration(
+                  color: Theme.of(builderContext).brightness == Brightness.dark
+                      ? const Color(0xFF2D2D2D)
+                      : Colors.white,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                margin: const EdgeInsets.only(left: 10, right: 10, top: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle bar at top for drag UX
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Title section
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.forward,
+                              color: ThemeConstants.primaryColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            TextStrings.forwardMessage,
+                            style: Theme.of(builderContext)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Preview of message being forwarded
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundImage: NetworkImage(
+                                'https://ui-avatars.com/api/?name=${message.senderName}'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  message.senderName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const Text(TextStrings.voiceMessage),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(),
+
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Text(
+                        TextStrings.selectConversation,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+
+                    // Search field
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: TextField(
+                        controller: searchController,
+                        onChanged: filterConversations,
+                        decoration: InputDecoration(
+                          hintText: TextStrings.searchConversations,
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: Colors.grey.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+
+                    // Conversation list
+                    Expanded(
+                      child: filteredConversations.isEmpty
+                          ? const Center(
+                              child: Text('No matching conversations'))
+                          : ListView.builder(
+                              itemCount: filteredConversations.length,
+                              itemBuilder: (listContext, index) {
+                                final conversation =
+                                    filteredConversations[index];
+
+                                // Don't allow forwarding to the current conversation
+                                if (controller.selectedConversation?.id ==
+                                    conversation.id) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                // Replace standard ListTile with HoverListTile
+                                return _HoverListTile(
+                                  leading: CircleAvatar(
+                                    backgroundImage:
+                                        NetworkImage(conversation.avatarUrl),
+                                  ),
+                                  title: Text(conversation.displayName),
+                                  subtitle: Text(
+                                    conversation.isGroup
+                                        ? "${conversation.participants.length} participants"
+                                        : conversation.isOnline
+                                            ? TextStrings.online
+                                            : "",
+                                    style: TextStyle(
+                                        color: conversation.isOnline
+                                            ? ThemeConstants.green
+                                            : null),
+                                  ),
+                                  onTap: () {
+                                    Navigator.pop(bottomSheetContext);
+
+                                    // Forward the message
+                                    controller
+                                        .forwardMessage(message, conversation)
+                                        .then((_) {
+                                      if (currentContext.mounted) {
+                                        // Replace with ResponsiveSnackbar
+                                        ResponsiveSnackBar.showSuccess(
+                                          context: currentContext,
+                                          message:
+                                              "${TextStrings.messageSaved} ${conversation.displayName}",
+                                        );
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -433,8 +677,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     }
   }
 
-  void _showForwardOptions(BuildContext context, Message message) {
-    final controller = message.controller;
+  void _showForwardOptions(BuildContext context, Message message,
+      [MessagesController? providedController]) {
+    final controller = providedController ?? message.controller;
     if (controller == null) return;
 
     // Get the current context which will be used to show the bottom sheet
@@ -462,5 +707,50 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       return text;
     }
     return '${text.substring(0, maxLength)}...';
+  }
+}
+
+// Add this new widget for hover effect
+class _HoverListTile extends StatefulWidget {
+  final Widget leading;
+  final Widget title;
+  final Widget subtitle;
+  final VoidCallback onTap;
+
+  const _HoverListTile({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  State<_HoverListTile> createState() => _HoverListTileState();
+}
+
+class _HoverListTileState extends State<_HoverListTile> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: Container(
+        color: _isHovering
+            ? (isDarkMode
+                ? ThemeConstants.primaryColor.withOpacity(0.1)
+                : ThemeConstants.primaryColor.withOpacity(0.05))
+            : Colors.transparent,
+        child: ListTile(
+          leading: widget.leading,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          onTap: widget.onTap,
+        ),
+      ),
+    );
   }
 }

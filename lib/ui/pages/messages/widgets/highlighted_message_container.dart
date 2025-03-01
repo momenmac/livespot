@@ -7,11 +7,11 @@ class HighlightedMessageContainer extends StatefulWidget {
   final Color highlightColor;
 
   const HighlightedMessageContainer({
-    Key? key,
+    super.key,
     required this.child,
     required this.isHighlighted,
     this.highlightColor = const Color(0xFFFFDA6B),
-  }) : super(key: key);
+  });
 
   @override
   State<HighlightedMessageContainer> createState() =>
