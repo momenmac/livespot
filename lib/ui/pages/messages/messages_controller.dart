@@ -1168,6 +1168,9 @@ class MessagesController extends ChangeNotifier {
     //     .collection('conversations')
     //     .doc(targetConversation.id)
     //     .collection('messages')
+    //     .doc(newMessageId)
+    //     .set(messageData);
+    //
     //   // Update conversation last message
     //   await _firestore
     //     .collection('conversations')
@@ -1248,10 +1251,11 @@ class MessagesController extends ChangeNotifier {
   // Highlight a message temporarily
   void _highlightMessage(String messageId) {
     _highlightedMessageId = messageId;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     // Remove the highlight after a delay
     Future.delayed(const Duration(milliseconds: 1500), () {
+      if (_isDisposed) return;
       _highlightedMessageId = null;
       notifyListeners();
     });
@@ -1295,18 +1299,30 @@ class MessagesController extends ChangeNotifier {
     // as this doesn't affect the UI directly
   }
 
+  // Override notifyListeners to check disposal state
+  @override
+  void notifyListeners() {
+    if (!_isDisposed) {
+      super.notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
-    // TODO: Cancel Firebase subscriptions when implemented
-    // for (final subscription in _subscriptions) {
-    //   subscription.cancel();
-    // }
+    _isDisposed = true;
 
+    // Cancel any active timers or streams
     searchController.removeListener(_onSearchChanged);
     searchController.dispose();
     messageController.dispose();
     listScrollController.dispose();
     messageScrollController.dispose();
+
+    // Cancel any Firebase subscriptions if you have them
+    // for (final subscription in _subscriptions) {
+    //   subscription.cancel();
+    // }
+
     super.dispose();
   }
 }
