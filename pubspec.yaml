@@ -52,6 +52,7 @@ dependencies:
   flutter_map_location_marker: ^9.1.1
   flutter_map_cancellable_tile_provider: ^3.0.2
   intl: ^0.20.2
+  get_it: ^8.0.3
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +79,8 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/mock/
+    - assets/mock/conversations.json
       #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

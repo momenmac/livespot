@@ -23,12 +23,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    // Set controller reference on conversation
-    widget.conversation.controller = widget.controller;
+    // Set controller reference on conversation safely
+    if (widget.conversation.controller != widget.controller) {
+      widget.conversation.controller = widget.controller;
+    }
 
-    // Also set controller reference on all messages in the conversation
+    // Also set controller reference on all messages in the conversation safely
     for (final message in widget.conversation.messages) {
-      message.controller = widget.controller;
+      if (message.controller != widget.controller) {
+        message.controller = widget.controller;
+      }
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -208,7 +212,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(TextStrings.deleteConversation),
+        title: Text(
+          TextStrings.deleteConversation,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         content: Text(TextStrings.deleteConversationConfirm),
         actions: [
           TextButton(

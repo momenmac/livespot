@@ -1,15 +1,12 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart'; // Add this import
+import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 
 enum MessageType {
   text,
+  voice,
   image,
   video,
-  voice,
   file,
-  location,
-  contact,
-  system,
 }
 
 enum MessageStatus {
@@ -17,161 +14,154 @@ enum MessageStatus {
   sent,
   delivered,
   read,
+  failed,
 }
 
 class Message {
   final String id;
-  final String content;
   final String senderId;
   final String senderName;
+  final String content;
   final DateTime timestamp;
+  final MessageType messageType;
+  final MessageStatus? status; // Only for outgoing messages
   final bool isRead;
   final bool isSent;
-  final bool isDelivered;
-  final MessageType messageType;
-  final String? mediaUrl;
-  final int? voiceDuration;
-  final MessageStatus? status;
-
-  // Add these new fields for reply functionality
+  final bool isEdited;
+  final String? mediaUrl; // URL for voice messages, images, etc.
+  final int? voiceDuration; // Duration in seconds for voice messages
   final String? replyToId; // ID of the message this is replying to
-  final String? replyToSenderName; // Name of the sender of the original message
-  final String? replyToContent; // Content of the original message
-  final MessageType? replyToMessageType; // Type of original message
-  final bool? isEdited; // Flag to indicate if message was edited
-  final String? forwardedFrom; // Name of original sender if forwarded
+  final String? replyToSenderName; // Name of the sender of the replied message
+  final String? replyToContent; // Content of the replied message
+  final MessageType? replyToMessageType; // Type of the replied message
+  final String? forwardedFrom; // Name of the original sender if forwarded
+  final DateTime? editedAt; // When the message was last edited
 
-  // Add a reference to the controller (not final so we can set it later)
-  MessagesController? controller;
+  // Change from final to allow setting after initialization
+  MessagesController? controller; // Reference to the controller
 
   Message({
     required this.id,
-    required this.content,
     required this.senderId,
     required this.senderName,
+    required this.content,
     required this.timestamp,
+    this.messageType = MessageType.text,
+    this.status,
     this.isRead = false,
     this.isSent = true,
-    this.isDelivered = true,
-    this.messageType = MessageType.text,
+    this.isEdited = false,
     this.mediaUrl,
     this.voiceDuration,
-    this.status,
-    // Add the new fields to constructor
     this.replyToId,
     this.replyToSenderName,
     this.replyToContent,
     this.replyToMessageType,
-    this.isEdited = false,
     this.forwardedFrom,
-    this.controller, // Add controller to constructor
+    this.editedAt,
+    this.controller,
   });
 
-  bool get isVoiceMessage => messageType == MessageType.voice;
-
-  // Add helper method to check if this is a reply
   bool get isReply => replyToId != null;
-
-  // Add helper method to check if this is forwarded
-  // Update to make it simpler - just check if forwardedFrom exists
   bool get isForwarded => forwardedFrom != null;
+  bool get isMedia => messageType != MessageType.text;
+  bool get isVoice => messageType == MessageType.voice;
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'content': content,
-      'senderId': senderId,
-      'senderName': senderName,
-      'timestamp': timestamp.millisecondsSinceEpoch,
-      'isRead': isRead,
-      'isSent': isSent,
-      'isDelivered': isDelivered,
-      'messageType': describeEnum(messageType),
-      'mediaUrl': mediaUrl,
-      'voiceDuration': voiceDuration,
-      'status': status != null ? describeEnum(status!) : null,
-      // Add new fields to JSON
-      'replyToId': replyToId,
-      'replyToSenderName': replyToSenderName,
-      'replyToContent': replyToContent,
-      'replyToMessageType':
-          replyToMessageType != null ? describeEnum(replyToMessageType!) : null,
-      'isEdited': isEdited,
-      'forwardedFrom': forwardedFrom,
-    };
-  }
-
+  // Create a copy with potentially different values
   Message copyWith({
     String? id,
-    String? content,
     String? senderId,
     String? senderName,
+    String? content,
     DateTime? timestamp,
+    MessageType? messageType,
+    MessageStatus? status,
     bool? isRead,
     bool? isSent,
-    bool? isDelivered,
-    MessageType? messageType,
+    bool? isEdited,
     String? mediaUrl,
     int? voiceDuration,
-    MessageStatus? status,
-    // Add new fields to copyWith
     String? replyToId,
     String? replyToSenderName,
     String? replyToContent,
     MessageType? replyToMessageType,
-    bool? isEdited,
     String? forwardedFrom,
+    DateTime? editedAt,
     MessagesController? controller,
   }) {
     return Message(
       id: id ?? this.id,
-      content: content ?? this.content,
       senderId: senderId ?? this.senderId,
       senderName: senderName ?? this.senderName,
+      content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
+      messageType: messageType ?? this.messageType,
+      status: status ?? this.status,
       isRead: isRead ?? this.isRead,
       isSent: isSent ?? this.isSent,
-      isDelivered: isDelivered ?? this.isDelivered,
-      messageType: messageType ?? this.messageType,
+      isEdited: isEdited ?? this.isEdited,
       mediaUrl: mediaUrl ?? this.mediaUrl,
       voiceDuration: voiceDuration ?? this.voiceDuration,
-      status: status ?? this.status,
-      // Include new fields in copyWith
       replyToId: replyToId ?? this.replyToId,
       replyToSenderName: replyToSenderName ?? this.replyToSenderName,
       replyToContent: replyToContent ?? this.replyToContent,
       replyToMessageType: replyToMessageType ?? this.replyToMessageType,
-      isEdited: isEdited ?? this.isEdited,
       forwardedFrom: forwardedFrom ?? this.forwardedFrom,
-      controller:
-          controller ?? this.controller, // Include controller in copyWith
+      editedAt: editedAt ?? this.editedAt,
+      controller: controller ?? this.controller,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'senderId': senderId,
+      'senderName': senderName,
+      'content': content,
+      'timestamp': timestamp.millisecondsSinceEpoch,
+      'messageType': messageType.toString().split('.').last,
+      'status': status?.toString().split('.').last,
+      'isRead': isRead,
+      'isSent': isSent,
+      'isEdited': isEdited,
+      'mediaUrl': mediaUrl,
+      'voiceDuration': voiceDuration,
+      'replyToId': replyToId,
+      'replyToSenderName': replyToSenderName,
+      'replyToContent': replyToContent,
+      'replyToMessageType': replyToMessageType?.toString().split('.').last,
+      'forwardedFrom': forwardedFrom,
+      'editedAt': editedAt?.millisecondsSinceEpoch,
+    };
   }
 
   static Message fromJson(Map<String, dynamic> json) {
     return Message(
       id: json['id'],
-      content: json['content'],
       senderId: json['senderId'],
       senderName: json['senderName'],
-      timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp']),
-      isRead: json['isRead'] ?? false,
-      isSent: json['isSent'] ?? true,
-      isDelivered: json['isDelivered'] ?? true,
+      content: json['content'],
+      timestamp: json['timestamp'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'])
+          : DateTime.now(),
       messageType: _parseMessageType(json['messageType']),
-      mediaUrl: json['mediaUrl'],
-      voiceDuration: json['voiceDuration'],
       status:
           json['status'] != null ? _parseMessageStatus(json['status']) : null,
-      // Parse new fields from JSON
+      isRead: json['isRead'] ?? false,
+      isSent: json['isSent'] ?? true,
+      isEdited: json['isEdited'] ?? false,
+      mediaUrl: json['mediaUrl'],
+      voiceDuration: json['voiceDuration'],
       replyToId: json['replyToId'],
       replyToSenderName: json['replyToSenderName'],
       replyToContent: json['replyToContent'],
       replyToMessageType: json['replyToMessageType'] != null
           ? _parseMessageType(json['replyToMessageType'])
           : null,
-      isEdited: json['isEdited'] ?? false,
       forwardedFrom: json['forwardedFrom'],
+      editedAt: json['editedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(json['editedAt'])
+          : null,
     );
   }
 
@@ -179,20 +169,14 @@ class Message {
     switch (type) {
       case 'text':
         return MessageType.text;
+      case 'voice':
+        return MessageType.voice;
       case 'image':
         return MessageType.image;
       case 'video':
         return MessageType.video;
-      case 'voice':
-        return MessageType.voice;
       case 'file':
         return MessageType.file;
-      case 'location':
-        return MessageType.location;
-      case 'contact':
-        return MessageType.contact;
-      case 'system':
-        return MessageType.system;
       default:
         return MessageType.text;
     }
@@ -208,6 +192,8 @@ class Message {
         return MessageStatus.delivered;
       case 'read':
         return MessageStatus.read;
+      case 'failed':
+        return MessageStatus.failed;
       default:
         return MessageStatus.sending;
     }

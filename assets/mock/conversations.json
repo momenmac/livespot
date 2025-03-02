@@ -1,0 +1,293 @@
+{
+  "conversations": [
+    {
+      "id": "conv1",
+      "participants": [
+        {
+          "id": "current",
+          "name": "Me",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "isOnline": true
+        },
+        {
+          "id": "user1",
+          "name": "John Doe",
+          "avatarUrl": "https://ui-avatars.com/api/?name=John+Doe",
+          "isOnline": true
+        }
+      ],
+      "messages": [
+        {
+          "id": "msg1_1",
+          "senderId": "user1",
+          "senderName": "John Doe",
+          "content": "Hello there! How are you doing today?",
+          "timestamp": 1645623495000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg1_2",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Hi John! I'm doing great, thanks for asking.",
+          "timestamp": 1645623375000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "delivered"
+        },
+        {
+          "id": "msg1_3",
+          "senderId": "user1",
+          "senderName": "John Doe",
+          "content": "That's wonderful to hear!",
+          "timestamp": 1645623255000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "vmsg1_4",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Voice message",
+          "timestamp": 1645623135000,
+          "messageType": "voice",
+          "isRead": true,
+          "status": "delivered",
+          "voiceDuration": 24,
+          "mediaUrl": "voice_message_mock_1_4.mp3"
+        }
+      ],
+      "unreadCount": 1,
+      "isGroup": false,
+      "groupName": null,
+      "isMuted": false,
+      "isArchived": false
+    },
+    {
+      "id": "conv2",
+      "participants": [
+        {
+          "id": "current",
+          "name": "Me",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "isOnline": true
+        },
+        {
+          "id": "user2",
+          "name": "Emma Wilson",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Emma+Wilson",
+          "isOnline": false
+        }
+      ],
+      "messages": [
+        {
+          "id": "msg2_1",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Did you get the project files I sent?",
+          "timestamp": 1645623015000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        },
+        {
+          "id": "msg2_2",
+          "senderId": "user2",
+          "senderName": "Emma Wilson",
+          "content": "Yes, I'm reviewing them now. They look great!",
+          "timestamp": 1645622895000,
+          "messageType": "text",
+          "isRead": true
+        }
+      ],
+      "unreadCount": 0,
+      "isGroup": false,
+      "groupName": null,
+      "isMuted": true,
+      "isArchived": false
+    },
+    {
+      "id": "conv3",
+      "participants": [
+        {
+          "id": "current",
+          "name": "Me",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "isOnline": true
+        },
+        {
+          "id": "user3",
+          "name": "Alex Johnson",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Alex+Johnson",
+          "isOnline": true
+        },
+        {
+          "id": "user4",
+          "name": "Sarah Parker",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Sarah+Parker",
+          "isOnline": false
+        },
+        {
+          "id": "user5",
+          "name": "Michael Brown",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Michael+Brown",
+          "isOnline": true
+        }
+      ],
+      "messages": [
+        {
+          "id": "msg3_1",
+          "senderId": "user3",
+          "senderName": "Alex Johnson",
+          "content": "Let's finalize the project timeline today.",
+          "timestamp": 1645622775000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg3_2",
+          "senderId": "user4",
+          "senderName": "Sarah Parker",
+          "content": "I agree, we need to move forward with this.",
+          "timestamp": 1645622655000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "vmsg3_3",
+          "senderId": "user5",
+          "senderName": "Michael Brown",
+          "content": "Voice message",
+          "timestamp": 1645622535000,
+          "messageType": "voice",
+          "isRead": false,
+          "voiceDuration": 35,
+          "mediaUrl": "voice_message_mock_3_3.mp3"
+        },
+        {
+          "id": "msg3_4",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "I'll prepare the schedule and share it with everyone.",
+          "timestamp": 1645622415000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "delivered"
+        }
+      ],
+      "unreadCount": 3,
+      "isGroup": true,
+      "groupName": "Project Team",
+      "isMuted": false,
+      "isArchived": false
+    },
+    {
+      "id": "conv4",
+      "participants": [
+        {
+          "id": "current",
+          "name": "Me",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "isOnline": true
+        },
+        {
+          "id": "user6",
+          "name": "David Lee",
+          "avatarUrl": "https://ui-avatars.com/api/?name=David+Lee",
+          "isOnline": false
+        }
+      ],
+      "messages": [
+        {
+          "id": "msg4_1",
+          "senderId": "user6",
+          "senderName": "David Lee",
+          "content": "Can you help me with the new interface design?",
+          "timestamp": 1645622295000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "msg4_2",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Sure, I can set up a call tomorrow to discuss it.",
+          "timestamp": 1645622175000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        }
+      ],
+      "unreadCount": 0,
+      "isGroup": false,
+      "groupName": null,
+      "isMuted": false,
+      "isArchived": true
+    },
+    {
+      "id": "conv5",
+      "participants": [
+        {
+          "id": "current",
+          "name": "Me",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "isOnline": true
+        },
+        {
+          "id": "user7",
+          "name": "Jennifer Smith",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Jennifer+Smith",
+          "isOnline": true
+        },
+        {
+          "id": "user8",
+          "name": "Robert Taylor",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Robert+Taylor",
+          "isOnline": false
+        },
+        {
+          "id": "user9",
+          "name": "Lisa Wong",
+          "avatarUrl": "https://ui-avatars.com/api/?name=Lisa+Wong",
+          "isOnline": true
+        }
+      ],
+      "messages": [
+        {
+          "id": "msg5_1",
+          "senderId": "user7",
+          "senderName": "Jennifer Smith",
+          "content": "The client loved our presentation!",
+          "timestamp": 1645622055000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg5_2",
+          "senderId": "user9",
+          "senderName": "Lisa Wong",
+          "content": "Great job everyone! Let's celebrate!",
+          "timestamp": 1645621935000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg5_3",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "This is amazing news. Thanks for all your hard work!",
+          "timestamp": 1645621815000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "delivered"
+        }
+      ],
+      "unreadCount": 2,
+      "isGroup": true,
+      "groupName": "Marketing Team",
+      "isMuted": false,
+      "isArchived": false
+    }
+  ]
+}

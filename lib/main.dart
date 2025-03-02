@@ -14,28 +14,59 @@ Future<void> main() async {
   // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations if needed
+  // COMPLETELY NEW APPROACH: SafeFirebaseInit
+  bool firebaseInitialized = await safeFirebaseInit();
+
+  // Set preferred orientations
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
   // Reset hero tag registry on app start
   HeroTagRegistry.reset();
 
-  // Add this line to globally disable FAB hero animations
-  // This is an alternative solution if adding hero tags is problematic
-  // MaterialRectArcTween.debugAllowMaterialPointsForPath = false;
+  runApp(MyApp(firebaseInitialized: firebaseInitialized));
+}
 
-  runApp(const MyApp());
+/// Safely initializes Firebase, handling duplicate initialization issues
+Future<bool> safeFirebaseInit() async {
+  try {
+    // First check if any Firebase apps are initialized
+    List<FirebaseApp> apps = Firebase.apps;
+
+    if (apps.isEmpty) {
+      // No apps initialized yet, we can safely initialize
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('✅ Firebase initialized successfully');
+      return true;
+    } else {
+      // An app is already initialized, get the default one
+      FirebaseApp defaultApp = Firebase.app();
+      debugPrint('ℹ️ Using existing Firebase app: ${defaultApp.name}');
+      return true;
+    }
+  } catch (e) {
+    // Special handling for the duplicate app error
+    if (e.toString().contains('duplicate-app')) {
+      debugPrint('ℹ️ Using existing Firebase instance');
+      return true;
+    } else {
+      debugPrint('❌ Firebase initialization error: $e');
+      return false;
+    }
+  }
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool firebaseInitialized;
+
+  const MyApp({
+    super.key,
+    this.firebaseInitialized = false,
+  });
 
   @override
   Widget build(BuildContext context) {

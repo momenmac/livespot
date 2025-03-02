@@ -59,11 +59,17 @@ class TTextTheme {
   // Dark Theme
   static TextTheme darkTextTheme = TextTheme(
     headlineLarge: TextStyle().copyWith(
-        fontSize: 32.0, fontWeight: FontWeight.bold, color: Colors.black),
+        fontSize: 32.0,
+        fontWeight: FontWeight.bold,
+        color: ThemeConstants.lightBackgroundColor),
     headlineMedium: TextStyle().copyWith(
-        fontSize: 24.0, fontWeight: FontWeight.w600, color: Colors.black),
+        fontSize: 24.0,
+        fontWeight: FontWeight.w600,
+        color: ThemeConstants.lightBackgroundColor),
     headlineSmall: TextStyle().copyWith(
-        fontSize: 18.0, fontWeight: FontWeight.w600, color: Colors.black),
+        fontSize: 18.0,
+        fontWeight: FontWeight.w600,
+        color: ThemeConstants.lightBackgroundColor),
     labelSmall: GoogleFonts.poppins(
         fontSize: 13.83,
         fontWeight: FontWeight.w500,

@@ -113,7 +113,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                               Icon(
                                 Icons.forward,
                                 size: 12,
-                                color: isSent ? Colors.white : Colors.black87,
+                                color:
+                                    isDarkMode ? Colors.white : Colors.black87,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -122,7 +123,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                                   fontWeight: FontWeight.w500,
                                   fontStyle: FontStyle.italic,
                                   fontSize: 11,
-                                  color: isSent ? Colors.white : Colors.black87,
+                                  color: isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
                                 ),
                               ),
                             ],
@@ -848,6 +851,9 @@ class _MessageBubbleState extends State<MessageBubble> {
           size: 12,
           color: Colors.lightBlueAccent,
         );
+      case MessageStatus.failed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 }

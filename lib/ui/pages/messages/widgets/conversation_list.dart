@@ -488,7 +488,10 @@ class ConversationList extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(TextStrings.deleteConversation),
+        title: Text(
+          TextStrings.deleteConversation,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         content: Text(TextStrings.deleteConversationConfirm),
         actions: [
           TextButton(

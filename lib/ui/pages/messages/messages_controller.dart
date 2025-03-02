@@ -1,4 +1,6 @@
 import 'dart:core';
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
@@ -6,6 +8,10 @@ import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+
+// TODO: Add Firebase imports (Firestore and Storage only):
+// import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:firebase_storage/firebase_storage.dart';
 
 enum FilterMode {
   all,
@@ -15,6 +21,13 @@ enum FilterMode {
 }
 
 class MessagesController extends ChangeNotifier {
+  // TODO: Add Firebase instances
+  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  // Current user reference - will come from your Django auth system
+  String get currentUserId => 'current'; // Temporary hardcoded ID
+
   List<Conversation> _conversations = [];
   List<Conversation> _filteredConversations = [];
   Conversation? _selectedConversation;
@@ -29,6 +42,9 @@ class MessagesController extends ChangeNotifier {
   // Add state variables for editing
   Message? _editingMessage;
   Message? get editingMessage => _editingMessage;
+
+  // TODO: Add streamSubscriptions to track and cancel Firebase listeners
+  // List<StreamSubscription> _subscriptions = [];
 
   List<Conversation> get conversations => _filteredConversations;
   Conversation? get selectedConversation {
@@ -51,6 +67,9 @@ class MessagesController extends ChangeNotifier {
   final ScrollController listScrollController = ScrollController();
   final ScrollController messageScrollController = ScrollController();
 
+  // Add a flag to track if the controller is disposed
+  bool _isDisposed = false;
+
   MessagesController() {
     searchController.addListener(_onSearchChanged);
 
@@ -68,17 +87,151 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
+  // TODO: Add method to initialize Firebase listeners
+  // void _initFirebaseListeners() {
+  //   // Listen for conversation changes
+  //   final conversationsStream = _firestore
+  //     .collection('conversations')
+  //     .where('participants', arrayContains: currentUserId)
+  //     .orderBy('lastMessageTimestamp', descending: true)
+  //     .snapshots();
+  //
+  //   final subscription = conversationsStream.listen((snapshot) {
+  //     _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+  //     _applyFilters();
+  //     notifyListeners();
+  //   });
+  //
+  //   _subscriptions.add(subscription);
+  // }
+
+  // TODO: Add method to update online status
+  // void _setupOnlineStatus() {
+  //   // Update online status every 5 minutes
+  //   _onlineStatusTimer = Timer.periodic(Duration(minutes: 5), (_) => _updateOnlineStatus());
+  //
+  //   // Update immediately on startup
+  //   _updateOnlineStatus();
+  // }
+
+  // TODO: Add method to update user online status
+  // Future<void> _updateOnlineStatus() async {
+  //   if (currentUserId.isNotEmpty) {
+  //     await _firestore.collection('users').doc(currentUserId).update({
+  //       'lastSeen': FieldValue.serverTimestamp(),
+  //       'isOnline': true
+  //     });
+  //   }
+  // }
+
   Future<void> loadConversations() async {
-    // TODO: Replace with Firebase Firestore fetch
-    // final snapshot = await FirebaseFirestore.instance
+    // TODO: Replace with Firebase Firestore fetch when ready
+    // try {
+    //   final snapshot = await _firestore
     //     .collection('conversations')
     //     .where('participants', arrayContains: currentUserId)
     //     .orderBy('lastMessageTimestamp', descending: true)
     //     .get();
+    //
+    //   _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+    //   _applyFilters();
+    //   notifyListeners();
+    //   return;
+    // } catch (e) {
+    //   print('Error loading conversations: $e');
+    //   // Fall back to mock data in case of error
+    // }
 
-    // Mock data for now
-    _conversations = _generateMockConversations();
-    _applyFilters();
+    // In the meantime, load from mock JSON file
+    try {
+      // Use a try-catch specifically for the file reading operation
+      String response;
+      try {
+        response =
+            await rootBundle.loadString('assets/mock/conversations.json');
+      } catch (e) {
+        print('Error loading JSON file: $e');
+        throw Exception('JSON file not found or invalid format');
+      }
+
+      // Parse the JSON - wrap this in its own try-catch to catch JSON parsing errors
+      Map<String, dynamic> data;
+      try {
+        data = json.decode(response) as Map<String, dynamic>;
+      } catch (e) {
+        print('Error parsing JSON: $e');
+        throw Exception('Invalid JSON format');
+      }
+
+      if (!data.containsKey('conversations')) {
+        print('JSON missing "conversations" key');
+        throw Exception('Invalid JSON structure');
+      }
+
+      _conversations = [];
+
+      // Process each conversation
+      for (var conversationData in data['conversations']) {
+        // Safely handle participants parsing
+        List<User> participants = [];
+        if (conversationData['participants'] is List) {
+          for (var participantData in conversationData['participants']) {
+            try {
+              participants.add(User(
+                id: participantData['id'] ?? '',
+                name: participantData['name'] ?? 'Unknown User',
+                avatarUrl: participantData['avatarUrl'] ??
+                    'https://ui-avatars.com/api/?name=Unknown',
+                isOnline: participantData['isOnline'] ?? false,
+              ));
+            } catch (e) {
+              print('Error parsing participant: $e');
+            }
+          }
+        }
+
+        // Safely handle messages parsing
+        List<Message> messages = [];
+        if (conversationData['messages'] is List) {
+          for (var messageData in conversationData['messages']) {
+            try {
+              messages.add(Message.fromJson(messageData));
+            } catch (e) {
+              print('Error parsing message: $e');
+            }
+          }
+        }
+
+        // Create conversation with fallback values for required fields
+        _conversations.add(Conversation(
+          id: conversationData['id'] ??
+              'unknown_${DateTime.now().millisecondsSinceEpoch}',
+          participants: participants,
+          messages: messages,
+          lastMessage: messages.isNotEmpty
+              ? messages.first
+              : Message(
+                  id: 'empty',
+                  senderId: '',
+                  senderName: '',
+                  content: 'No messages',
+                  timestamp: DateTime.now(),
+                ),
+          unreadCount: conversationData['unreadCount'] ?? 0,
+          isGroup: conversationData['isGroup'] ?? false,
+          groupName: conversationData['groupName'],
+          isMuted: conversationData['isMuted'] ?? false,
+          isArchived: conversationData['isArchived'] ?? false,
+        ));
+      }
+
+      _applyFilters();
+    } catch (e) {
+      // If JSON loading fails, fall back to generated mock data
+      print('Error loading mock JSON data: $e');
+      _conversations = _generateMockConversations();
+      _applyFilters();
+    }
 
     // Set controller references on all messages
     ensureMessageControllerReferences();
@@ -331,14 +484,10 @@ class MessagesController extends ChangeNotifier {
   }
 
   Future<void> sendMessage(String content) async {
-    if (content.isEmpty) return;
+    if (content.isEmpty || _selectedConversation == null || _isDisposed) return;
 
-    if (_selectedConversation == null) {
-      print("Warning: Trying to send message without selected conversation");
-      return;
-    }
-
-    final currentUserId = 'current'; // TODO: Get from authentication
+    // Use the current user from the selected conversation
+    final currentUserId = this.currentUserId;
     final currentUser = _selectedConversation!.participants
         .firstWhere((p) => p.id == currentUserId);
 
@@ -372,16 +521,17 @@ class MessagesController extends ChangeNotifier {
         _applyFilters();
       }
 
-      // TODO: Update in Firebase
-      // FirebaseFirestore.instance
-      //    .collection('conversations')
-      //    .doc(_selectedConversation!.id)
-      //    .collection('messages')
-      //    .doc(editedMessage.id)
-      //    .update({
-      //      'content': content,
-      //      'isEdited': true,
-      //    });
+      // TODO: Update in Firestore when ready
+      // await _firestore
+      //   .collection('conversations')
+      //   .doc(_selectedConversation!.id)
+      //   .collection('messages')
+      //   .doc(editedMessage.id)
+      //   .update({
+      //     'content': content,
+      //     'isEdited': true,
+      //     'editedAt': FieldValue.serverTimestamp(),
+      //   });
 
       // Clear editing state
       _editingMessage = null;
@@ -390,8 +540,9 @@ class MessagesController extends ChangeNotifier {
       return;
     }
 
-    // Normal message send, but check for reply
+    // Normal message send
     final newMessage = Message(
+      // Generate a temporary ID
       id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
       senderId: currentUserId,
       senderName: currentUser.name,
@@ -433,29 +584,41 @@ class MessagesController extends ChangeNotifier {
     messageController.clear();
 
     // Immediately notify listeners to update UI
-    notifyListeners();
+    if (!_isDisposed) {
+      notifyListeners();
+    }
 
     // Fixed: Scroll after a very short delay to ensure the ListView has updated
     await Future.delayed(const Duration(milliseconds: 10));
-    _scrollToNewestMessage();
+    if (!_isDisposed) _scrollToNewestMessage();
 
-    // TODO: Send to Firebase
-    // await FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(_selectedConversation!.id)
-    //    .collection('messages')
-    //    .add(newMessage.toJson());
+    // TODO: When ready to implement Firebase, uncomment this section
+    // try {
+    //   // Add the message to the messages subcollection
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .collection('messages')
+    //     .doc(newMessage.id)
+    //     .set(newMessage.toJson());
     //
-    // await FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(_selectedConversation!.id)
-    //    .update({
-    //      'lastMessage': newMessage.toJson(),
-    //      'lastMessageTimestamp': FieldValue.serverTimestamp(),
-    //    });
+    //   // Update the conversation's last message info
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .update({
+    //       'lastMessage': newMessage.toJson(),
+    //       'lastMessageTimestamp': FieldValue.serverTimestamp(),
+    //       'unreadCount': FieldValue.increment(1)  // Increment unread count for other users
+    //     });
+    // } catch (e) {
+    //   print('Error sending message: $e');
+    //   // Handle error - maybe update UI to show failed message
+    // }
 
     // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 800));
+    if (_isDisposed) return;
 
     // Update message status to sent
     final sentMessage = newMessage.copyWith(status: MessageStatus.sent);
@@ -477,10 +640,11 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     // Simulate delivered status after a delay
     await Future.delayed(const Duration(seconds: 1));
+    if (_isDisposed) return;
 
     final deliveredMessage =
         sentMessage.copyWith(status: MessageStatus.delivered);
@@ -501,19 +665,58 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   void deleteMessage(Message message) {
     if (_selectedConversation == null) return;
 
-    // TODO: Delete from Firebase
-    // FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(_selectedConversation!.id)
-    //    .collection('messages')
-    //    .doc(message.id)
-    //    .delete();
+    // TODO: Delete from Firestore
+    // try {
+    //   // Delete the message document
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .collection('messages')
+    //     .doc(message.id)
+    //     .delete();
+    //
+    //   // If this was the last message, update the conversation's lastMessage field
+    //   if (_selectedConversation!.lastMessage.id == message.id) {
+    //     // Find the new last message
+    //     final snapshot = await _firestore
+    //       .collection('conversations')
+    //       .doc(_selectedConversation!.id)
+    //       .collection('messages')
+    //       .orderBy('timestamp', descending: true)
+    //       .limit(1)
+    //       .get();
+    //
+    //     if (snapshot.docs.isNotEmpty) {
+    //       // Update with new last message
+    //       final newLastMessage = Message.fromFirestore(snapshot.docs.first);
+    //       await _firestore
+    //         .collection('conversations')
+    //         .doc(_selectedConversation!.id)
+    //         .update({
+    //           'lastMessage': newLastMessage.toJson(),
+    //           'lastMessageTimestamp': newLastMessage.timestamp
+    //         });
+    //     } else {
+    //       // No messages left
+    //       await _firestore
+    //         .collection('conversations')
+    //         .doc(_selectedConversation!.id)
+    //         .update({
+    //           'lastMessage': null,
+    //           'lastMessageTimestamp': FieldValue.serverTimestamp()
+    //         });
+    //     }
+    //   }
+    // } catch (e) {
+    //   print('Error deleting message: $e');
+    //   // Handle error
+    // }
 
     final updatedMessages = _selectedConversation!.messages
         .where((m) => m.id != message.id)
@@ -559,11 +762,15 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
-    // TODO: Update in Firebase
-    // FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(conversation.id)
-    //    .update({'isMuted': !conversation.isMuted});
+    // TODO: Update in Firestore
+    // try {
+    //   _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .update({'isMuted': !conversation.isMuted});
+    // } catch (e) {
+    //   print('Error toggling mute: $e');
+    // }
 
     notifyListeners();
   }
@@ -582,11 +789,15 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
-    // TODO: Update in Firebase
-    // FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(conversation.id)
-    //    .update({'isArchived': !conversation.isArchived});
+    // TODO: Update in Firestore
+    // try {
+    //   _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .update({'isArchived': !conversation.isArchived});
+    // } catch (e) {
+    //   print('Error toggling archive: $e');
+    // }
 
     notifyListeners();
   }
@@ -598,11 +809,27 @@ class MessagesController extends ChangeNotifier {
     }
     _applyFilters();
 
-    // TODO: Delete from Firebase
-    // FirebaseFirestore.instance
-    //    .collection('conversations')
-    //    .doc(conversation.id)
-    //    .delete();
+    // TODO: Delete from Firestore
+    // try {
+    //   // Delete the messages subcollection first
+    //   final batch = _firestore.batch();
+    //   final messagesSnapshot = await _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .collection('messages')
+    //     .get();
+    //
+    //   for (final doc in messagesSnapshot.docs) {
+    //     batch.delete(doc.reference);
+    //   }
+    //
+    //   // Then delete the conversation document
+    //   batch.delete(_firestore.collection('conversations').doc(conversation.id));
+    //
+    //   await batch.commit();
+    // } catch (e) {
+    //   print('Error deleting conversation: $e');
+    // }
 
     notifyListeners();
   }
@@ -615,6 +842,17 @@ class MessagesController extends ChangeNotifier {
     }
 
     final now = DateTime.now();
+
+    // TODO: Generate Firebase Storage path and document ID when ready
+    // final messageId = _firestore
+    //   .collection('conversations')
+    //   .doc(_selectedConversation!.id)
+    //   .collection('messages')
+    //   .doc()
+    //   .id;
+    //
+    // final storagePath = 'voice_messages/${_selectedConversation!.id}/${messageId}.m4a';
+
     final newMessage = Message(
       id: 'msg_${now.millisecondsSinceEpoch}',
       content:
@@ -661,19 +899,35 @@ class MessagesController extends ChangeNotifier {
     // Fixed: Scroll after a very short delay to ensure the ListView has updated
     Future.delayed(const Duration(milliseconds: 10), _scrollToNewestMessage);
 
-    // TODO: Upload voice recording to Firebase Storage
-    // 1. Create a Firebase Storage reference
-    // final storageRef = FirebaseStorage.instance.ref();
-    // final voiceMessageRef = storageRef.child('voice_messages/${conversation.id}/${DateTime.now().millisecondsSinceEpoch}.m4a');
+    // TODO: Upload voice recording to Firebase Storage when ready
+    // final storageRef = _storage.ref();
+    // final voiceMessageRef = storageRef.child(storagePath);
     //
-    // 2. Upload the file
-    // final uploadTask = voiceMessageRef.putFile(File(recordingPath));
+    // // Upload the file
+    // uploadTask = voiceMessageRef.putFile(File(recordingPath));
     //
-    // 3. Get the download URL
-    // final downloadUrl = await (await uploadTask).ref.getDownloadURL();
+    // // Get the download URL
+    // downloadUrl = await (await uploadTask).ref.getDownloadURL();
     //
-    // 4. Create message with URL
-    // final message = Message(..., mediaUrl: downloadUrl)
+    // // Create message with URL in Firestore
+    // await _firestore
+    //   .collection('conversations')
+    //   .doc(_selectedConversation!.id)
+    //   .collection('messages')
+    //   .doc(messageId)
+    //   .set({
+    //     'id': messageId,
+    //     'senderId': currentUserId,
+    //     'senderName': currentUser.name,
+    //     'content': 'Voice message',
+    //     'timestamp': FieldValue.serverTimestamp(),
+    //     'messageType': 'voice',
+    //     'voiceDuration': durationSeconds,
+    //     'mediaUrl': downloadUrl,
+    //     'isRead': false
+    //   });
+
+    // ...existing code...
   }
 
   String _formatDuration(int seconds) {
@@ -712,11 +966,31 @@ class MessagesController extends ChangeNotifier {
         _applyFilters();
       }
 
-      // TODO: Update in Firebase
-      // FirebaseFirestore.instance
-      //    .collection('conversations')
-      //    .doc(conversation.id)
-      //    .update({'unreadCount': 0});
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'unreadCount': 0});
+      //
+      //   // Also mark all messages as read
+      //   final batch = _firestore.batch();
+      //   final unreadMessagesQuery = await _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .collection('messages')
+      //     .where('isRead', isEqualTo: false)
+      //     .where('senderId', isNotEqualTo: currentUserId)
+      //     .get();
+      //
+      //   for (final doc in unreadMessagesQuery.docs) {
+      //     batch.update(doc.reference, {'isRead': true});
+      //   }
+      //
+      //   await batch.commit();
+      // } catch (e) {
+      //   print('Error marking conversation as read: $e');
+      // }
 
       notifyListeners();
     }
@@ -751,11 +1025,29 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
-    // TODO: Update in Firebase
-    // FirebaseFirestore.instance
-    //   .collection('conversations')
-    //   .doc(conversation.id)
-    //   .update({'unreadCount': 1});
+    // TODO: Update in Firestore
+    // try {
+    //   _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .update({'unreadCount': 1});
+    //
+    //   // Also mark the latest message as unread
+    //   final latestMessageQuery = await _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .collection('messages')
+    //     .where('senderId', isNotEqualTo: currentUserId)
+    //     .orderBy('timestamp', descending: true)
+    //     .limit(1)
+    //     .get();
+    //
+    //   if (latestMessageQuery.docs.isNotEmpty) {
+    //     await latestMessageQuery.docs.first.reference.update({'isRead': false});
+    //   }
+    // } catch (e) {
+    //   print('Error marking conversation as unread: $e');
+    // }
 
     notifyListeners();
   }
@@ -846,6 +1138,49 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
 
+    // TODO: Forward message to Firestore
+    // try {
+    //   // Create new message ID
+    //   final newMessageId = _firestore
+    //     .collection('conversations')
+    //     .doc(targetConversation.id)
+    //     .collection('messages')
+    //     .doc()
+    //     .id;
+    //
+    //   // Create message data
+    //   final messageData = {
+    //     'id': newMessageId,
+    //     'senderId': currentUserId,
+    //     'senderName': 'You', // Or get from Firestore user profile
+    //     'content': message.content,
+    //     'timestamp': FieldValue.serverTimestamp(),
+    //     'messageType': message.messageType,
+    //     'mediaUrl': message.mediaUrl,
+    //     'voiceDuration': message.voiceDuration,
+    //     'isRead': false,
+    //     'isForwarded': true,
+    //     'forwardedFrom': message.senderId == currentUserId ? null : message.senderName
+    //   };
+    //
+    //   // Add message to target conversation
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(targetConversation.id)
+    //     .collection('messages')
+    //   // Update conversation last message
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(targetConversation.id)
+    //     .update({
+    //       'lastMessage': messageData,
+    //       'lastMessageTimestamp': FieldValue.serverTimestamp(),
+    //       'unreadCount': FieldValue.increment(1)
+    //     });
+    // } catch (e) {
+    //   print('Error forwarding message: $e');
+    // }
+
     // The second notify is needed to update status changes
     notifyListeners();
 
@@ -922,29 +1257,51 @@ class MessagesController extends ChangeNotifier {
     });
   }
 
-  // Add this method to ensure all messages have controller references
+  // Update this method to handle ensureMessageControllerReferences better
   void ensureMessageControllerReferences() {
+    // Set controller reference on all conversations
     for (final conversation in _conversations) {
-      conversation.controller = this;
+      // Don't set if it's already the same instance
+      if (conversation.controller != this) {
+        conversation.controller = this;
+      }
 
+      // Set controller reference on all messages in the conversation
       for (final message in conversation.messages) {
-        message.controller = this;
+        // Don't set if it's already the same instance
+        if (message.controller != this) {
+          message.controller = this;
+        }
       }
     }
 
+    // Also ensure the selected conversation has the controller reference
     if (_selectedConversation != null) {
-      _selectedConversation!.controller = this;
+      // Don't set if it's already the same instance
+      if (_selectedConversation!.controller != this) {
+        _selectedConversation!.controller = this;
+      }
 
+      // Set controller reference on all messages in the selected conversation
       for (final message in _selectedConversation!.messages) {
-        message.controller = this;
+        // Don't set if it's already the same instance
+        if (message.controller != this) {
+          message.controller = this;
+        }
       }
     }
 
-    notifyListeners();
+    // No need to notify listeners just for setting controller references
+    // as this doesn't affect the UI directly
   }
 
   @override
   void dispose() {
+    // TODO: Cancel Firebase subscriptions when implemented
+    // for (final subscription in _subscriptions) {
+    //   subscription.cancel();
+    // }
+
     searchController.removeListener(_onSearchChanged);
     searchController.dispose();
     messageController.dispose();

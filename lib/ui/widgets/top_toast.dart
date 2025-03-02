@@ -47,8 +47,7 @@ class TopToast {
   }) {
     final screenSize = MediaQuery.of(context).size;
     // Position the toast slightly lower if it's a success message
-    final topPadding = MediaQuery.of(context).padding.top +
-        (backgroundColor.value == Colors.green.shade700.value ? 60.0 : 10.0);
+    final topPadding = MediaQuery.of(context).padding.top + 80;
 
     return OverlayEntry(
       builder: (context) => Positioned(
