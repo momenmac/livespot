@@ -1,6 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String text;

@@ -6,7 +6,7 @@ import 'package:flutter_application_2/ui/pages/map/widgets/custom_marker.dart';
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
 
 class MapView extends StatelessWidget {
   final MapPageController controller;

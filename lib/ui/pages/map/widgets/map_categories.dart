@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
 
 class CategoryItem {
   final String name;

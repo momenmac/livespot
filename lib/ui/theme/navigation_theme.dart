@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/theme_constants.dart';
+import '../../constants/theme_constants.dart';
 
 class TNavigationTheme {
   TNavigationTheme._();

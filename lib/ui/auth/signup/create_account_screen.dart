@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/assest_path_constants.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/assest_path_constants.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/widgets/custom_textfields.dart';
@@ -10,8 +10,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'dart:typed_data';
-import 'package:flutter_application_2/core/utils/validation_helper.dart';
-import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/services/utils/validation_helper.dart';
+import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 

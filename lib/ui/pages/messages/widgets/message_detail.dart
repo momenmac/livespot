@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 // For clipboard
-import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';

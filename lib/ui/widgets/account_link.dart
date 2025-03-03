@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/ui/auth/login/login_screen.dart';
 import 'package:flutter_application_2/ui/widgets/custom_buttons.dart';
 

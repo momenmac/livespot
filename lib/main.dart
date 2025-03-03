@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 

@@ -3,13 +3,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
-import 'package:flutter_application_2/core/utils/email_utils.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/services/utils/email_utils.dart';
 import 'package:flutter_application_2/ui/paint/bubble2.dart';
 import 'package:flutter_application_2/ui/paint/bubble1.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/ui/widgets/verification_code_field.dart';
-import 'package:flutter_application_2/core/utils/navigation_service.dart';
+import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 

@@ -95,13 +95,17 @@ class TopToast {
                       ),
                     ),
                   ),
-                  GestureDetector(
-                    onTap: _hideToast,
-                    child: Icon(
+                  IconButton(
+                    onPressed: _hideToast,
+                    icon: Icon(
                       Icons.close,
                       color: Colors.white.withOpacity(0.9),
-                      size: 18, // Larger close icon
+                      size: 18,
                     ),
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(),
+                    splashRadius: 18,
+                    mouseCursor: SystemMouseCursors.click,
                   ),
                 ],
               ),

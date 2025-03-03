@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_categories.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';

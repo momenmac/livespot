@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/theme/appbar_theme.dart';
 import 'package:flutter_application_2/ui/theme/bottom_sheet_theme.dart';
 import 'package:flutter_application_2/ui/theme/elevated_button_theme.dart';
