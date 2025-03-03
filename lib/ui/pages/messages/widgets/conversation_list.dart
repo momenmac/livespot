@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
+import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
@@ -516,6 +515,7 @@ class ConversationList extends StatelessWidget {
   }
 }
 
+// Convert _ConversationTile from StatelessWidget to StatefulWidget to track hover state
 class _ConversationTile extends StatefulWidget {
   final Conversation conversation;
   final bool isSelected;
@@ -532,11 +532,11 @@ class _ConversationTile extends StatefulWidget {
   });
 
   @override
-  _ConversationTileState createState() => _ConversationTileState();
+  State<_ConversationTile> createState() => _ConversationTileState();
 }
 
 class _ConversationTileState extends State<_ConversationTile> {
-  bool isHovered = false;
+  bool _isHovering = false;
 
   @override
   Widget build(BuildContext context) {
@@ -547,134 +547,211 @@ class _ConversationTileState extends State<_ConversationTile> {
         _formatMessageTime(widget.conversation.lastMessage.timestamp);
 
     return MouseRegion(
-      onEnter: (_) => setState(() => isHovered = true),
-      onExit: (_) => setState(() => isHovered = false),
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
       child: Container(
         color: Colors.transparent,
-        child: ListTile(
-          onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundImage: NetworkImage(widget.conversation.avatarUrl),
-              ),
-              if (widget.conversation.isOnline)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: ThemeConstants.green,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isDarkMode
-                            ? ThemeConstants.darkBackgroundColor
-                            : ThemeConstants.lightBackgroundColor,
-                        width: 2,
+        child: Stack(
+          children: [
+            ListTile(
+              onTap: () {
+                // Set controller on conversation and all its messages before navigating
+                widget.conversation.controller = widget.controller;
+
+                // Set controller on ALL messages in the conversation
+                for (final message in widget.conversation.messages) {
+                  message.controller = widget.controller;
+                }
+
+                // Now navigate to the chat detail page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatDetailPage(
+                      controller: widget.controller,
+                      conversation: widget.conversation,
+                    ),
+                  ),
+                ).then((_) {
+                  // Force refresh when returning
+                  if (widget.controller.selectedConversation?.id ==
+                      widget.conversation.id) {
+                    widget.controller.selectConversation(widget.conversation);
+                  }
+                  widget.controller.notifyListeners();
+                });
+              },
+              onLongPress: widget.onLongPress,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage:
+                        NetworkImage(widget.conversation.avatarUrl),
+                  ),
+                  if (widget.conversation.isOnline)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: ThemeConstants.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDarkMode
+                                ? ThemeConstants.darkBackgroundColor
+                                : ThemeConstants.lightBackgroundColor,
+                            width: 2,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.conversation.displayName,
-                  style: TextStyle(
-                    fontWeight: widget.conversation.unreadCount > 0
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ],
               ),
-              Text(
-                formattedTime,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.textTheme.bodySmall?.color,
-                  fontWeight: widget.conversation.unreadCount > 0
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-          subtitle: Row(
-            children: [
-              if (widget.conversation.isMuted)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Icon(
-                    Icons.volume_off,
-                    size: 14,
-                    color: ThemeConstants.grey,
-                  ),
-                ),
-              Expanded(
-                child: Text(
-                  _formatLastMessage(widget.conversation),
-                  style: TextStyle(
-                    fontWeight: widget.conversation.unreadCount > 0
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    color: widget.conversation.unreadCount > 0
-                        ? theme.textTheme.bodyLarge?.color
-                        : theme.textTheme.bodySmall?.color,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (widget.conversation.unreadCount > 0)
-                Container(
-                  margin: const EdgeInsets.only(left: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: ThemeConstants.primaryColor,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    widget.conversation.unreadCount.toString(),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.conversation.displayName,
+                      style: TextStyle(
+                        fontWeight: widget.conversation.unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              // Show three dots menu icon when hovered
-              if (isHovered)
-                IconButton(
-                  icon: Icon(
-                    Icons.more_vert,
-                    size: 20,
-                    color: ThemeConstants.grey,
+                  Text(
+                    formattedTime,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.textTheme.bodySmall?.color,
+                      fontWeight: widget.conversation.unreadCount > 0
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: BoxConstraints.tightFor(width: 24, height: 24),
-                  splashRadius: 20,
-                  onPressed: () => _showCompactMenu(context),
+                ],
+              ),
+              subtitle: Row(
+                children: [
+                  if (widget.conversation.isMuted)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(
+                        Icons.volume_off,
+                        size: 14,
+                        color: ThemeConstants.grey,
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      _formatLastMessage(widget.conversation),
+                      style: TextStyle(
+                        fontWeight: widget.conversation.unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: widget.conversation.unreadCount > 0
+                            ? theme.textTheme.bodyLarge?.color
+                            : theme.textTheme.bodySmall?.color,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.conversation.unreadCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ThemeConstants.primaryColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        widget.conversation.unreadCount.toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Three dots menu repositioned to appear directly to the right of unread messages badge
+            if (_isHovering)
+              Positioned(
+                top: 43, // Position at subtitle level
+                right: 6, // Small right padding from edge
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Render the unread badge as part of this row if it exists
+                    if (widget.conversation.unreadCount > 0)
+                      Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: ThemeConstants.primaryColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          widget.conversation.unreadCount.toString(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    _buildOptionsButton(context),
+                  ],
                 ),
-            ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionsButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _showOptionsPopup(context),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey[800]
+                : Colors.grey[200],
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.more_vert,
+            size: 18,
           ),
         ),
       ),
     );
   }
 
-  // Smaller, more compact popup menu
-  void _showCompactMenu(BuildContext context) {
+  void _showOptionsPopup(BuildContext context) {
+    final conversation = widget.conversation;
+    final controller = widget.controller;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     final RenderBox button = context.findRenderObject() as RenderBox;
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -690,95 +767,72 @@ class _ConversationTileState extends State<_ConversationTile> {
     showMenu<String>(
       context: context,
       position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      elevation: 4,
-      constraints: const BoxConstraints(maxWidth: 180), // Make menu smaller
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 8,
       items: [
-        // Mute/Unmute option
+        // Mute/Unmute action
         PopupMenuItem<String>(
-          height: 40, // Make items more compact
           value: 'mute',
           child: Row(
             children: [
               Icon(
-                widget.conversation.isMuted
-                    ? Icons.volume_up
-                    : Icons.volume_off,
+                conversation.isMuted ? Icons.volume_up : Icons.volume_off,
                 color: ThemeConstants.primaryColor,
-                size: 18, // Smaller icon
+                size: 18,
               ),
               const SizedBox(width: 8),
               Text(
-                widget.conversation.isMuted
-                    ? TextStrings.unmute
-                    : TextStrings.mute,
-                style: TextStyle(fontSize: 14), // Smaller text
-              ),
+                  conversation.isMuted ? TextStrings.unmute : TextStrings.mute),
             ],
           ),
         ),
-        // Mark as read/unread option
+
+        // Mark as read/unread
         PopupMenuItem<String>(
-          height: 40,
           value: 'read',
           child: Row(
             children: [
               Icon(
-                widget.conversation.unreadCount > 0
-                    ? Icons.mark_chat_read
-                    : Icons.mark_chat_unread,
+                conversation.unreadCount > 0
+                    ? Icons.done_all
+                    : Icons.mark_email_unread,
                 color: ThemeConstants.green,
                 size: 18,
               ),
               const SizedBox(width: 8),
-              Text(
-                widget.conversation.unreadCount > 0
-                    ? TextStrings.markAsRead
-                    : TextStrings.markAsUnread,
-                style: TextStyle(fontSize: 14),
-              ),
+              Text(conversation.unreadCount > 0
+                  ? TextStrings.markAsRead
+                  : TextStrings.markAsUnread),
             ],
           ),
         ),
-        // Archive/Unarchive option
+
+        // Archive/Unarchive action
         PopupMenuItem<String>(
-          height: 40,
           value: 'archive',
           child: Row(
             children: [
               Icon(
-                widget.conversation.isArchived
-                    ? Icons.unarchive
-                    : Icons.archive,
+                conversation.isArchived ? Icons.unarchive : Icons.archive,
                 color: ThemeConstants.orange,
                 size: 18,
               ),
               const SizedBox(width: 8),
-              Text(
-                widget.conversation.isArchived
-                    ? TextStrings.unarchive
-                    : TextStrings.archive,
-                style: TextStyle(fontSize: 14),
-              ),
+              Text(conversation.isArchived
+                  ? TextStrings.unarchive
+                  : TextStrings.archive),
             ],
           ),
         ),
-        // Delete option
+
+        // Delete action
         PopupMenuItem<String>(
-          height: 40,
           value: 'delete',
           child: Row(
             children: [
-              Icon(
-                Icons.delete_outline,
-                color: ThemeConstants.red,
-                size: 18,
-              ),
+              Icon(Icons.delete_outline, color: ThemeConstants.red, size: 18),
               const SizedBox(width: 8),
-              Text(
-                TextStrings.delete,
-                style: TextStyle(fontSize: 14),
-              ),
+              Text(TextStrings.delete),
             ],
           ),
         ),
@@ -786,27 +840,32 @@ class _ConversationTileState extends State<_ConversationTile> {
     ).then((value) {
       if (value == null) return;
 
-      // Handle menu item selection
       switch (value) {
         case 'mute':
-          widget.controller.toggleMute(widget.conversation);
+          // Store the state BEFORE toggling so we know what message to show
+          final willBeMuted = !conversation.isMuted;
+
+          // TODO: When implementing Firebase, add async handling here
+          controller.toggleMute(conversation);
+
           ResponsiveSnackBar.showInfo(
             context: context,
-            message: widget.conversation.isMuted
-                ? "Conversation unmuted"
-                : "Conversation muted",
+            message: willBeMuted
+                ? TextStrings.conversationMuted
+                : TextStrings.conversationUnmuted,
           );
           break;
 
         case 'read':
-          if (widget.conversation.unreadCount > 0) {
-            widget.controller.markConversationAsRead(widget.conversation);
+          // TODO: When implementing Firebase, add async handling for marking read/unread
+          if (conversation.unreadCount > 0) {
+            controller.markConversationAsRead(conversation);
             ResponsiveSnackBar.showInfo(
               context: context,
               message: TextStrings.markedAsRead,
             );
           } else {
-            widget.controller.markConversationAsUnread(widget.conversation);
+            controller.markConversationAsUnread(conversation);
             ResponsiveSnackBar.showInfo(
               context: context,
               message: TextStrings.markedAsUnread,
@@ -815,25 +874,30 @@ class _ConversationTileState extends State<_ConversationTile> {
           break;
 
         case 'archive':
-          widget.controller.toggleArchive(widget.conversation);
+          // Store the state BEFORE toggling so we know what message to show
+          final willBeArchived = !conversation.isArchived;
+
+          // TODO: When implementing Firebase, add async handling here
+          controller.toggleArchive(conversation);
+
           ResponsiveSnackBar.showInfo(
             context: context,
-            message: widget.conversation.isArchived
+            message: willBeArchived
                 ? TextStrings.conversationArchived
                 : TextStrings.conversationUnarchived,
           );
           break;
 
         case 'delete':
-          // Show delete confirmation dialog
-          _confirmDeleteConversation(context);
+          _confirmDeleteConversation(context, conversation);
           break;
       }
     });
   }
 
-  // Add confirmation dialog for deletion
-  void _confirmDeleteConversation(BuildContext context) {
+  void _confirmDeleteConversation(
+      BuildContext context, Conversation conversation) {
+    // TODO: When implementing Firebase, add confirmation that deletion was successful
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -849,12 +913,8 @@ class _ConversationTileState extends State<_ConversationTile> {
           ),
           TextButton(
             onPressed: () {
-              widget.controller.deleteConversation(widget.conversation);
+              widget.controller.deleteConversation(conversation);
               Navigator.pop(context);
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: "Conversation deleted",
-              );
             },
             child: Text(
               TextStrings.delete,

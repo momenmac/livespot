@@ -224,4 +224,7 @@ class TextStrings {
   static const String cancelEdit = 'Cancel edit';
   static const String noConversationsForward = 'No conversations to forward to';
   static const String copiedToClipboard = 'Text copied to clipboard';
+
+  static const String conversationMuted = 'Conversation muted';
+  static const String conversationUnmuted = 'Conversation unmuted';
 }

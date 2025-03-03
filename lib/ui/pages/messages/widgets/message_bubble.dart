@@ -36,17 +36,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   @override
   void dispose() {
-    // Ensure any menu is dismissed to prevent context errors
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // This safely dismisses any open menu when the widget is disposed
-        if (context.mounted) {
-          Navigator.of(context, rootNavigator: true).popUntil((route) {
-            return route is! PopupRoute;
-          });
-        }
-      });
-    }
+    // Remove the post-frame callback as it was causing the unmounting error
     super.dispose();
   }
 
@@ -227,6 +217,9 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _showOptionsPopup(BuildContext context, bool isSent) {
+    // Check if widget is still mounted before showing menu
+    if (!mounted) return;
+
     // Create menu options
     final List<PopupMenuEntry<String>> items = [
       PopupMenuItem<String>(
@@ -321,6 +314,9 @@ class _MessageBubbleState extends State<MessageBubble> {
       elevation: 8,
       items: items,
     ).then((value) {
+      // Check if widget is still mounted before proceeding
+      if (!mounted || value == null) return;
+
       // Handle selection
       if (value == null) return;
 
@@ -372,8 +368,12 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   void _showForwardSheet(
       BuildContext context, Message message, MessagesController controller) {
-    // Get the current context which will be used to show the bottom sheet
+    // Store context in local variable to avoid issues with context after unmounting
     final currentContext = context;
+
+    if (!mounted) return;
+
+    // Get the current context which will be used to show the bottom sheet
 
     // Create a controller for the search field
     final TextEditingController searchController = TextEditingController();
