@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/core/constants/text_strings.dart';
 import 'package:flutter_application_2/core/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
@@ -514,7 +516,7 @@ class ConversationList extends StatelessWidget {
   }
 }
 
-class _ConversationTile extends StatelessWidget {
+class _ConversationTile extends StatefulWidget {
   final Conversation conversation;
   final bool isSelected;
   final VoidCallback onTap;
@@ -530,142 +532,336 @@ class _ConversationTile extends StatelessWidget {
   });
 
   @override
+  _ConversationTileState createState() => _ConversationTileState();
+}
+
+class _ConversationTileState extends State<_ConversationTile> {
+  bool isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
     final formattedTime =
-        _formatMessageTime(conversation.lastMessage.timestamp);
+        _formatMessageTime(widget.conversation.lastMessage.timestamp);
 
-    return Container(
-      color: Colors.transparent,
-      child: ListTile(
-        onTap: () {
-          // Set controller on conversation and all its messages before navigating
-          conversation.controller = controller;
-
-          // Set controller on ALL messages in the conversation
-          for (final message in conversation.messages) {
-            message.controller = controller;
-          }
-
-          // Now navigate to the chat detail page
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatDetailPage(
-                controller: controller,
-                conversation: conversation,
+    return MouseRegion(
+      onEnter: (_) => setState(() => isHovered = true),
+      onExit: (_) => setState(() => isHovered = false),
+      child: Container(
+        color: Colors.transparent,
+        child: ListTile(
+          onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Stack(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundImage: NetworkImage(widget.conversation.avatarUrl),
               ),
-            ),
-          ).then((_) {
-            // Force refresh when returning
-            if (controller.selectedConversation?.id == conversation.id) {
-              controller.selectConversation(conversation);
-            }
-            controller.notifyListeners();
-          });
-        },
-        onLongPress: onLongPress,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundImage: NetworkImage(conversation.avatarUrl),
-            ),
-            if (conversation.isOnline)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: ThemeConstants.green,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isDarkMode
-                          ? ThemeConstants.darkBackgroundColor
-                          : ThemeConstants.lightBackgroundColor,
-                      width: 2,
+              if (widget.conversation.isOnline)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: ThemeConstants.green,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDarkMode
+                            ? ThemeConstants.darkBackgroundColor
+                            : ThemeConstants.lightBackgroundColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                conversation.displayName,
-                style: TextStyle(
-                  fontWeight: conversation.unreadCount > 0
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Text(
-              formattedTime,
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.textTheme.bodySmall?.color,
-                fontWeight: conversation.unreadCount > 0
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-        subtitle: Row(
-          children: [
-            if (conversation.isMuted)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  Icons.volume_off,
-                  size: 14,
-                  color: ThemeConstants.grey,
-                ),
-              ),
-            Expanded(
-              child: Text(
-                _formatLastMessage(conversation),
-                style: TextStyle(
-                  fontWeight: conversation.unreadCount > 0
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                  color: conversation.unreadCount > 0
-                      ? theme.textTheme.bodyLarge?.color
-                      : theme.textTheme.bodySmall?.color,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (conversation.unreadCount > 0)
-              Container(
-                margin: const EdgeInsets.only(left: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: ThemeConstants.primaryColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
                 child: Text(
-                  conversation.unreadCount.toString(),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                  widget.conversation.displayName,
+                  style: TextStyle(
+                    fontWeight: widget.conversation.unreadCount > 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                formattedTime,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textTheme.bodySmall?.color,
+                  fontWeight: widget.conversation.unreadCount > 0
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+          subtitle: Row(
+            children: [
+              if (widget.conversation.isMuted)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    Icons.volume_off,
+                    size: 14,
+                    color: ThemeConstants.grey,
                   ),
                 ),
+              Expanded(
+                child: Text(
+                  _formatLastMessage(widget.conversation),
+                  style: TextStyle(
+                    fontWeight: widget.conversation.unreadCount > 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: widget.conversation.unreadCount > 0
+                        ? theme.textTheme.bodyLarge?.color
+                        : theme.textTheme.bodySmall?.color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-          ],
+              if (widget.conversation.unreadCount > 0)
+                Container(
+                  margin: const EdgeInsets.only(left: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: ThemeConstants.primaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    widget.conversation.unreadCount.toString(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              // Show three dots menu icon when hovered
+              if (isHovered)
+                IconButton(
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: ThemeConstants.grey,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(width: 24, height: 24),
+                  splashRadius: 20,
+                  onPressed: () => _showCompactMenu(context),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  // Smaller, more compact popup menu
+  void _showCompactMenu(BuildContext context) {
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 4,
+      constraints: const BoxConstraints(maxWidth: 180), // Make menu smaller
+      items: [
+        // Mute/Unmute option
+        PopupMenuItem<String>(
+          height: 40, // Make items more compact
+          value: 'mute',
+          child: Row(
+            children: [
+              Icon(
+                widget.conversation.isMuted
+                    ? Icons.volume_up
+                    : Icons.volume_off,
+                color: ThemeConstants.primaryColor,
+                size: 18, // Smaller icon
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.conversation.isMuted
+                    ? TextStrings.unmute
+                    : TextStrings.mute,
+                style: TextStyle(fontSize: 14), // Smaller text
+              ),
+            ],
+          ),
+        ),
+        // Mark as read/unread option
+        PopupMenuItem<String>(
+          height: 40,
+          value: 'read',
+          child: Row(
+            children: [
+              Icon(
+                widget.conversation.unreadCount > 0
+                    ? Icons.mark_chat_read
+                    : Icons.mark_chat_unread,
+                color: ThemeConstants.green,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.conversation.unreadCount > 0
+                    ? TextStrings.markAsRead
+                    : TextStrings.markAsUnread,
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        // Archive/Unarchive option
+        PopupMenuItem<String>(
+          height: 40,
+          value: 'archive',
+          child: Row(
+            children: [
+              Icon(
+                widget.conversation.isArchived
+                    ? Icons.unarchive
+                    : Icons.archive,
+                color: ThemeConstants.orange,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.conversation.isArchived
+                    ? TextStrings.unarchive
+                    : TextStrings.archive,
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        // Delete option
+        PopupMenuItem<String>(
+          height: 40,
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(
+                Icons.delete_outline,
+                color: ThemeConstants.red,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                TextStrings.delete,
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+
+      // Handle menu item selection
+      switch (value) {
+        case 'mute':
+          widget.controller.toggleMute(widget.conversation);
+          ResponsiveSnackBar.showInfo(
+            context: context,
+            message: widget.conversation.isMuted
+                ? "Conversation unmuted"
+                : "Conversation muted",
+          );
+          break;
+
+        case 'read':
+          if (widget.conversation.unreadCount > 0) {
+            widget.controller.markConversationAsRead(widget.conversation);
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message: TextStrings.markedAsRead,
+            );
+          } else {
+            widget.controller.markConversationAsUnread(widget.conversation);
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message: TextStrings.markedAsUnread,
+            );
+          }
+          break;
+
+        case 'archive':
+          widget.controller.toggleArchive(widget.conversation);
+          ResponsiveSnackBar.showInfo(
+            context: context,
+            message: widget.conversation.isArchived
+                ? TextStrings.conversationArchived
+                : TextStrings.conversationUnarchived,
+          );
+          break;
+
+        case 'delete':
+          // Show delete confirmation dialog
+          _confirmDeleteConversation(context);
+          break;
+      }
+    });
+  }
+
+  // Add confirmation dialog for deletion
+  void _confirmDeleteConversation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          TextStrings.deleteConversation,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        content: Text(TextStrings.deleteConversationConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(TextStrings.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.controller.deleteConversation(widget.conversation);
+              Navigator.pop(context);
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: "Conversation deleted",
+              );
+            },
+            child: Text(
+              TextStrings.delete,
+              style: TextStyle(color: ThemeConstants.red),
+            ),
+          ),
+        ],
       ),
     );
   }

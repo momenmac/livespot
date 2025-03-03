@@ -52,8 +52,8 @@ class TopToast {
     return OverlayEntry(
       builder: (context) => Positioned(
         top: topPadding,
-        left: screenSize.width * 0.1,
-        width: screenSize.width * 0.8,
+        left: screenSize.width > 900 ? 450 * 0.1 : screenSize.width * 0.1,
+        width: screenSize.width > 900 ? 450 * 0.8 : screenSize.width * 0.8,
         child: Material(
           color: Colors.transparent,
           // Increasing elevation to ensure it shows above other UI elements
