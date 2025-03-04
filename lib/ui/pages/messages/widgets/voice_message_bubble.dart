@@ -32,6 +32,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
   int _elapsedSeconds = 0;
   int _totalSeconds = 0;
   bool _disposed = false;
+  // Add a variable to track milliseconds for more precise timing
+  int _elapsedMs = 0;
 
   // Sound wave points for a more realistic waveform
   final List<double> _wavePoints = [
@@ -98,27 +100,45 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
   void _startPlayback() {
     if (_disposed) return;
 
+    // Reset or continue playback state
     setState(() {
       _isPlaying = true;
-      _elapsedSeconds = 0;
-      _playbackProgress = 0.0;
+      // Start from beginning if we're at the end
+      if (_playbackProgress >= 0.99) {
+        _elapsedSeconds = 0;
+        _elapsedMs = 0;
+        _playbackProgress = 0.0;
+      }
     });
 
-    _progressTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    // Use a fixed interval for smooth updates
+    const updateInterval = 100; // milliseconds (10 updates per second)
+    final totalMs = _totalSeconds * 1000;
+
+    _progressTimer =
+        Timer.periodic(Duration(milliseconds: updateInterval), (timer) {
       if (_disposed) {
         timer.cancel();
         return;
       }
 
-      if (_elapsedSeconds >= _totalSeconds) {
-        _stopPlayback();
-        return;
-      }
+      // Update elapsed time in milliseconds for more precise tracking
+      _elapsedMs += updateInterval;
 
       if (!_disposed) {
         setState(() {
-          _elapsedSeconds++;
-          _playbackProgress = _elapsedSeconds / _totalSeconds;
+          // Update seconds display (integer division to get whole seconds)
+          _elapsedSeconds = _elapsedMs ~/ 1000;
+
+          // Update progress as a fraction of total time
+          _playbackProgress = _elapsedMs / totalMs;
+
+          // Check if playback is complete
+          if (_elapsedMs >= totalMs) {
+            _playbackProgress = 1.0;
+            _elapsedSeconds = _totalSeconds;
+            _stopPlayback();
+          }
         });
       }
     });
@@ -131,7 +151,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
     if (!_disposed) {
       setState(() {
         _isPlaying = false;
-        // Keep the last progress value to show where we stopped
+        // We don't reset progress here so it stays where it stopped
       });
     }
   }
@@ -319,80 +339,62 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
   }
 
   Widget _buildWaveformArea(Color textColor) {
+    // Get a more accurate width calculation that doesn't depend on screen size
+    final availableWidth = 200.0; // Fixed width for progress bar
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Modern progress bar
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: Stack(
-            children: [
-              // Background track
-              Container(
-                height: 4,
-                width: double.infinity,
-                color: Colors.white.withOpacity(0.2),
-              ),
-
-              // Animated progress indicator
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: 4,
-                width:
-                    MediaQuery.of(context).size.width * 0.6 * _playbackProgress,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: widget.isSent
-                        ? [Colors.white.withOpacity(0.9), Colors.white]
-                        : [
-                            ThemeConstants.primaryColor.withOpacity(0.7),
-                            ThemeConstants.primaryColor,
-                          ],
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: _isPlaying
-                      ? [
-                          BoxShadow(
-                            color: widget.isSent
-                                ? Colors.white.withOpacity(0.4)
-                                : ThemeConstants.primaryColor.withOpacity(0.4),
-                            blurRadius: 4,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
+          child: Container(
+            width: availableWidth,
+            child: Stack(
+              children: [
+                // Background track
+                Container(
+                  height: 4,
+                  width: availableWidth,
+                  color: Colors.white.withOpacity(0.2),
                 ),
-              ),
 
-              // Thumb indicator
-              if (_playbackProgress > 0)
-                Positioned(
-                  left: (MediaQuery.of(context).size.width *
-                          0.6 *
-                          _playbackProgress) -
-                      6,
-                  top: -4,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: widget.isSent
-                          ? Colors.white
-                          : ThemeConstants.primaryColor,
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.isSent
-                              ? Colors.black.withOpacity(0.3)
-                              : ThemeConstants.primaryColor.withOpacity(0.3),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
+                // Animated progress indicator with exact width calculation
+                AnimatedContainer(
+                  duration: const Duration(
+                      milliseconds:
+                          100), // Faster updates for smoother animation
+                  height: 4,
+                  width: availableWidth * _playbackProgress,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: widget.isSent
+                          ? [Colors.white.withOpacity(0.9), Colors.white]
+                          : [
+                              ThemeConstants.primaryColor.withOpacity(0.7),
+                              ThemeConstants.primaryColor,
+                            ],
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                    // ...existing code...
+                  ),
+                ),
+
+                // Thumb indicator with more precise positioning
+                if (_playbackProgress > 0)
+                  Positioned(
+                    left: (availableWidth * _playbackProgress) - 6,
+                    top: -4,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                          // ...existing code...
+                          ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
 

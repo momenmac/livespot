@@ -1,0 +1,72 @@
+[
+  {
+    "id": "user1",
+    "name": "John Smith",
+    "email": "john.smith@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=John+Smith",
+    "isOnline": true
+  },
+  {
+    "id": "user2",
+    "name": "Sarah Johnson",
+    "email": "sarah.j@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Sarah+Johnson",
+    "isOnline": true
+  },
+  {
+    "id": "user3",
+    "name": "Michael Brown",
+    "email": "m.brown@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Michael+Brown",
+    "isOnline": false
+  },
+  {
+    "id": "user4",
+    "name": "Emma Wilson",
+    "email": "emma.w@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Emma+Wilson",
+    "isOnline": false
+  },
+  {
+    "id": "user5",
+    "name": "David Lee",
+    "email": "david.lee@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=David+Lee",
+    "isOnline": true
+  },
+  {
+    "id": "user6",
+    "name": "Jennifer Taylor",
+    "email": "jennifer.t@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Jennifer+Taylor",
+    "isOnline": false
+  },
+  {
+    "id": "user7",
+    "name": "Robert Garcia",
+    "email": "robert.g@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Robert+Garcia",
+    "isOnline": true
+  },
+  {
+    "id": "user8",
+    "name": "Jessica Martinez",
+    "email": "jessica.m@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Jessica+Martinez",
+    "isOnline": false
+  },
+  {
+    "id": "user9",
+    "name": "William Anderson",
+    "email": "will.a@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=William+Anderson",
+    "isOnline": true
+  },
+  {
+    "id": "user10",
+    "name": "Sophia Thomas",
+    "email": "sophia.t@example.com",
+    "avatarUrl": "https://ui-avatars.com/api/?name=Sophia+Thomas",
+    "isOnline": false
+  }
+]

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 
 enum MessageType {

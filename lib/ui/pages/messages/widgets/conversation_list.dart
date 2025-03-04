@@ -5,9 +5,9 @@ import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/ui/widgets/safe_network_image.dart'; // Add this import
 
 // Simple class to hold action button data
 class ActionItem {
@@ -586,10 +586,10 @@ class _ConversationTileState extends State<_ConversationTile> {
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               leading: Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundImage:
-                        NetworkImage(widget.conversation.avatarUrl),
+                  SafeNetworkImage(
+                    imageUrl: widget.conversation.avatarUrl,
+                    size: 48,
+                    fallbackText: widget.conversation.displayName,
                   ),
                   if (widget.conversation.isOnline)
                     Positioned(
@@ -664,40 +664,24 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (widget.conversation.unreadCount > 0)
-                    Container(
-                      margin: const EdgeInsets.only(left: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: ThemeConstants.primaryColor,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        widget.conversation.unreadCount.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                  // Remove the unread badge from here to avoid duplication
+                  // We'll only show it in the hover menu
                 ],
               ),
             ),
 
-            // Three dots menu repositioned to appear directly to the right of unread messages badge
+            // Fix the hover menu with unread badge
             if (_isHovering)
               Positioned(
-                top: 43, // Position at subtitle level
-                right: 6, // Small right padding from edge
+                top: 28, // More visually centered position
+                right: 8, // Consistent padding
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Render the unread badge as part of this row if it exists
+                    // Always show the unread badge here if it exists
                     if (widget.conversation.unreadCount > 0)
                       Container(
-                        margin: const EdgeInsets.only(right: 4),
+                        margin: const EdgeInsets.only(right: 8), // More spacing
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(

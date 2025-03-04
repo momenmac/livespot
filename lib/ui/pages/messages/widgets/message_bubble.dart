@@ -317,9 +317,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       // Check if widget is still mounted before proceeding
       if (!mounted || value == null) return;
 
-      // Handle selection
-      if (value == null) return;
-
       print("Selected option: $value"); // Debug log
 
       // Get the controller from the message

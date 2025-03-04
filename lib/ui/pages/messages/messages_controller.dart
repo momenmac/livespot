@@ -1,6 +1,5 @@
 import 'dart:core';
 import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';

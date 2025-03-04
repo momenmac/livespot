@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/services/user_service.dart'; // Add this import
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/user.dart'; // Add this import
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
@@ -196,22 +198,11 @@ class _MessagesPageState extends State<MessagesPage> {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    // Create a mock list of users
-    final allUsers = List.generate(
-        10,
-        (index) => {
-              'id': 'user${index + 1}',
-              'name': 'User ${index + 1}',
-              'email': 'user${index + 1}@example.com',
-            });
-
-    // Define a separate widget to handle the search functionality
-    // This ensures proper state management
+    // Create user dialog with mock data
     showDialog(
       context: context,
       builder: (context) {
         return _SearchableContactsDialog(
-          allUsers: allUsers,
           searchController: searchController,
           theme: theme,
           isDarkMode: isDarkMode,
@@ -222,13 +213,11 @@ class _MessagesPageState extends State<MessagesPage> {
 }
 
 class _SearchableContactsDialog extends StatefulWidget {
-  final List<Map<String, String>> allUsers;
   final TextEditingController searchController;
   final ThemeData theme;
   final bool isDarkMode;
 
   const _SearchableContactsDialog({
-    required this.allUsers,
     required this.searchController,
     required this.theme,
     required this.isDarkMode,
@@ -240,22 +229,83 @@ class _SearchableContactsDialog extends StatefulWidget {
 }
 
 class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
-  late List<Map<String, String>> filteredUsers;
+  List<UserWithEmail> users = [];
+  List<UserWithEmail> filteredUsers = [];
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    filteredUsers = List.from(widget.allUsers);
+    // Load users from mock data
+    _loadUsers();
 
     // Add listener to the controller for immediate search response
     widget.searchController.addListener(_handleSearchChange);
   }
 
-  @override
-  void dispose() {
-    // Remove listener to prevent memory leaks
-    widget.searchController.removeListener(_handleSearchChange);
-    super.dispose();
+  Future<void> _loadUsers() async {
+    // TODO: Replace with Firebase auth and Firestore in the future
+
+    try {
+      final userService = UserService();
+
+      // Load all users as UserWithEmail objects directly
+      final loadedUsers = await userService.getUsers();
+
+      if (mounted) {
+        setState(() {
+          // Make sure we're working with the proper types
+          users = loadedUsers.whereType<UserWithEmail>().toList();
+
+          // If there are no users after filtering, try manual casting
+          if (users.isEmpty && loadedUsers.isNotEmpty) {
+            users = loadedUsers.map((user) {
+              // Try to convert regular User to UserWithEmail
+              if (user is! UserWithEmail) {
+                return UserWithEmail(
+                  id: user.id,
+                  name: user.name,
+                  avatarUrl: user.avatarUrl,
+                  email:
+                      '${user.name.toLowerCase().replaceAll(' ', '.')}@example.com',
+                  isOnline: user.isOnline,
+                );
+              }
+              return user as UserWithEmail;
+            }).toList();
+          }
+
+          filteredUsers = List.from(users);
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading users: $e');
+      // Create some fallback users if loading fails
+      if (mounted) {
+        setState(() {
+          // Create some default users as fallback
+          users = [
+            UserWithEmail(
+              id: 'user1',
+              name: 'John Smith',
+              email: 'john.smith@example.com',
+              avatarUrl: 'https://ui-avatars.com/api/?name=John+Smith',
+              isOnline: true,
+            ),
+            UserWithEmail(
+              id: 'user2',
+              name: 'Sarah Johnson',
+              email: 'sarah.j@example.com',
+              avatarUrl: 'https://ui-avatars.com/api/?name=Sarah+Johnson',
+              isOnline: false,
+            ),
+          ];
+          filteredUsers = List.from(users);
+          isLoading = false;
+        });
+      }
+    }
   }
 
   // Search handler triggered by controller changes
@@ -268,11 +318,11 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
   void _filterUsers(String query) {
     setState(() {
       if (query.isEmpty) {
-        filteredUsers = List.from(widget.allUsers);
+        filteredUsers = List.from(users);
       } else {
-        filteredUsers = widget.allUsers.where((user) {
-          final name = user['name']!.toLowerCase();
-          final email = user['email']!.toLowerCase();
+        filteredUsers = users.where((user) {
+          final name = user.name.toLowerCase();
+          final email = user.email.toLowerCase();
           final searchLower = query.toLowerCase();
           return name.contains(searchLower) || email.contains(searchLower);
         }).toList();
@@ -339,7 +389,7 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    filteredUsers.length == widget.allUsers.length
+                    filteredUsers.length == users.length
                         ? TextStrings.recentContacts
                         : '${filteredUsers.length} ${TextStrings.recentContacts}',
                     style: TextStyle(
@@ -347,7 +397,7 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                       color: widget.theme.textTheme.titleMedium?.color,
                     ),
                   ),
-                  if (filteredUsers.length != widget.allUsers.length)
+                  if (filteredUsers.length != users.length)
                     TextButton(
                       onPressed: () {
                         widget.searchController.clear();
@@ -359,42 +409,84 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
 
               const SizedBox(height: 10),
 
-              // Results list
+              // Results list with loading state and error handling
               Flexible(
-                child: filteredUsers.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Text(
-                            'No users found matching "${widget.searchController.text}"',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filteredUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = filteredUsers[index];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: ThemeConstants.primaryColor,
-                              child: Text(user['name']![0]),
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredUsers.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.person_off,
+                                  size: 48,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Padding(
+                                  padding: const EdgeInsets.all(20.0),
+                                  child: Text(
+                                    widget.searchController.text.isEmpty
+                                        ? 'No contacts found.\nTry adding some contacts first.'
+                                        : 'No users found matching "${widget.searchController.text}"',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ),
+                              ],
                             ),
-                            title: Text(user['name']!),
-                            subtitle: Text(user['email']!),
-                            onTap: () {
-                              ResponsiveSnackBar.showInfo(
-                                context: context,
-                                message:
-                                    "${TextStrings.startingConversationWith} ${user['name']}",
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: filteredUsers.length,
+                            itemBuilder: (context, index) {
+                              final user = filteredUsers[index];
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundImage: NetworkImage(user.avatarUrl),
+                                  backgroundColor: ThemeConstants.primaryColor,
+                                  onBackgroundImageError: (_, __) {
+                                    // Handle image loading errors silently
+                                  },
+                                  child: user.avatarUrl.isEmpty
+                                      ? Text(user.name[0])
+                                      : null,
+                                ),
+                                title: Text(user.name),
+                                subtitle: Text(user.email),
+                                // Online status indicator
+                                trailing: user.isOnline
+                                    ? Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: ThemeConstants.green,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                                onTap: () {
+                                  // TODO: Create new conversation in Firebase
+                                  // - Create or get conversation document in Firestore
+                                  // - Use transaction to ensure consistency
+                                  // - Add conversation reference to both users
+                                  // - Navigate to chat detail page with new conversation
+
+                                  ResponsiveSnackBar.showInfo(
+                                    context: context,
+                                    message:
+                                        "${TextStrings.startingConversationWith} ${user.name}",
+                                  );
+                                  Navigator.pop(context);
+                                },
                               );
-                              Navigator.pop(context);
                             },
-                          );
-                        },
-                      ),
+                          ),
               ),
 
               const SizedBox(height: 10),
