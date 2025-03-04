@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 
@@ -39,7 +40,7 @@ class UserService {
 
       return _cachedUsers!;
     } catch (e) {
-      print('Error loading user data: $e');
+      debugPrint('Error loading user data: $e');
       // Create default users as fallback
       _cachedUsers = _createDefaultUsers();
       return _cachedUsers!;

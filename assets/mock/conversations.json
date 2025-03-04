@@ -6,13 +6,13 @@
         {
           "id": "current",
           "name": "Me",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/32.jpg",
           "isOnline": true
         },
         {
           "id": "user1",
           "name": "John Doe",
-          "avatarUrl": "https://ui-avatars.com/api/?name=John+Doe",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/44.jpg",
           "isOnline": true
         }
       ],
@@ -56,6 +56,54 @@
           "status": "delivered",
           "voiceDuration": 24,
           "mediaUrl": "voice_message_mock_1_4.mp3"
+        },
+        {
+          "id": "msg1_5",
+          "senderId": "user1",
+          "senderName": "John Doe",
+          "content": "I like your voice message! Do you have time to meet up later?",
+          "timestamp": 1645623015000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "msg1_6",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Sure, I'm free after 5pm. Coffee?",
+          "timestamp": 1645622895000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        },
+        {
+          "id": "msg1_7",
+          "senderId": "user1",
+          "senderName": "John Doe",
+          "content": "Perfect! Let's meet at the usual place at 5:30pm.",
+          "timestamp": 1645622775000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "img1_8",
+          "senderId": "user1",
+          "senderName": "John Doe",
+          "content": "Image message",
+          "timestamp": 1645622655000,
+          "messageType": "image",
+          "isRead": true,
+          "mediaUrl": "https://picsum.photos/500/300"
+        },
+        {
+          "id": "msg1_9",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Nice picture! Looking forward to our meeting!",
+          "timestamp": 1645622535000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
         }
       ],
       "unreadCount": 1,
@@ -70,13 +118,13 @@
         {
           "id": "current",
           "name": "Me",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/32.jpg",
           "isOnline": true
         },
         {
           "id": "user2",
           "name": "Emma Wilson",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Emma+Wilson",
+          "avatarUrl": "https://randomuser.me/api/portraits/women/12.jpg",
           "isOnline": false
         }
       ],
@@ -99,6 +147,56 @@
           "timestamp": 1645622895000,
           "messageType": "text",
           "isRead": true
+        },
+        {
+          "id": "msg2_3",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Great! Let me know if you have any questions.",
+          "timestamp": 1645622775000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        },
+        {
+          "id": "msg2_4",
+          "senderId": "user2",
+          "senderName": "Emma Wilson",
+          "content": "I noticed there might be an issue with section 3. Can we discuss it?",
+          "timestamp": 1645622655000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "msg2_5",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Sure, what seems to be the problem?",
+          "timestamp": 1645622535000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        },
+        {
+          "id": "vmsg2_6",
+          "senderId": "user2",
+          "senderName": "Emma Wilson",
+          "content": "Voice message",
+          "timestamp": 1645622415000,
+          "messageType": "voice",
+          "isRead": true,
+          "voiceDuration": 45,
+          "mediaUrl": "voice_message_mock_2_6.mp3"
+        },
+        {
+          "id": "msg2_7",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "I understand the issue now. I'll fix it and send you an updated version.",
+          "timestamp": 1645622295000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
         }
       ],
       "unreadCount": 0,
@@ -113,25 +211,25 @@
         {
           "id": "current",
           "name": "Me",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/32.jpg",
           "isOnline": true
         },
         {
           "id": "user3",
           "name": "Alex Johnson",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Alex+Johnson",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/22.jpg",
           "isOnline": true
         },
         {
           "id": "user4",
           "name": "Sarah Parker",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Sarah+Parker",
+          "avatarUrl": "https://randomuser.me/api/portraits/women/67.jpg",
           "isOnline": false
         },
         {
           "id": "user5",
           "name": "Michael Brown",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Michael+Brown",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/55.jpg",
           "isOnline": true
         }
       ],
@@ -174,6 +272,62 @@
           "messageType": "text",
           "isRead": true,
           "status": "delivered"
+        },
+        {
+          "id": "msg3_5",
+          "senderId": "user3",
+          "senderName": "Alex Johnson",
+          "content": "That would be great. When do you think you can have it ready?",
+          "timestamp": 1645622295000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "img3_6",
+          "senderId": "user4",
+          "senderName": "Sarah Parker",
+          "content": "Image message",
+          "timestamp": 1645622175000,
+          "messageType": "image",
+          "isRead": false,
+          "mediaUrl": "https://picsum.photos/500/400"
+        },
+        {
+          "id": "msg3_7",
+          "senderId": "user4",
+          "senderName": "Sarah Parker",
+          "content": "Here's a draft of the UI design for the new feature.",
+          "timestamp": 1645622055000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg3_8",
+          "senderId": "user5",
+          "senderName": "Michael Brown",
+          "content": "Looks promising! I think we should incorporate this into our timeline.",
+          "timestamp": 1645621935000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg3_9",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "I agree, I'll have the schedule ready by tomorrow morning with these designs included.",
+          "timestamp": 1645621815000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "delivered"
+        },
+        {
+          "id": "msg3_10",
+          "senderId": "user3",
+          "senderName": "Alex Johnson",
+          "content": "Perfect! Let's reconvene tomorrow at 10am to review.",
+          "timestamp": 1645621695000,
+          "messageType": "text",
+          "isRead": false
         }
       ],
       "unreadCount": 3,
@@ -188,13 +342,13 @@
         {
           "id": "current",
           "name": "Me",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/32.jpg",
           "isOnline": true
         },
         {
           "id": "user6",
           "name": "David Lee",
-          "avatarUrl": "https://ui-avatars.com/api/?name=David+Lee",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/17.jpg",
           "isOnline": false
         }
       ],
@@ -217,6 +371,64 @@
           "messageType": "text",
           "isRead": true,
           "status": "read"
+        },
+        {
+          "id": "msg4_3",
+          "senderId": "user6",
+          "senderName": "David Lee",
+          "content": "That would be perfect. What time works for you?",
+          "timestamp": 1645622055000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "msg4_4",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "How about 2pm?",
+          "timestamp": 1645621935000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
+        },
+        {
+          "id": "msg4_5",
+          "senderId": "user6",
+          "senderName": "David Lee",
+          "content": "2pm works for me. Here are some initial ideas I had:",
+          "timestamp": 1645621815000,
+          "messageType": "text",
+          "isRead": true
+        },
+        {
+          "id": "img4_6",
+          "senderId": "user6",
+          "senderName": "David Lee",
+          "content": "Image message",
+          "timestamp": 1645621695000,
+          "messageType": "image",
+          "isRead": true,
+          "mediaUrl": "https://picsum.photos/600/400"
+        },
+        {
+          "id": "img4_7",
+          "senderId": "user6",
+          "senderName": "David Lee",
+          "content": "Image message",
+          "timestamp": 1645621575000,
+          "messageType": "image",
+          "isRead": true,
+          "mediaUrl": "https://picsum.photos/600/450"
+        },
+        {
+          "id": "msg4_8",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "These look promising! I'll review them before our call.",
+          "timestamp": 1645621455000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "read"
         }
       ],
       "unreadCount": 0,
@@ -231,25 +443,25 @@
         {
           "id": "current",
           "name": "Me",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Me",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/32.jpg",
           "isOnline": true
         },
         {
           "id": "user7",
           "name": "Jennifer Smith",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Jennifer+Smith",
+          "avatarUrl": "https://randomuser.me/api/portraits/women/42.jpg",
           "isOnline": true
         },
         {
           "id": "user8",
           "name": "Robert Taylor",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Robert+Taylor",
+          "avatarUrl": "https://randomuser.me/api/portraits/men/71.jpg",
           "isOnline": false
         },
         {
           "id": "user9",
           "name": "Lisa Wong",
-          "avatarUrl": "https://ui-avatars.com/api/?name=Lisa+Wong",
+          "avatarUrl": "https://randomuser.me/api/portraits/women/33.jpg",
           "isOnline": true
         }
       ],
@@ -281,6 +493,91 @@
           "messageType": "text",
           "isRead": true,
           "status": "delivered"
+        },
+        {
+          "id": "msg5_4",
+          "senderId": "user8",
+          "senderName": "Robert Taylor",
+          "content": "Sorry I missed the presentation. Had a doctor's appointment.",
+          "timestamp": 1645621695000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg5_5",
+          "senderId": "user7",
+          "senderName": "Jennifer Smith",
+          "content": "No worries Robert, we recorded it for you.",
+          "timestamp": 1645621575000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg5_6",
+          "senderId": "user9",
+          "senderName": "Lisa Wong",
+          "content": "They specifically loved the new branding direction!",
+          "timestamp": 1645621455000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "img5_7",
+          "senderId": "user9",
+          "senderName": "Lisa Wong",
+          "content": "Image message",
+          "timestamp": 1645621335000,
+          "messageType": "image",
+          "isRead": false,
+          "mediaUrl": "https://picsum.photos/550/350"
+        },
+        {
+          "id": "msg5_8",
+          "senderId": "user9",
+          "senderName": "Lisa Wong",
+          "content": "Here's a photo from the celebration!",
+          "timestamp": 1645621215000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "msg5_9",
+          "senderId": "current",
+          "senderName": "Me",
+          "content": "Looks fun! Sorry I couldn't join, had to jump on another call.",
+          "timestamp": 1645621095000,
+          "messageType": "text",
+          "isRead": true,
+          "status": "delivered"
+        },
+        {
+          "id": "msg5_10",
+          "senderId": "user8",
+          "senderName": "Robert Taylor",
+          "content": "When's our next planning session?",
+          "timestamp": 1645620975000,
+          "messageType": "text",
+          "isRead": false
+        },
+        {
+          "id": "vmsg5_11",
+          "senderId": "user7",
+          "senderName": "Jennifer Smith",
+          "content": "Voice message",
+          "timestamp": 1645620855000,
+          "messageType": "voice",
+          "isRead": false,
+          "voiceDuration": 28,
+          "mediaUrl": "voice_message_mock_5_11.mp3"
+        },
+        {
+          "id": "msg5_12",
+          "senderId": "user7",
+          "senderName": "Jennifer Smith",
+          "content": "I just sent all the details for next week's meeting in that voice note.",
+          "timestamp": 1645620735000,
+          "messageType": "text",
+          "isRead": false
         }
       ],
       "unreadCount": 2,

@@ -87,7 +87,7 @@ class LoginScreenState extends State<LoginScreen>
           if (!mounted) return;
 
           // Update navigation to keep only GetStarted screen in stack
-          NavigationService().replaceUntilHome(AppRoutes.home);
+          NavigationService().replaceAllWith(AppRoutes.home);
         } else {
           if (!mounted) return;
 

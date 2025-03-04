@@ -227,4 +227,13 @@ class TextStrings {
 
   static const String conversationMuted = 'Conversation muted';
   static const String conversationUnmuted = 'Conversation unmuted';
+
+  // Image related strings
+  static const String imageDownloaded = 'Image saved to gallery';
+  static const String imageDownloadedSuccessfully =
+      'Image downloaded successfully';
+  static const String imageDownloadFailed = 'Failed to download image';
+  static const String imageOpenedForDownload = 'Image opened for download';
+  static const String imageDownloadInProgress = 'Downloading image...';
+  static const String imageSaveManually = 'Right-click to save image manually';
 }

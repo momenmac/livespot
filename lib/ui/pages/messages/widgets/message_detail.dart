@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 // For clipboard
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/message_bubble.dart';
 import 'dart:async';
+import 'package:image_picker/image_picker.dart';
 
 class ActionItem {
   final IconData icon;
@@ -48,6 +50,9 @@ class _MessageDetailState extends State<MessageDetail>
 
   // Animation controller for recording animation
   late AnimationController _pulseController;
+
+  // Add ImagePicker for attachment functionality
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -145,6 +150,142 @@ class _MessageDetailState extends State<MessageDetail>
     final minutes = (seconds / 60).floor();
     final remainingSeconds = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  // Add method to handle image selection
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedImage = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 70, // Adjust quality for better performance
+      );
+
+      if (pickedImage != null) {
+        // Send the image through the controller
+        widget.controller.sendImageMessage(
+          pickedImage,
+          caption: '', // Empty caption by default
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error selecting image: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+      print('Error picking image: $e');
+    }
+  }
+
+  // Add method to show attachment options
+  void _showAttachmentOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF2D2D2D) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar at top
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              const Text(
+                'Send Media',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Camera option - not available on web
+                  if (!kIsWeb)
+                    _buildAttachmentOption(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickImage(ImageSource.camera);
+                      },
+                      icon: Icons.camera_alt,
+                      label: 'Camera',
+                      color: ThemeConstants.green,
+                    ),
+
+                  // Gallery/Photo Library option
+                  _buildAttachmentOption(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage(ImageSource.gallery);
+                    },
+                    icon: Icons.photo_library,
+                    label: 'Gallery',
+                    color: ThemeConstants.primaryColor,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 30),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper method to build attachment options
+  Widget _buildAttachmentOption({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -249,23 +390,37 @@ class _MessageDetailState extends State<MessageDetail>
                   currentConversation.messages,
                 );
 
+                // Check if this message should be highlighted (when navigated to from a reply)
+                final isHighlighted =
+                    widget.controller.highlightedMessageId == message.id;
+
                 return Column(
                   children: [
                     if (showDateHeader)
                       _buildDateHeader(
                           currentConversation.messages[index].timestamp, theme),
-                    MessageBubble(
-                      message: message,
-                      showAvatar: showAvatar,
-                      showName: showName,
-                      onLongPress: () => _showMessageActions(context, message),
-                      onSwipeReply: (msg) {
-                        widget.controller.setReplyToMessage(msg);
-                      },
-                      onReplyTap: (originalMessageId) {
-                        // When a reply is tapped, navigate to original message
-                        widget.controller.scrollToMessage(originalMessageId);
-                      },
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: isHighlighted
+                            ? ThemeConstants.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: MessageBubble(
+                        message: message,
+                        showAvatar: showAvatar,
+                        showName: showName,
+                        onLongPress: () =>
+                            _showMessageActions(context, message),
+                        onSwipeReply: (msg) {
+                          widget.controller.setReplyToMessage(msg);
+                        },
+                        onReplyTap: (originalMessageId) {
+                          // Navigate to original message when reply is tapped
+                          widget.controller.scrollToMessage(originalMessageId);
+                        },
+                      ),
                     ),
                   ],
                 );
@@ -577,9 +732,7 @@ class _MessageDetailState extends State<MessageDetail>
                   ),
                   IconButton(
                     icon: const Icon(Icons.attach_file),
-                    onPressed: () {
-                      // TODO: Implement file attachment
-                    },
+                    onPressed: _showAttachmentOptions,
                   ),
                   Expanded(
                     child: TextField(
@@ -604,9 +757,20 @@ class _MessageDetailState extends State<MessageDetail>
                       textCapitalization: TextCapitalization.sentences,
                       minLines: 1,
                       maxLines: 5,
+                      // Enhanced keypress handling with special focus for web
                       onSubmitted: (text) {
                         if (text.trim().isNotEmpty) {
                           widget.controller.sendMessage(text.trim());
+                        }
+                      },
+                      // Add keyboard listener for more robust Enter key handling
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.send,
+                      onEditingComplete: () {
+                        final text =
+                            widget.controller.messageController.text.trim();
+                        if (text.isNotEmpty) {
+                          widget.controller.sendMessage(text);
                         }
                       },
                     ),

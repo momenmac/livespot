@@ -348,7 +348,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
         // Modern progress bar
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: Container(
+          child: SizedBox(
             width: availableWidth,
             child: Stack(
               children: [

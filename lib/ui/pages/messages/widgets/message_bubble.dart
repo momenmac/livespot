@@ -7,6 +7,7 @@ import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/voice_message_bubble.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/ui/pages/messages/widgets/image_message_bubble.dart';
 
 class MessageBubble extends StatefulWidget {
   final Message message;
@@ -147,15 +148,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                           }
                           return false;
                         },
-                        child: widget.message.messageType == MessageType.voice
-                            ? VoiceMessageBubble(
-                                message: widget.message,
-                                isSent: isSent,
-                                onLongPress: widget.onLongPress,
-                                onReply: widget.onSwipeReply,
-                              )
-                            : _buildMessageBubble(
-                                context, theme, isSent, bubbleColor, textColor),
+                        child: _buildMessageContentByType(
+                            context, theme, isSent, bubbleColor, textColor),
                       ),
                     ],
                   ),
@@ -176,6 +170,33 @@ class _MessageBubbleState extends State<MessageBubble> {
         ],
       ),
     );
+  }
+
+  // New helper method to build the appropriate message content based on type
+  Widget _buildMessageContentByType(BuildContext context, ThemeData theme,
+      bool isSent, Color bubbleColor, Color? textColor) {
+    switch (widget.message.messageType) {
+      case MessageType.voice:
+        return VoiceMessageBubble(
+          message: widget.message,
+          isSent: isSent,
+          onLongPress: widget.onLongPress,
+          onReply: widget.onSwipeReply,
+        );
+
+      case MessageType.image:
+        return ImageMessageBubble(
+          message: widget.message,
+          isSent: isSent,
+          onLongPress: widget.onLongPress,
+          onReply: widget.onSwipeReply,
+        );
+
+      case MessageType.text:
+      default:
+        return _buildMessageBubble(
+            context, theme, isSent, bubbleColor, textColor);
+    }
   }
 
   Widget _buildOptionsButton(BuildContext context, bool isSent) {
@@ -648,65 +669,91 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildReplyPreview(
       BuildContext context, bool isSent, bool isDarkMode) {
-    return Container(
-      margin: EdgeInsets.only(
-        bottom: 4,
-        left: isSent ? 0 : 12,
-        right: isSent ? 12 : 0,
-      ),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isSent
-            ? ThemeConstants.primaryColor.withOpacity(0.3)
-            : (isDarkMode ? Colors.grey[800] : Colors.grey[200]),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: ThemeConstants.primaryColor.withOpacity(0.3),
-          width: 1,
+    return GestureDetector(
+      onTap: () {
+        // Navigate to the original message when tapped
+        if (widget.onReplyTap != null && widget.message.replyToId != null) {
+          widget.onReplyTap!(widget.message.replyToId!);
+        }
+      },
+      child: Container(
+        margin: EdgeInsets.only(
+          bottom: 4,
+          left: isSent ? 0 : 12,
+          right: isSent ? 12 : 0,
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.reply,
-            size: 14,
-            color: isSent
-                ? Colors.white70
-                : Theme.of(context).textTheme.bodySmall?.color,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isSent
+              ? ThemeConstants.primaryColor.withOpacity(0.3)
+              : (isDarkMode ? Colors.grey[800] : Colors.grey[200]),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: ThemeConstants.primaryColor.withOpacity(0.3),
+            width: 1,
           ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "${TextStrings.replyingTo} ${widget.message.replyToSenderName}",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10,
-                    color: isSent
-                        ? Colors.white70
-                        : Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                ),
-                Text(
-                  widget.message.replyToMessageType == MessageType.voice
-                      ? TextStrings.voiceMessage
-                      : widget.message.replyToContent ?? "",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isSent
-                        ? Colors.white70
-                        : Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                ),
-              ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.reply,
+              size: 14,
+              color: isSent
+                  ? Colors.white70
+                  : Theme.of(context).textTheme.bodySmall?.color,
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "${TextStrings.replyingTo} ${widget.message.replyToSenderName}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          color: isSent
+                              ? Colors.white70
+                              : Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                      // Add indicator to show it's tappable
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.touch_app,
+                        size: 10,
+                        color: isSent
+                            ? Colors.white70
+                            : Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.7),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    widget.message.replyToMessageType == MessageType.voice
+                        ? TextStrings.voiceMessage
+                        : widget.message.replyToContent ?? "",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isSent
+                          ? Colors.white70
+                          : Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,7 +3,7 @@ import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/user_service.dart'; // Add this import
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
-import 'package:flutter_application_2/ui/pages/messages/models/user.dart'; // Add this import
+// Add this import
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
@@ -271,7 +271,7 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                   isOnline: user.isOnline,
                 );
               }
-              return user as UserWithEmail;
+              return user;
             }).toList();
           }
 

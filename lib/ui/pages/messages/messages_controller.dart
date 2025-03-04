@@ -1,5 +1,6 @@
 import 'dart:core';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:image_picker/image_picker.dart';
 
 // TODO: Add Firebase imports (Firestore and Storage only):
 // import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,7 +22,11 @@ enum FilterMode {
 }
 
 class MessagesController extends ChangeNotifier {
-  // TODO: Add Firebase instances
+// TODO: Add Firebase instances
+  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // final FirebaseStorage _storage = FirebaseStorage.instance;
+
+// TODO: Add Firebase instances
   // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   // final FirebaseStorage _storage = FirebaseStorage.instance;
 
@@ -41,6 +47,11 @@ class MessagesController extends ChangeNotifier {
   // Add state variables for editing
   Message? _editingMessage;
   Message? get editingMessage => _editingMessage;
+  // TODO: Add streamSubscriptions to track and cancel Firebase listeners
+  // List<StreamSubscription> _subscriptions = [];
+
+  // TODO: Add streamSubscriptions to track and cancel Firebase listeners
+  // List<StreamSubscription> _subscriptions = [];
 
   // TODO: Add streamSubscriptions to track and cancel Firebase listeners
   // List<StreamSubscription> _subscriptions = [];
@@ -82,8 +93,119 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
 
       // Always notify listeners to ensure UI updates even when results are empty
-      notifyListeners();
+      notifyListeners()
+          // TODO: Add method to initialize Firebase listeners
+          // void _initFirebaseListeners() {
+          //   // Listen for conversation changes
+          //   final conversationsStream = _firestore
+          //     .collection('conversations')
+          //     .where('participants', arrayContains: currentUserId)
+          //     .orderBy('lastMessageTimestamp', descending: true)
+          //     .snapshots();
+          //
+          //   final subscription = conversationsStream.listen((snapshot) {
+          //     _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+          //     _applyFilters();
+          //     notifyListeners();
+          //   });
+          //
+          //   _subscriptions.add(subscription);
+          // }
+
+          // TODO: Add method to update online status
+          // void _setupOnlineStatus() {
+          //   // Update online status every 5 minutes
+          //   _onlineStatusTimer = Timer.periodic(Duration(minutes: 5), (_) => _updateOnlineStatus());
+          //
+          //   // Update immediately on startup
+          //   _updateOnlineStatus();
+          // }
+
+          // TODO: Add method to update user online status
+          // Future<void> _updateOnlineStatus() async {
+          //   if (currentUserId.isNotEmpty) {
+          //     await _firestore.collection('users').doc(currentUserId).update({
+          //       'lastSeen': FieldValue.serverTimestamp(),
+          //       'isOnline': true
+          //     });
+          //   }
+          // }
+          ;
+
+      // TODO: Add method to initialize Firebase listeners
+      // void _initFirebaseListeners() {
+      //   // Listen for conversation changes
+      //   final conversationsStream = _firestore
+      //     .collection('conversations')
+      //     .where('participants', arrayContains: currentUserId)
+      //     .orderBy('lastMessageTimestamp', descending: true)
+      //     .snapshots();
+      //
+      //   final subscription = conversationsStream.listen((snapshot) {
+      //     _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+      //     _applyFilters();
+      //     notifyListeners();
+      //   });
+      //
+      //   _subscriptions.add(subscription);
+      // }
+
+      // TODO: Add method to update online status
+      // void _setupOnlineStatus() {
+      //   // Update online status every 5 minutes
+      //   _onlineStatusTimer = Timer.periodic(Duration(minutes: 5), (_) => _updateOnlineStatus());
+      //
+      //   // Update immediately on startup
+      //   _updateOnlineStatus();
+      // }
+
+      // TODO: Add method to update user online status
+      // Future<void> _updateOnlineStatus() async {
+      //   if (currentUserId.isNotEmpty) {
+      //     await _firestore.collection('users').doc(currentUserId).update({
+      //       'lastSeen': FieldValue.serverTimestamp(),
+      //       'isOnline': true
+      //     });
+      //   }
+      // }
     }
+
+    // TODO: Add method to initialize Firebase listeners
+    // void _initFirebaseListeners() {
+    //   // Listen for conversation changes
+    //   final conversationsStream = _firestore
+    //     .collection('conversations')
+    //     .where('participants', arrayContains: currentUserId)
+    //     .orderBy('lastMessageTimestamp', descending: true)
+    //     .snapshots();
+    //
+    //   final subscription = conversationsStream.listen((snapshot) {
+    //     _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+    //     _applyFilters();
+    //     notifyListeners();
+    //   });
+    //
+    //   _subscriptions.add(subscription);
+    // }
+
+    // TODO: Add method to update online status
+    // void _setupOnlineStatus() {
+    //   // Update online status every 5 minutes
+    //   _onlineStatusTimer = Timer.periodic(Duration(minutes: 5), (_) => _updateOnlineStatus());
+    //
+    //   // Update immediately on startup
+    //   _updateOnlineStatus();
+    // }
+
+    // TODO: Add method to update user online status
+    // Future<void> _updateOnlineStatus() async {
+    //   if (currentUserId.isNotEmpty) {
+    //     await _firestore.collection('users').doc(currentUserId).update({
+    //       'lastSeen': FieldValue.serverTimestamp(),
+    //       'isOnline': true
+    //     });
+    //   }
+    // }
   }
 
   // TODO: Add method to initialize Firebase listeners
@@ -123,8 +245,43 @@ class MessagesController extends ChangeNotifier {
   //   }
   // }
 
-  Future<void> loadConversations() async {
-    // TODO: Replace with Firebase Firestore fetch when ready
+  Future<void> loadConversations() async
+  // TODO: Replace with Firebase Firestore fetch when ready
+  // try {
+  //   final snapshot = await _firestore
+  //     .collection('conversations')
+  //     .where('participants', arrayContains: currentUserId)
+  //     .orderBy('lastMessageTimestamp', descending: true)
+  //     .get();
+  //
+  //   _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+  //   _applyFilters();
+  //   notifyListeners();
+  //   return;
+  // } catch (e) {
+  //   print('Error loading conversations: $e');
+  //   // Fall back to mock data in case of error
+  // }
+
+// TODO: Replace with Firebase Firestore fetch when ready
+  // try {
+  //   final snapshot = await _firestore
+  //     .collection('conversations')
+  //     .where('participants', arrayContains: currentUserId)
+  //     .orderBy('lastMessageTimestamp', descending: true)
+  //     .get();
+  //
+  //   _conversations = snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList();
+  //   _applyFilters();
+  //   notifyListeners();
+  //   return;
+  // } catch (e) {
+  //   print('Error loading conversations: $e');
+  //   // Fall back to mock data in case of error
+  // }
+
+  {
+// TODO: Replace with Firebase Firestore fetch when ready
     // try {
     //   final snapshot = await _firestore
     //     .collection('conversations')
@@ -518,6 +675,29 @@ class MessagesController extends ChangeNotifier {
         _conversations[index] = updatedConversation;
         _selectedConversation = updatedConversation;
         _applyFilters();
+        // TODO: Update in Firestore when ready
+        // await _firestore
+        //   .collection('conversations')
+        //   .doc(_selectedConversation!.id)
+        //   .collection('messages')
+        //   .doc(editedMessage.id)
+        //   .update({
+        //     'content': content,
+        //     'isEdited': true,
+        //     'editedAt': FieldValue.serverTimestamp(),
+        //   });
+
+        // TODO: Update in Firestore when ready
+        // await _firestore
+        //   .collection('conversations')
+        //   .doc(_selectedConversation!.id)
+        //   .collection('messages')
+        //   .doc(editedMessage.id)
+        //   .update({
+        //     'content': content,
+        //     'isEdited': true,
+        //     'editedAt': FieldValue.serverTimestamp(),
+        //   });
       }
 
       // TODO: Update in Firestore when ready
@@ -590,6 +770,29 @@ class MessagesController extends ChangeNotifier {
     // Fixed: Scroll after a very short delay to ensure the ListView has updated
     await Future.delayed(const Duration(milliseconds: 10));
     if (!_isDisposed) _scrollToNewestMessage();
+    // TODO: When ready to implement Firebase, uncomment this section
+    // try {
+    //   // Add the message to the messages subcollection
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .collection('messages')
+    //     .doc(newMessage.id)
+    //     .set(newMessage.toJson());
+    //
+    //   // Update the conversation's last message info
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .update({
+    //       'lastMessage': newMessage.toJson(),
+    //       'lastMessageTimestamp': FieldValue.serverTimestamp(),
+    //       'unreadCount': FieldValue.increment(1)  // Increment unread count for other users
+    //     });
+    // } catch (e) {
+    //   print('Error sending message: $e');
+    //   // Handle error - maybe update UI to show failed message
+    // }
 
     // TODO: When ready to implement Firebase, uncomment this section
     // try {
@@ -669,6 +872,52 @@ class MessagesController extends ChangeNotifier {
 
   void deleteMessage(Message message) {
     if (_selectedConversation == null) return;
+    // TODO: Delete from Firestore
+    // try {
+    //   // Delete the message document
+    //   await _firestore
+    //     .collection('conversations')
+    //     .doc(_selectedConversation!.id)
+    //     .collection('messages')
+    //     .doc(message.id)
+    //     .delete();
+    //
+    //   // If this was the last message, update the conversation's lastMessage field
+    //   if (_selectedConversation!.lastMessage.id == message.id) {
+    //     // Find the new last message
+    //     final snapshot = await _firestore
+    //       .collection('conversations')
+    //       .doc(_selectedConversation!.id)
+    //       .collection('messages')
+    //       .orderBy('timestamp', descending: true)
+    //       .limit(1)
+    //       .get();
+    //
+    //     if (snapshot.docs.isNotEmpty) {
+    //       // Update with new last message
+    //       final newLastMessage = Message.fromFirestore(snapshot.docs.first);
+    //       await _firestore
+    //         .collection('conversations')
+    //         .doc(_selectedConversation!.id)
+    //         .update({
+    //           'lastMessage': newLastMessage.toJson(),
+    //           'lastMessageTimestamp': newLastMessage.timestamp
+    //         });
+    //     } else {
+    //       // No messages left
+    //       await _firestore
+    //         .collection('conversations')
+    //         .doc(_selectedConversation!.id)
+    //         .update({
+    //           'lastMessage': null,
+    //           'lastMessageTimestamp': FieldValue.serverTimestamp()
+    //         });
+    //     }
+    //   }
+    // } catch (e) {
+    //   print('Error deleting message: $e');
+    //   // Handle error
+    // }
 
     // TODO: Delete from Firestore
     // try {
@@ -759,6 +1008,25 @@ class MessagesController extends ChangeNotifier {
         _selectedConversation = updatedConversation;
       }
       _applyFilters();
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'isMuted': !conversation.isMuted});
+      // } catch (e) {
+      //   print('Error toggling mute: $e');
+      // }
+
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'isMuted': !conversation.isMuted});
+      // } catch (e) {
+      //   print('Error toggling mute: $e');
+      // }
     }
 
     // TODO: Update in Firestore
@@ -786,6 +1054,25 @@ class MessagesController extends ChangeNotifier {
         _selectedConversation = updatedConversation;
       }
       _applyFilters();
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'isArchived': !conversation.isArchived});
+      // } catch (e) {
+      //   print('Error toggling archive: $e');
+      // }
+
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'isArchived': !conversation.isArchived});
+      // } catch (e) {
+      //   print('Error toggling archive: $e');
+      // }
     }
 
     // TODO: Update in Firestore
@@ -807,6 +1094,27 @@ class MessagesController extends ChangeNotifier {
       _selectedConversation = null;
     }
     _applyFilters();
+    // TODO: Delete from Firestore
+    // try {
+    //   // Delete the messages subcollection first
+    //   final batch = _firestore.batch();
+    //   final messagesSnapshot = await _firestore
+    //     .collection('conversations')
+    //     .doc(conversation.id)
+    //     .collection('messages')
+    //     .get();
+    //
+    //   for (final doc in messagesSnapshot.docs) {
+    //     batch.delete(doc.reference);
+    //   }
+    //
+    //   // Then delete the conversation document
+    //   batch.delete(_firestore.collection('conversations').doc(conversation.id));
+    //
+    //   await batch.commit();
+    // } catch (e) {
+    //   print('Error deleting conversation: $e');
+    // }
 
     // TODO: Delete from Firestore
     // try {
@@ -841,6 +1149,15 @@ class MessagesController extends ChangeNotifier {
     }
 
     final now = DateTime.now();
+    // TODO: Generate Firebase Storage path and document ID when ready
+    // final messageId = _firestore
+    //   .collection('conversations')
+    //   .doc(_selectedConversation!.id)
+    //   .collection('messages')
+    //   .doc()
+    //   .id;
+    //
+    // final storagePath = 'voice_messages/${_selectedConversation!.id}/${messageId}.m4a';
 
     // TODO: Generate Firebase Storage path and document ID when ready
     // final messageId = _firestore
@@ -897,6 +1214,35 @@ class MessagesController extends ChangeNotifier {
 
     // Fixed: Scroll after a very short delay to ensure the ListView has updated
     Future.delayed(const Duration(milliseconds: 10), _scrollToNewestMessage);
+    // TODO: Upload voice recording to Firebase Storage when ready
+    // final storageRef = _storage.ref();
+    // final voiceMessageRef = storageRef.child(storagePath);
+    //
+    // // Upload the file
+    // uploadTask = voiceMessageRef.putFile(File(recordingPath));
+    //
+    // // Get the download URL
+    // downloadUrl = await (await uploadTask).ref.getDownloadURL();
+    //
+    // // Create message with URL in Firestore
+    // await _firestore
+    //   .collection('conversations')
+    //   .doc(_selectedConversation!.id)
+    //   .collection('messages')
+    //   .doc(messageId)
+    //   .set({
+    //     'id': messageId,
+    //     'senderId': currentUserId,
+    //     'senderName': currentUser.name,
+    //     'content': 'Voice message',
+    //     'timestamp': FieldValue.serverTimestamp(),
+    //     'messageType': 'voice',
+    //     'voiceDuration': durationSeconds,
+    //     'mediaUrl': downloadUrl,
+    //     'isRead': false
+    //   });
+
+    // ...existing code...
 
     // TODO: Upload voice recording to Firebase Storage when ready
     // final storageRef = _storage.ref();
@@ -963,6 +1309,57 @@ class MessagesController extends ChangeNotifier {
           _selectedConversation = updatedConversation;
         }
         _applyFilters();
+        // TODO: Update in Firestore
+        // try {
+        //   _firestore
+        //     .collection('conversations')
+        //     .doc(conversation.id)
+        //     .update({'unreadCount': 0});
+        //
+        //   // Also mark all messages as read
+        //   final batch = _firestore.batch();
+        //   final unreadMessagesQuery = await _firestore
+        //     .collection('conversations')
+        //     .doc(conversation.id)
+        //     .collection('messages')
+        //     .where('isRead', isEqualTo: false)
+        //     .where('senderId', isNotEqualTo: currentUserId)
+        //     .get();
+        //
+        //   for (final doc in unreadMessagesQuery.docs) {
+        //     batch.update(doc.reference, {'isRead': true});
+        //   }
+        //
+        //   await batch.commit();
+        // } catch (e) {
+        //   print('Error marking conversation as read: $e');
+        // }
+
+        // TODO: Update in Firestore
+        // try {
+        //   _firestore
+        //     .collection('conversations')
+        //     .doc(conversation.id)
+        //     .update({'unreadCount': 0});
+        //
+        //   // Also mark all messages as read
+        //   final batch = _firestore.batch();
+        //   final unreadMessagesQuery = await _firestore
+        //     .collection('conversations')
+        //     .doc(conversation.id)
+        //     .collection('messages')
+        //     .where('isRead', isEqualTo: false)
+        //     .where('senderId', isNotEqualTo: currentUserId)
+        //     .get();
+        //
+        //   for (final doc in unreadMessagesQuery.docs) {
+        //     batch.update(doc.reference, {'isRead': true});
+        //   }
+        //
+        //   await batch.commit();
+        // } catch (e) {
+        //   print('Error marking conversation as read: $e');
+        // }
       }
 
       // TODO: Update in Firestore
@@ -1022,6 +1419,53 @@ class MessagesController extends ChangeNotifier {
         _selectedConversation = updatedConversation;
       }
       _applyFilters();
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'unreadCount': 1});
+      //
+      //   // Also mark the latest message as unread
+      //   final latestMessageQuery = await _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .collection('messages')
+      //     .where('senderId', isNotEqualTo: currentUserId)
+      //     .orderBy('timestamp', descending: true)
+      //     .limit(1)
+      //     .get();
+      //
+      //   if (latestMessageQuery.docs.isNotEmpty) {
+      //     await latestMessageQuery.docs.first.reference.update({'isRead': false});
+      //   }
+      // } catch (e) {
+      //   print('Error marking conversation as unread: $e');
+      // }
+
+      // TODO: Update in Firestore
+      // try {
+      //   _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .update({'unreadCount': 1});
+      //
+      //   // Also mark the latest message as unread
+      //   final latestMessageQuery = await _firestore
+      //     .collection('conversations')
+      //     .doc(conversation.id)
+      //     .collection('messages')
+      //     .where('senderId', isNotEqualTo: currentUserId)
+      //     .orderBy('timestamp', descending: true)
+      //     .limit(1)
+      //     .get();
+      //
+      //   if (latestMessageQuery.docs.isNotEmpty) {
+      //     await latestMessageQuery.docs.first.reference.update({'isRead': false});
+      //   }
+      // } catch (e) {
+      //   print('Error marking conversation as unread: $e');
+      // }
     }
 
     // TODO: Update in Firestore
@@ -1135,6 +1579,97 @@ class MessagesController extends ChangeNotifier {
     if (deliveredIndex != -1) {
       _conversations[deliveredIndex] = deliveredConversation;
       _applyFilters();
+      // TODO: Forward message to Firestore
+      // try {
+      //   // Create new message ID
+      //   final newMessageId = _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .collection('messages')
+      //     .doc()
+      //     .id;
+      //
+      //   // Create message data
+      //   final messageData = {
+      //     'id': newMessageId,
+      //     'senderId': currentUserId,
+      //     'senderName': 'You', // Or get from Firestore user profile
+      //     'content': message.content,
+      //     'timestamp': FieldValue.serverTimestamp(),
+      //     'messageType': message.messageType,
+      //     'mediaUrl': message.mediaUrl,
+      //     'voiceDuration': message.voiceDuration,
+      //     'isRead': false,
+      //     'isForwarded': true,
+      //     'forwardedFrom': message.senderId == currentUserId ? null : message.senderName
+      //   };
+      //
+      //   // Add message to target conversation
+      //   await _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .collection('messages')
+      //     .doc(newMessageId)
+      //     .set(messageData);
+      //
+      //   // Update conversation last message
+      //   await _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .update({
+      //       'lastMessage': messageData,
+      //       'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      //       'unreadCount': FieldValue.increment(1)
+      //     });
+      // } catch (e) {
+      //   print('Error forwarding message: $e');
+      // }
+
+      // TODO: Forward message to Firestore
+      // try {
+      //   // Create new message ID
+      //   final newMessageId = _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .collection('messages')
+      //     .doc()
+      //     .id;
+      //
+      //   // Create message data
+      //   final messageData = {
+      //     'id': newMessageId,
+      //     'senderId': currentUserId,
+      //     'senderName': 'You', // Or get from Firestore user profile
+      //     'content': message.content,
+      //     'timestamp': FieldValue.serverTimestamp(),
+      //     'messageType': message.messageType,
+      //     'mediaUrl': message.mediaUrl,
+      //     'voiceDuration': message.voiceDuration,
+      //     'isRead': false,
+      //     'isForwarded': true,
+      //     'forwardedFrom': message.senderId == currentUserId ? null : message.senderName
+      //   };
+      //
+      //   // Add message to target conversation
+      //   await _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .collection('messages')
+      //     .doc(newMessageId)
+      //     .set(messageData);
+      //
+      //   // Update conversation last message
+      //   await _firestore
+      //     .collection('conversations')
+      //     .doc(targetConversation.id)
+      //     .update({
+      //       'lastMessage': messageData,
+      //       'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      //       'unreadCount': FieldValue.increment(1)
+      //     });
+      // } catch (e) {
+      //   print('Error forwarding message: $e');
+      // }
     }
 
     // TODO: Forward message to Firestore
@@ -1210,36 +1745,52 @@ class MessagesController extends ChangeNotifier {
 
   // Method to find and scroll to a message by ID
   Future<void> scrollToMessage(String messageId) async {
-    if (_selectedConversation == null) return;
+    if (_selectedConversation == null || messageId.isEmpty) return;
 
     // Find the message in the conversation
     final index =
         _selectedConversation!.messages.indexWhere((m) => m.id == messageId);
 
-    if (index == -1) return; // Message not found
-
-    // Calculate approximate position
-    // Since ListView is reversed with newest at top, we need to calculate position from the bottom
-    final totalMessages = _selectedConversation!.messages.length;
-    final approxItemHeight =
-        80.0; // Approximate height of each message in pixels
+    if (index == -1) {
+      print('Message not found: $messageId');
+      return; // Message not found
+    }
 
     // Wait for the next frame to ensure the ListView is built
     await Future.delayed(Duration.zero);
 
-    if (messageScrollController.hasClients) {
-      // Calculate position (reverse order since newest at top)
-      final position = (totalMessages - 1 - index) * approxItemHeight;
+    if (!messageScrollController.hasClients) {
+      print('Scroll controller has no clients');
+      return;
+    }
 
-      // Scroll to the position
-      messageScrollController.animateTo(
-        position,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+    try {
+      // Calculate position based on index in reversed list
+      // We need to find approximate position since items can have varying heights
+      final approximateItemHeight =
+          90.0; // Better estimate of message bubble height
+
+      // Add padding at the top to ensure visibility
+      const scrollPadding = 60.0;
+
+      // In a reversed list, we calculate from bottom to top
+      final totalMessages = _selectedConversation!.messages.length;
+      final position = (totalMessages - 1 - index) * approximateItemHeight;
+
+      // Scroll with animation
+      await messageScrollController.animateTo(
+        max(0, position - scrollPadding), // Ensure we don't go below 0
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic, // More natural feeling curve
       );
 
-      // Highlight the message (you'd need to implement a highlighting mechanism)
+      // Highlight the message for visual feedback
       _highlightMessage(messageId);
+
+      // Give user feedback
+      print('Scrolled to message: $messageId');
+    } catch (e) {
+      print('Error scrolling to message: $e');
     }
   }
 
@@ -1250,13 +1801,16 @@ class MessagesController extends ChangeNotifier {
   // Highlight a message temporarily
   void _highlightMessage(String messageId) {
     _highlightedMessageId = messageId;
-    if (!_isDisposed) notifyListeners();
+    notifyListeners();
 
     // Remove the highlight after a delay
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    Future.delayed(const Duration(milliseconds: 2500), () {
       if (_isDisposed) return;
-      _highlightedMessageId = null;
-      notifyListeners();
+      if (_highlightedMessageId == messageId) {
+        // Only clear if it's still the same message
+        _highlightedMessageId = null;
+        notifyListeners();
+      }
     });
   }
 
@@ -1316,6 +1870,10 @@ class MessagesController extends ChangeNotifier {
     messageController.dispose();
     listScrollController.dispose();
     messageScrollController.dispose();
+    // Cancel any Firebase subscriptions if you have them
+    // for (final subscription in _subscriptions) {
+    //   subscription.cancel();
+    // }
 
     // Cancel any Firebase subscriptions if you have them
     // for (final subscription in _subscriptions) {
@@ -1323,5 +1881,131 @@ class MessagesController extends ChangeNotifier {
     // }
 
     super.dispose();
+  }
+
+  // Method to send an image message
+  Future<void> sendImageMessage(XFile imageFile, {String caption = ''}) async {
+    if (_selectedConversation == null || _isDisposed) return;
+
+    // Use the current user from the selected conversation
+    final currentUserId = this.currentUserId;
+    final currentUser = _selectedConversation!.participants
+        .firstWhere((p) => p.id == currentUserId);
+
+    // Generate a unique ID and a placeholder image URL
+    final String messageId = 'img_${DateTime.now().millisecondsSinceEpoch}';
+
+    // For now, in this mock environment, we'll use a placeholder URL
+    // When implementing with a real backend, you'll upload the image and get a real URL
+    final String mockImageUrl = _generateMockImageUrl(imageFile.name);
+
+    final newMessage = Message(
+      id: messageId,
+      senderId: currentUserId,
+      senderName: currentUser.name,
+      content: caption.isNotEmpty ? caption : 'Image message',
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      isRead: false,
+      messageType: MessageType.image,
+      mediaUrl: mockImageUrl,
+      controller: this,
+      // Add reply metadata if this is a reply
+      replyToId: _replyToMessage?.id,
+      replyToSenderName: _replyToMessage?.senderName,
+      replyToContent: _replyToMessage?.content,
+      replyToMessageType: _replyToMessage?.messageType,
+    );
+
+    // Clear reply state if it exists
+    _replyToMessage = null;
+
+    // Add message locally first (optimistic update)
+    final updatedMessages = [
+      newMessage,
+      ..._selectedConversation!.messages,
+    ];
+
+    final updatedConversation = _selectedConversation!.copyWith(
+      messages: updatedMessages,
+      lastMessage: newMessage,
+    );
+
+    // Update conversation in the lists
+    final index =
+        _conversations.indexWhere((c) => c.id == updatedConversation.id);
+    if (index != -1) {
+      _conversations[index] = updatedConversation;
+      _selectedConversation = updatedConversation;
+      _applyFilters();
+    }
+
+    // Immediately notify listeners to update UI
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+
+    // Scroll to show the new message
+    await Future.delayed(const Duration(milliseconds: 10));
+    if (!_isDisposed) _scrollToNewestMessage();
+
+    // TODO: When ready for real implementation, upload the image to storage here
+    // For now, we'll simulate network delay and status changes
+
+    // Simulate network delay for "uploading"
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (_isDisposed) return;
+
+    // Update message status to sent
+    final sentMessage = newMessage.copyWith(status: MessageStatus.sent);
+    final updatedMessagesWithSent = updatedMessages.map((m) {
+      return m.id == newMessage.id ? sentMessage : m;
+    }).toList();
+
+    final finalUpdatedConversation = updatedConversation.copyWith(
+      messages: updatedMessagesWithSent,
+      lastMessage: sentMessage,
+    );
+
+    // Update conversation in the lists
+    final finalIndex =
+        _conversations.indexWhere((c) => c.id == finalUpdatedConversation.id);
+    if (finalIndex != -1) {
+      _conversations[finalIndex] = finalUpdatedConversation;
+      _selectedConversation = finalUpdatedConversation;
+      _applyFilters();
+    }
+
+    if (!_isDisposed) notifyListeners();
+
+    // Simulate delivered status after a delay
+    await Future.delayed(const Duration(seconds: 1));
+    if (_isDisposed) return;
+
+    final deliveredMessage =
+        sentMessage.copyWith(status: MessageStatus.delivered);
+    final updatedMessagesWithDelivered = updatedMessagesWithSent.map((m) {
+      return m.id == sentMessage.id ? deliveredMessage : m;
+    }).toList();
+
+    final deliveredConversation = finalUpdatedConversation.copyWith(
+      messages: updatedMessagesWithDelivered,
+      lastMessage: deliveredMessage,
+    );
+
+    final deliveredIndex =
+        _conversations.indexWhere((c) => c.id == deliveredConversation.id);
+    if (deliveredIndex != -1) {
+      _conversations[deliveredIndex] = deliveredConversation;
+      _selectedConversation = deliveredConversation;
+      _applyFilters();
+    }
+
+    if (!_isDisposed) notifyListeners();
+  }
+
+  // Helper method to generate a mock image URL
+  String _generateMockImageUrl(String imageName) {
+    return 'https://via.placeholder.com/150?text=$imageName';
   }
 }
