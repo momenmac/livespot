@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,15 +7,18 @@ import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/utils/image_saver.dart';
 import 'package:intl/intl.dart';
 
 // Import platform-specific packages
 import 'package:dio/dio.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 // Properly import web utilities - this will be ignored on mobile
 import 'package:flutter_application_2/utils/web_utils.dart';
+import 'package:flutter_application_2/utils/platform_utils.dart';
+import 'package:flutter_application_2/utils/simple_share.dart';
+import 'package:flutter_application_2/utils/image_path_helper.dart';
 
 class ImageMessageBubble extends StatelessWidget {
   final Message message;
@@ -33,7 +38,7 @@ class ImageMessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final imageUrl = message.mediaUrl ?? '';
+    final imageUrl = ImagePathHelper.getValidImageUrl(message.mediaUrl);
 
     // Determine bubble background and text colors
     final bubbleColor = isSent
@@ -79,83 +84,7 @@ class ImageMessageBubble extends StatelessWidget {
                     onTap: () => _showFullScreenImage(context, imageUrl),
                     child: Hero(
                       tag: 'image_${message.id}',
-                      child: CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        placeholder: (context, url) => Container(
-                          height: 220,
-                          width: 280,
-                          decoration: BoxDecoration(
-                            color: isDarkMode
-                                ? Colors.grey[800]
-                                : Colors.grey[300],
-                          ),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: ThemeConstants.primaryColor,
-                              strokeWidth: 2,
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          height: 220,
-                          width: 280,
-                          decoration: BoxDecoration(
-                            color: isDarkMode
-                                ? Colors.grey[800]
-                                : Colors.grey[300],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.broken_image_outlined,
-                                size: 42,
-                                color: isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Image not available',
-                                style: TextStyle(
-                                  color: isDarkMode
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        fit: BoxFit.cover,
-                        height: 220, // Fixed height for consistent UI
-                        width: 280, // Fixed width as well
-                        fadeInDuration: const Duration(milliseconds: 300),
-                        fadeOutDuration: const Duration(milliseconds: 300),
-                        imageBuilder: (context, imageProvider) => Container(
-                          height: 220,
-                          width: 280,
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: imageProvider,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          child: Container(
-                            // Add a subtle gradient overlay to make text more readable
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.3),
-                                ],
-                                stops: const [0.7, 1.0],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: _buildImageContent(context, imageUrl, isDarkMode),
                     ),
                   ),
                 ),
@@ -205,7 +134,119 @@ class ImageMessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildImageContent(
+      BuildContext context, String imageUrl, bool isDarkMode) {
+    // Handle data URLs specially for better performance
+    if (imageUrl.startsWith('data:image/')) {
+      return Image.memory(
+        base64Decode(imageUrl.split(',')[1]),
+        fit: BoxFit.cover,
+        height: 220,
+        width: 280,
+        errorBuilder: (context, error, stackTrace) {
+          print('Error loading data URL image: $error');
+          return _buildImageErrorWidget(isDarkMode);
+        },
+      );
+    }
+
+    // Handle regular URLs
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      maxWidthDiskCache: 800,
+      maxHeightDiskCache: 800,
+      cacheKey: imageUrl.contains(' ') ? null : imageUrl,
+      fadeInDuration: const Duration(milliseconds: 300),
+      fadeOutDuration: const Duration(milliseconds: 300),
+      placeholder: (context, url) => _buildImageLoadingWidget(isDarkMode),
+      errorWidget: (context, url, error) {
+        print('Image error: $error, URL: $url');
+        return Image.network(
+          'https://picsum.photos/400',
+          fit: BoxFit.cover,
+          height: 220,
+          width: 280,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildImageErrorWidget(isDarkMode);
+          },
+        );
+      },
+      fit: BoxFit.cover,
+      height: 220,
+      width: 280,
+      imageBuilder: (context, imageProvider) => Container(
+        height: 220,
+        width: 280,
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: imageProvider,
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withOpacity(0.3),
+              ],
+              stops: const [0.7, 1.0],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageLoadingWidget(bool isDarkMode) {
+    return Container(
+      height: 220,
+      width: 280,
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
+      ),
+      child: Center(
+        child: CircularProgressIndicator(
+          color: ThemeConstants.primaryColor,
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageErrorWidget(bool isDarkMode) {
+    return Container(
+      height: 220,
+      width: 280,
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.broken_image_outlined,
+            size: 42,
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Image not available',
+            style: TextStyle(
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showFullScreenImage(BuildContext context, String imageUrl) {
+    // Apply extra URL validation to avoid encoding issues
+    final processedUrl = ImagePathHelper.getValidImageUrl(imageUrl);
+
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: true, // Make fully opaque (not transparent)
@@ -242,7 +283,7 @@ class ImageMessageBubble extends StatelessWidget {
                       child: const Icon(Icons.download_outlined,
                           color: Colors.white),
                     ),
-                    onPressed: () => _downloadImage(context, imageUrl),
+                    onPressed: () => _downloadImage(context, processedUrl),
                   ),
                 ],
               ),
@@ -258,22 +299,27 @@ class ImageMessageBubble extends StatelessWidget {
                     child: Hero(
                       tag: 'image_${message.id}',
                       child: CachedNetworkImage(
-                        imageUrl: imageUrl,
+                        imageUrl: processedUrl,
+                        // Add error handling
+                        memCacheWidth: 1200,
+                        errorWidget: (context, url, error) {
+                          print('Fullscreen image error: $error');
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image,
+                                  color: Colors.white70, size: 60),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ],
+                          );
+                        },
                         placeholder: (context, url) => const Center(
                           child:
                               CircularProgressIndicator(color: Colors.white70),
-                        ),
-                        errorWidget: (context, url, error) => const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image,
-                                color: Colors.white70, size: 60),
-                            SizedBox(height: 16),
-                            Text(
-                              'Failed to load image',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          ],
                         ),
                         fit: BoxFit.contain,
                       ),
@@ -294,74 +340,33 @@ class ImageMessageBubble extends StatelessWidget {
     );
   }
 
-  // Completely revised download function that works across platforms
+  // Updated to use our simpler utility
   void _downloadImage(BuildContext context, String imageUrl) async {
+    final processedUrl = ImagePathHelper.getValidImageUrl(imageUrl);
     try {
-      if (kIsWeb) {
-        // WEB IMPLEMENTATION - Using our safer utility class
-        final success = await WebUtils.downloadFile(
-          url: imageUrl,
-          filename: 'image_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        );
+      ResponsiveSnackBar.showInfo(
+        context: context,
+        message: TextStrings.imageDownloadInProgress,
+      );
 
+      final result = await SimpleShare.saveImage(
+        processedUrl,
+        'chat_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+
+      if (result['isSuccess'] == true) {
         ResponsiveSnackBar.showSuccess(
           context: context,
-          message: success
-              ? TextStrings.imageDownloadInProgress
-              : TextStrings.imageSaveManually,
+          message: TextStrings.imageDownloaded,
         );
-      } else {
-        // MOBILE IMPLEMENTATION (Android/iOS)
+      } else if (result['needsManualSave'] == true) {
+        // Special case for web
         ResponsiveSnackBar.showInfo(
           context: context,
-          message: TextStrings.imageDownloadInProgress,
+          message: TextStrings.imageSaveManually,
         );
-
-        // Check for permissions on mobile
-        final status = await Permission.storage.status;
-        if (!status.isGranted) {
-          // Request permission
-          final result = await Permission.storage.request();
-          if (!result.isGranted) {
-            ResponsiveSnackBar.showError(
-              context: context,
-              message: 'Storage permission is required to save images',
-            );
-            return;
-          }
-        }
-
-        // Download with dio and save to gallery
-        try {
-          // Download image bytes
-          final response = await Dio().get(
-            imageUrl,
-            options: Options(responseType: ResponseType.bytes),
-          );
-
-          // Save to gallery
-          final result = await ImageGallerySaver.saveImage(
-            response.data,
-            quality: 100,
-            name: 'image_${DateTime.now().millisecondsSinceEpoch}',
-          );
-
-          // Show success message
-          if (result != null && result['isSuccess'] == true) {
-            ResponsiveSnackBar.showSuccess(
-              context: context,
-              message: TextStrings.imageDownloaded,
-            );
-          } else {
-            throw Exception('Failed to save image');
-          }
-        } catch (dioError) {
-          print('Download error: $dioError');
-          ResponsiveSnackBar.showError(
-            context: context,
-            message: TextStrings.imageDownloadFailed,
-          );
-        }
+      } else {
+        throw Exception(result['error'] ?? 'Failed to save image');
       }
     } catch (e) {
       print('Error downloading image: $e');

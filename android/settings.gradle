@@ -10,9 +10,9 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
+        gradlePluginPortal()
         google()
         mavenCentral()
-        gradlePluginPortal()
     }
 }
 
@@ -23,3 +23,6 @@ plugins {
 }
 
 include ":app"
+
+// Remove the following line as we're using a direct fix approach instead
+// apply from: new File(settingsDir, "settings_patches.gradle")

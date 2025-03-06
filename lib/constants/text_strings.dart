@@ -236,4 +236,6 @@ class TextStrings {
   static const String imageOpenedForDownload = 'Image opened for download';
   static const String imageDownloadInProgress = 'Downloading image...';
   static const String imageSaveManually = 'Right-click to save image manually';
+
+  // Image download strings
 }

@@ -1,0 +1,11 @@
+// Load patches
+apply from: "${rootProject.projectDir}/patches.gradle"
+
+gradle.beforeProject { project ->
+    if (project.name == 'image_gallery_saver') {
+        project.beforeEvaluate {
+            project.apply from: "${rootProject.projectDir}/patches.gradle"
+            project.ext.applyImageGallerySaverPatch(project)
+        }
+    }
+}

@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:flutter_application_2/firebase_options.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
@@ -14,8 +15,16 @@ Future<void> main() async {
   // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
 
-  // COMPLETELY NEW APPROACH: SafeFirebaseInit
-  bool firebaseInitialized = await safeFirebaseInit();
+  // Initialize Firebase with proper options
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('✅ Firebase initialized successfully');
+  } catch (e) {
+    print('❌ Failed to initialize Firebase: $e');
+    // Continue without Firebase if initialization fails
+  }
 
   // Set preferred orientations
   SystemChrome.setPreferredOrientations([
@@ -26,47 +35,11 @@ Future<void> main() async {
   // Reset hero tag registry on app start
   HeroTagRegistry.reset();
 
-  runApp(MyApp(firebaseInitialized: firebaseInitialized));
-}
-
-/// Safely initializes Firebase, handling duplicate initialization issues
-Future<bool> safeFirebaseInit() async {
-  try {
-    // First check if any Firebase apps are initialized
-    List<FirebaseApp> apps = Firebase.apps;
-
-    if (apps.isEmpty) {
-      // No apps initialized yet, we can safely initialize
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      debugPrint('✅ Firebase initialized successfully');
-      return true;
-    } else {
-      // An app is already initialized, get the default one
-      FirebaseApp defaultApp = Firebase.app();
-      debugPrint('ℹ️ Using existing Firebase app: ${defaultApp.name}');
-      return true;
-    }
-  } catch (e) {
-    // Special handling for the duplicate app error
-    if (e.toString().contains('duplicate-app')) {
-      debugPrint('ℹ️ Using existing Firebase instance');
-      return true;
-    } else {
-      debugPrint('❌ Firebase initialization error: $e');
-      return false;
-    }
-  }
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final bool firebaseInitialized;
-
-  const MyApp({
-    super.key,
-    this.firebaseInitialized = false,
-  });
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {

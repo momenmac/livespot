@@ -83,5 +83,11 @@
 	<string>This app needs access to save images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to save images.</string>
+	<!-- Camera permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera to take photos for sharing in messages.</string>
+	<!-- Microphone permissions for voice messages -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs access to your microphone to record voice messages.</string>
 </dict>
 </plist>
