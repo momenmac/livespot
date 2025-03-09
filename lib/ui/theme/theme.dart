@@ -3,6 +3,7 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/theme/appbar_theme.dart';
 import 'package:flutter_application_2/ui/theme/bottom_sheet_theme.dart';
 import 'package:flutter_application_2/ui/theme/elevated_button_theme.dart';
+import 'package:flutter_application_2/ui/theme/notification_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_button_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_form_field_theme.dart';
 import 'package:flutter_application_2/ui/theme/text_theme.dart';
@@ -48,6 +49,7 @@ class TAppTheme {
     bottomAppBarTheme: TNavigationTheme.navigationBarTheme,
     iconTheme: TNavigationTheme.navigationBarItemThemeLight,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonLight,
+    cardTheme: TNotificationTheme.notificationCardThemeLight,
     // Configure date picker theme to use primary color
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.lightBackgroundColor,
@@ -107,6 +109,8 @@ class TAppTheme {
     bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
     iconTheme: TNavigationTheme.navigationBarItemThemeDark,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke,
+    cardTheme: TNotificationTheme.notificationCardThemeDark,
+
     // Dark mode date picker theme
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.darkBackgroundColor,

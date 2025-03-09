@@ -238,4 +238,13 @@ class TextStrings {
   static const String imageSaveManually = 'Right-click to save image manually';
 
   // Image download strings
+
+  //! Notifications
+  static const String turnOnNotifications = 'Turn on notifications';
+  static const String enableNotifications = 'Enable Notifications';
+  static const String disableNotifications = 'Disable Notifications';
+  static const String notificationDescription =
+      'Get updates on your posts and comments, communities you follow, and what\'s trending.';
+  static const String notNow = 'Not Now';
+  static const String turnOn = 'Turn On';
 }

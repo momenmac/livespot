@@ -28,4 +28,15 @@ class ThemeConstants {
   static const textFieldLabelColorLight = grey;
   static const textFieldFillColorDark = darkCardColor;
   static const textFieldLabelColorDark = grey;
+
+  static const notificationGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [
+      navigationActiveColor, // Darkest
+      primaryColor, // Still dark
+      navigationHoverColor, // Getting lighter
+    ],
+    stops: [0.0, 0.15, 1.0], // Adjusted stops to prevent gaps
+  );
 }

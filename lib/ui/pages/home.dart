@@ -3,7 +3,7 @@ import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import '../widgets/navigation_bar.dart';
 import 'map/map_page.dart';
 import 'camera_page.dart';
-import 'notifications_page.dart';
+import 'notification/notifications_page.dart';
 import 'profile_page.dart';
 
 class Home extends StatefulWidget {
