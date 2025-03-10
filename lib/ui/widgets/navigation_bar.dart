@@ -13,6 +13,7 @@ class AnimatedIconButton extends StatefulWidget {
   final VoidCallback onPressed;
   final Color color;
   final double size;
+  final int? badgeCount;
 
   const AnimatedIconButton({
     super.key,
@@ -22,6 +23,7 @@ class AnimatedIconButton extends StatefulWidget {
     required this.onPressed,
     required this.color,
     required this.size,
+    this.badgeCount,
   });
 
   @override
@@ -59,16 +61,45 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
         _controller.forward().then((_) => _controller.reverse());
         widget.onPressed();
       },
-      icon: AnimatedBuilder(
-        animation: _animation,
-        builder: (context, child) => Transform.scale(
-          scale: _animation.value,
-          child: Icon(
-            widget.isSelected ? widget.selectedIcon : widget.unselectedIcon,
-            size: widget.size,
-            color: widget.color,
+      icon: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) => Transform.scale(
+              scale: _animation.value,
+              child: Icon(
+                widget.isSelected ? widget.selectedIcon : widget.unselectedIcon,
+                size: widget.size,
+                color: widget.color,
+              ),
+            ),
           ),
-        ),
+          if (widget.badgeCount != null && widget.badgeCount! > 0)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 14,
+                  minHeight: 14,
+                ),
+                child: Text(
+                  widget.badgeCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -110,6 +141,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(25),
                 color: currentIndex == 0
+                    // ignore: deprecated_member_use
                     ? theme.primaryColor.withOpacity(0.1)
                     : Colors.transparent,
               ),
@@ -129,6 +161,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(25),
                 color: currentIndex == 1
+                    // ignore: deprecated_member_use
                     ? theme.primaryColor.withOpacity(0.1)
                     : Colors.transparent,
               ),
@@ -147,6 +180,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(25),
                 color: currentIndex == 3
+                    // ignore: deprecated_member_use
                     ? theme.primaryColor.withOpacity(0.1)
                     : Colors.transparent,
               ),
@@ -165,6 +199,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(25),
                 color: currentIndex == 4
+                    // ignore: deprecated_member_use
                     ? theme.primaryColor.withOpacity(0.1)
                     : Colors.transparent,
               ),
@@ -189,11 +224,13 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
 class CustomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final int? unreadCount;
 
   const CustomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.unreadCount,
   });
 
   @override
@@ -238,7 +275,7 @@ class CustomNavigationBar extends StatelessWidget {
                   : theme.iconTheme.color!,
               size: theme.iconTheme.size!,
               onPressed: () => onTap(3),
-              // Colors.grey.shade500
+              badgeCount: unreadCount,
             ),
             AnimatedIconButton(
               selectedIcon: Icons.person,
@@ -261,12 +298,14 @@ class CustomScaffold extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
   final Widget body;
+  final int? unreadCount; // Add this
 
   const CustomScaffold({
     super.key,
     required this.currentIndex,
     required this.onTap,
     required this.body,
+    this.unreadCount, // Add this
   });
 
   @override
@@ -286,6 +325,7 @@ class CustomScaffold extends StatelessWidget {
           : CustomNavigationBar(
               currentIndex: currentIndex,
               onTap: onTap,
+              unreadCount: unreadCount, // Add this
             ),
       floatingActionButton: isLargeScreen
           ? null

@@ -6,6 +6,7 @@ class NotificationModel {
   final IconData icon;
   final String? title;
   final String? imageUrl;
+  bool isRead;
 
   NotificationModel({
     required this.message,
@@ -13,5 +14,6 @@ class NotificationModel {
     required this.icon,
     this.title,
     this.imageUrl,
+    this.isRead = false,
   });
 }

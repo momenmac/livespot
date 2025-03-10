@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_2/ui/theme/notification_theme.dart';
 import 'package:flutter_application_2/ui/pages/notification/notification_model.dart';
 import 'package:intl/intl.dart';
+import 'notification_filter.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({Key? key}) : super(key: key);
@@ -18,23 +19,71 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   bool _showBanner = true;
   bool _notificationsEnabled = false;
+  NotificationFilter _selectedFilter = NotificationFilter.all;
+
+  List<NotificationModel> _getFilteredNotifications() {
+    return _selectedFilter.filterNotifications(notifications);
+  }
+
+  String _getRelativeTime(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final notificationDate = DateTime(date.year, date.month, date.day);
+
+    // Only show relative time for today's notifications
+    if (notificationDate == today) {
+      final difference = now.difference(date);
+      if (difference.inMinutes < 1) {
+        return 'Just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes}m ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours}h ago';
+      }
+    }
+
+    // For older notifications, return empty string
+    return '';
+  }
 
   // Sample notifications - replace with your actual data source
   final List<NotificationModel> notifications = [
     NotificationModel(
-      message: "New message from John Doe",
-      dateTime: DateTime.now(),
-      icon: Icons.home,
+      message: "Meeting reminder: Team sync in 15 minutes",
+      dateTime: DateTime.now().subtract(const Duration(minutes: 5)),
+      icon: Icons.calendar_today,
+      isRead: false,
     ),
     NotificationModel(
-      message: "Your post received 10 likes",
+      message: "New message from Sarah in Project Discussion",
+      dateTime: DateTime.now().subtract(const Duration(minutes: 30)),
+      icon: Icons.chat_bubble_outline,
+      isRead: false,
+    ),
+    NotificationModel(
+      message: "Document 'Q4 Report' has been shared with you",
+      dateTime: DateTime.now().subtract(const Duration(hours: 2)),
+      icon: Icons.description,
+    ),
+    NotificationModel(
+      message: "Your recent post received 25 likes",
+      dateTime: DateTime.now().subtract(const Duration(hours: 5)),
+      icon: Icons.thumb_up_outlined,
+    ),
+    NotificationModel(
+      message: "Weekly summary: 12 new updates in your network",
       dateTime: DateTime.now().subtract(const Duration(days: 1)),
-      icon: Icons.remove_red_eye,
+      icon: Icons.analytics_outlined,
     ),
     NotificationModel(
-      message: "Welcome to the app!",
+      message: "Security alert: New login from Chrome browser",
+      dateTime: DateTime.now().subtract(const Duration(days: 2)),
+      icon: Icons.security,
+    ),
+    NotificationModel(
+      message: "Welcome to the platform! Complete your profile",
       dateTime: DateTime.now().subtract(const Duration(days: 3)),
-      icon: Icons.notifications,
+      icon: Icons.person_outline,
     ),
   ];
 
@@ -95,13 +144,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
+  void _markAsRead(NotificationModel notification) {
+    setState(() {
+      notification.isRead = true;
+    });
+  }
+
   Widget _buildNotificationsList() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final filteredNotifications = _getFilteredNotifications();
 
     // Group notifications by date
     final groupedNotifications = <String, List<NotificationModel>>{};
 
-    for (var notification in notifications) {
+    for (var notification in filteredNotifications) {
       final dateHeader = _getDateHeader(notification.dateTime);
       groupedNotifications.putIfAbsent(dateHeader, () => []);
       groupedNotifications[dateHeader]!.add(notification);
@@ -132,34 +188,82 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 .map((notification) => Card(
                       margin: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 4),
-                      color: isDark
-                          ? ThemeConstants.darkCardColor
-                          : ThemeConstants.greyLight,
+                      color: notification.isRead
+                          ? (isDark
+                              ? ThemeConstants.darkCardColor
+                              : ThemeConstants.greyLight)
+                          : (isDark
+                              // ignore: deprecated_member_use
+                              ? Colors.blue.withOpacity(0.2)
+                              // ignore: deprecated_member_use
+                              : Colors.blue.withOpacity(0.1)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
+                        side: notification.isRead
+                            ? BorderSide.none
+                            : const BorderSide(color: Colors.blue, width: 1),
                       ),
                       elevation: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(
-                              notification.icon,
-                              color: isDark ? Colors.white70 : Colors.black54,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                notification.message,
-                                style: isDark
-                                    ? TNotificationTheme
-                                        .notificationTextStyleDark
-                                    : TNotificationTheme
-                                        .notificationTextStyleLight,
+                      child: InkWell(
+                        onTap: () => _markAsRead(notification),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Stack(
+                                children: [
+                                  Icon(
+                                    notification.icon,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.black54,
+                                    size: 24,
+                                  ),
+                                  if (!notification.isRead)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.blue,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      notification.message,
+                                      style: isDark
+                                          ? TNotificationTheme
+                                              .notificationTextStyleDark
+                                          : TNotificationTheme
+                                              .notificationTextStyleLight,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _getRelativeTime(notification.dateTime),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black45,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ))
@@ -180,6 +284,40 @@ class _NotificationsPageState extends State<NotificationsPage> {
           : AppBar(
               title: const Text('Notifications'),
               automaticallyImplyLeading: false,
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 9.0),
+                  child: DropdownButton<NotificationFilter>(
+                    value: _selectedFilter,
+                    underline: const SizedBox(),
+                    icon: Icon(
+                      Icons.filter_list,
+                      color: Theme.of(context).iconTheme.color,
+                      size: 31,
+                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                    items: NotificationFilter.values
+                        .map((filter) => DropdownMenuItem(
+                              value: filter,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8.0),
+                                child: Text(filter.label),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _selectedFilter = value;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
       body: SingleChildScrollView(
         child: Column(
