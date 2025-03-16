@@ -12,6 +12,15 @@
 .swiftpm/
 migrate_working_dir/
 
+# Django related
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Virtual environment
+venv/
+
 # IntelliJ related
 *.iml
 *.ipr
