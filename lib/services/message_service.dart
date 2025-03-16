@@ -96,9 +96,6 @@ class MessageService {
   ) async {
     try {
       final imageUrl = await uploadImage(imageSource);
-      if (imageUrl == null) {
-        throw Exception('Failed to upload image');
-      }
 
       // Create and send the message with the image URL
       final message = Message(

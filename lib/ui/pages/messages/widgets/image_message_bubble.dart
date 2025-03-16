@@ -1,22 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:flutter_application_2/utils/image_saver.dart';
 import 'package:intl/intl.dart';
 
-// Import platform-specific packages
-import 'package:dio/dio.dart';
-import 'package:permission_handler/permission_handler.dart';
-
 // Properly import web utilities - this will be ignored on mobile
-import 'package:flutter_application_2/utils/web_utils.dart';
-import 'package:flutter_application_2/utils/platform_utils.dart';
 import 'package:flutter_application_2/utils/simple_share.dart';
 import 'package:flutter_application_2/utils/image_path_helper.dart';
 
