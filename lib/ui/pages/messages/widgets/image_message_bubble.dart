@@ -9,8 +9,8 @@ import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:intl/intl.dart';
 
 // Properly import web utilities - this will be ignored on mobile
-import 'package:flutter_application_2/utils/simple_share.dart';
-import 'package:flutter_application_2/utils/image_path_helper.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/simple_share.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/image_path_helper.dart';
 
 class ImageMessageBubble extends StatelessWidget {
   final Message message;

@@ -9,7 +9,7 @@ import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_application_2/services/account_provider.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'dart:async';
 
 // Import the correct file for hero tag management

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/account.dart';
+import '../../../models/account.dart';
 import 'auth_service.dart';
 
 class AccountProvider extends ChangeNotifier {

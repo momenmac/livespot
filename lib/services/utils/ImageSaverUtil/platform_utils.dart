@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_application_2/utils/web_utils.dart';
-import 'package:flutter_application_2/utils/image_saver.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/web_utils.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/image_saver.dart';
 
 /// Platform-agnostic utilities that work across web and mobile
 class PlatformUtils {

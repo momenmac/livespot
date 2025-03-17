@@ -1,5 +1,5 @@
 import 'package:http/http.dart' as http;
-import '../utils/api_urls.dart';
+import 'api/account/api_urls.dart';
 import 'dart:async';
 
 class NetworkChecker {

@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/account.dart';
-import '../utils/api_urls.dart';
+import '../../../models/account.dart';
+import 'api_urls.dart';
 
 class AuthService {
   final GoogleSignIn googleSignIn = _getGoogleSignIn();

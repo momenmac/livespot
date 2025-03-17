@@ -15,10 +15,10 @@ import 'package:flutter_application_2/services/utils/validation_helper.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:flutter_application_2/services/account_provider.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/network_checker.dart';
-import 'package:flutter_application_2/utils/api_urls.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});

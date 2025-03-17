@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/services/auth_service.dart';
+import 'package:flutter_application_2/services/api/account/auth_service.dart';
 import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/widgets/account_link.dart';

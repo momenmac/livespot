@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
-import 'package:flutter_application_2/utils/image_path_helper.dart';
-import 'package:flutter_application_2/utils/upload_helper.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/image_path_helper.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/upload_helper.dart';
 
 class MessageService {
   // Mock data for conversations

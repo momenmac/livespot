@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_application_2/utils/image_saver.dart';
+import 'package:flutter_application_2/services/utils/ImageSaverUtil/image_saver.dart';
 
 /// A simple platform-agnostic sharing utility that works on all platforms
 class SimpleShare {

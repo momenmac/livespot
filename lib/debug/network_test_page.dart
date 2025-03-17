@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/network_checker.dart';
-import '../utils/api_urls.dart';
+import '../services/api/account/api_urls.dart';
 import 'api_tester.dart';
 
 class NetworkTestPage extends StatefulWidget {
