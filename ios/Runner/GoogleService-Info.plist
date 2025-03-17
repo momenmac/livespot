@@ -13,7 +13,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>io.flutter.flutter.app</string>
+	<string>com.example.flutterApplication2</string>
 	<key>PROJECT_ID</key>
 	<string>livespot-b1eb4</string>
 	<key>STORAGE_BUCKET</key>

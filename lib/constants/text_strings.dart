@@ -247,4 +247,11 @@ class TextStrings {
       'Get updates on your posts and comments, communities you follow, and what\'s trending.';
   static const String notNow = 'Not Now';
   static const String turnOn = 'Turn On';
+
+  // Account creation
+  static const String accountCreatedSuccessfully =
+      "Account created successfully!";
+  static const String registrationFailed =
+      "Registration failed. Please try again.";
+  static const String creatingAccount = "Creating account...";
 }

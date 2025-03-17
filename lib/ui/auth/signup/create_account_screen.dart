@@ -10,10 +10,15 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter_application_2/services/utils/validation_helper.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/services/account_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_application_2/services/network_checker.dart';
+import 'package:flutter_application_2/utils/api_urls.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -27,6 +32,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   Uint8List? _imageBytes;
+  bool _isRegistering = false;
 
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -65,25 +71,129 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
     super.dispose();
   }
 
-  void _handleDonePressed() {
+  Future<void> _handleDonePressed() async {
+    // Validate each field
     for (var key in _textFieldKeys) {
       key.currentState?.triggerValidation();
     }
 
     if (_formKey.currentState!.validate()) {
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: TextStrings.accountCreationStarted,
-      );
+      setState(() {
+        _isRegistering = true;
+      });
 
-      NavigationService().navigateTo(
-        AppRoutes.verifyEmail,
-        arguments: {
-          'email': _emailController.text,
-          'profileImage': _imageBytes,
-          'censorEmail': false,
-        },
-      );
+      // Log registration attempt
+      print('📱 Attempting to register user: ${_emailController.text}');
+      print('📱 API URL: ${ApiUrls.register}');
+
+      // Check network connectivity and server availability
+      try {
+        final isServerReachable = await NetworkChecker.isServerReachable();
+        if (!isServerReachable) {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message:
+                "Cannot connect to server. Please check your internet connection.",
+          );
+          setState(() {
+            _isRegistering = false;
+          });
+
+          // Navigate to the debug page if server isn't reachable
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text('Server Connection Issue'),
+                content:
+                    Text('Would you like to open the network debugging tools?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('No'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      NavigationService().navigateTo(AppRoutes.directApiTest);
+                    },
+                    child: Text('Yes'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return;
+        }
+
+        // Debug network info
+        final networkInfo = await NetworkChecker.debugNetworkInfo();
+        print('📡 Network debug info: $networkInfo');
+      } catch (e) {
+        print('📡 Network check error: $e');
+      }
+
+      try {
+        final accountProvider =
+            Provider.of<AccountProvider>(context, listen: false);
+
+        // Debug print for request data
+        print('📱 Registration data: ${jsonEncode({
+              'email': _emailController.text,
+              'password': _passwordController.text,
+              'first_name': _firstNameController.text,
+              'last_name': _lastNameController.text,
+            })}');
+
+        final result = await accountProvider.register(
+          email: _emailController.text,
+          password: _passwordController.text,
+          firstName: _firstNameController.text,
+          lastName: _lastNameController.text,
+        );
+
+        print('📱 Registration result: $result');
+        print('📱 Provider error: ${accountProvider.error}');
+        print(
+            '📱 Current user after registration: ${accountProvider.currentUser}');
+
+        if (result) {
+          // If registration was successful
+          ResponsiveSnackBar.showSuccess(
+            context: context,
+            message: TextStrings.accountCreatedSuccessfully,
+          );
+
+          // Move to the next screen
+          NavigationService().navigateTo(
+            AppRoutes.verifyEmail,
+            arguments: {
+              'email': _emailController.text,
+              'profileImage': _imageBytes,
+              'censorEmail': false,
+            },
+          );
+        } else {
+          // If registration failed, show the error
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: accountProvider.error ?? TextStrings.registrationFailed,
+          );
+        }
+      } catch (e) {
+        print('📱 Registration exception: $e');
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Registration error: ${e.toString()}",
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isRegistering = false;
+          });
+        }
+      }
     } else {
       ResponsiveSnackBar.showError(
         context: context,
@@ -247,14 +357,20 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                                 ),
                                 const SizedBox(height: 37),
                                 AnimatedButton(
-                                  onPressed: _handleDonePressed,
-                                  text: TextStrings.next,
+                                  onPressed: _isRegistering
+                                      ? null
+                                      : _handleDonePressed,
+                                  text: _isRegistering
+                                      ? TextStrings.creatingAccount
+                                      : TextStrings.next,
+                                  showLoader: _isRegistering,
                                 ),
                                 const SizedBox(height: 37),
                                 Center(
                                   child: TextButton(
-                                    onPressed: () =>
-                                        NavigationService().goBack(),
+                                    onPressed: _isRegistering
+                                        ? null
+                                        : () => NavigationService().goBack(),
                                     child: Text(TextStrings.cancel),
                                   ),
                                 ),

@@ -2,11 +2,11 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Default Firebase configuration options for the app
+/// Default [FirebaseOptions] for use with your Firebase apps.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      return web;
+      throw UnsupportedError('Web platform is not supported for this app.');
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -14,57 +14,37 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macOS - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        throw UnsupportedError('macOS is not supported for this app.');
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        throw UnsupportedError('Windows is not supported for this app.');
       case TargetPlatform.linux:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        throw UnsupportedError('Linux is not supported for this app.');
       default:
         throw UnsupportedError(
-          'DefaultFirebaseOptions are not supported for this platform.',
+          'Unknown platform ${defaultTargetPlatform.name} is not supported for this app.',
         );
     }
   }
 
-  // These are placeholder values - replace with your actual Firebase project configuration
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey:
-        "AIzaSyAgUhHU8wSJgO5kJ15ZkP78vYsCcOUUvr8", // Replace with your API key
-    authDomain: "demo-project.firebaseapp.com",
-    projectId: "demo-project",
-    storageBucket: "demo-project.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abc123def456ghi789",
-    measurementId: "G-ABC123DEF45",
-  );
-
   static const FirebaseOptions android = FirebaseOptions(
     apiKey:
-        "AIzaSyABCDEFGhIJklMNOPqrsTUVwxyz12345678", // Replace with your API key
-    appId: "1:123456789012:android:abc123def456ghi789",
-    messagingSenderId: "123456789012",
-    projectId: "demo-project",
-    storageBucket: "demo-project.appspot.com",
+        'AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE', // Use same API key as iOS for now
+    appId:
+        '1:813529293309:android:1234567890abcdef', // Replace with your actual Android app ID
+    messagingSenderId: '813529293309',
+    projectId: 'livespot-b1eb4',
+    storageBucket: 'livespot-b1eb4.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey:
-        "AIzaSyABCDEFGhIJklMNOPqrsTUVwxyz98765432", // Replace with your API key
-    appId: "1:123456789012:ios:abc123def456ghi789",
-    messagingSenderId: "123456789012",
-    projectId: "demo-project",
-    storageBucket: "demo-project.appspot.com",
+    apiKey: 'AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE',
+    appId: '1:813529293309:ios:761f2bdd7d94011a583994',
+    messagingSenderId: '813529293309',
+    projectId: 'livespot-b1eb4',
+    storageBucket: 'livespot-b1eb4.firebasestorage.app',
     iosClientId:
-        "123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com",
-    iosBundleId: "com.example.flutterApplication2",
+        '813529293309-e6au6bm35phan94i7l5uhf9d8h4a3ka6.apps.googleusercontent.com',
+    iosBundleId:
+        'com.example.flutterApplication2', // Make sure this matches your actual bundle ID
   );
 }

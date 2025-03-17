@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/debug/direct_api_test_page.dart';
+import 'package:flutter_application_2/debug/network_test_page.dart';
+import 'package:flutter_application_2/ui/auth/get_started_screen.dart';
 import 'package:flutter_application_2/ui/auth/login/login_screen.dart';
 import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart';
 import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
@@ -21,11 +24,13 @@ class AppRoutes {
   static const String camera = '/camera';
   static const String map = '/map';
   static const String messages = '/messages';
+  static const String networkTest = '/debug/network-test';
+  static const String directApiTest = '/debug/direct-api-test';
 
   // Route map
   static Map<String, WidgetBuilder> get routes => {
-        // initial: (_) => const GetStartedScreen(), // Initial route handler
-        initial: (_) => const Home(), // Initial route handler
+        initial: (_) => const GetStartedScreen(), // Initial route handler
+        // initial: (_) => const Home(), // Initial route handler
         home: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
@@ -47,5 +52,7 @@ class AppRoutes {
         camera: (_) => const CameraPage(),
         map: (_) => const MapPage(),
         messages: (_) => const MessagesPage(),
+        networkTest: (context) => const NetworkTestPage(),
+        directApiTest: (context) => const DirectApiTestPage(),
       };
 }
