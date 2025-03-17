@@ -15,6 +15,9 @@ class ApiUrls {
     }
   }
 
+  // Base API URL
+  static String get baseApiUrl => baseUrl;
+
   // Authentication URLs
   static String get register => '$baseUrl/accounts/register/';
   static String get login => '$baseUrl/accounts/login/';
@@ -22,4 +25,9 @@ class ApiUrls {
   static String get profile => '$baseUrl/accounts/profile/';
   static String get verifyToken => '$baseUrl/accounts/verify-token/';
   static String get logout => '$baseUrl/accounts/logout/';
+
+  // Profile image upload - updated paths based on server configuration
+  static String get profileImage => '$baseUrl/accounts/profile-image/';
+  static String get updateProfile => '$baseUrl/accounts/update-profile/';
+  static String get getCsrfToken => '$baseUrl/get-csrf-token/';
 }

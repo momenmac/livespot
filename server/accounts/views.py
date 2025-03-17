@@ -164,3 +164,41 @@ class ProfileView(APIView):
         except Exception as e:
             response = Response({"error": str(e)}, status=500)
             return add_cors_headers(response)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ProfileImageView(APIView):
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+        
+    def post(self, request):
+        try:
+            # Log the request for debugging
+            logger.info(f"Profile image upload request received")
+            
+            # Check if user is authenticated
+            if not request.user.is_authenticated:
+                logger.warning("Unauthenticated profile image upload attempt")
+                return add_cors_headers(Response({"error": "Authentication required"}, status=401))
+                
+            # Get the image from request
+            image_file = request.FILES.get('profile_image')
+            if not image_file:
+                logger.warning("No image file in request")
+                return add_cors_headers(Response({"error": "No image file provided"}, status=400))
+                
+            # Update user's profile picture
+            user = request.user
+            user.profile_picture = image_file
+            user.save()
+            
+            logger.info(f"Profile image updated for user: {user.email}")
+            return add_cors_headers(Response({
+                "message": "Profile image updated successfully",
+                "profile_picture_url": user.profile_picture.url if user.profile_picture else None
+            }))
+            
+        except Exception as e:
+            logger.error(f"Profile image upload error: {str(e)}")
+            print(f"Profile image upload error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))

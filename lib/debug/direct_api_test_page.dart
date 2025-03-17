@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class DirectApiTestPage extends StatefulWidget {
-  const DirectApiTestPage({Key? key}) : super(key: key);
+  const DirectApiTestPage({super.key});
 
   @override
   _DirectApiTestPageState createState() => _DirectApiTestPageState();

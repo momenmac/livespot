@@ -85,6 +85,10 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
       // Log registration attempt
       print('📱 Attempting to register user: ${_emailController.text}');
       print('📱 API URL: ${ApiUrls.register}');
+      print('📱 Has profile image: ${_imageBytes != null}');
+      if (_imageBytes != null) {
+        print('📱 Image size: ${_imageBytes!.length} bytes');
+      }
 
       // Check network connectivity and server availability
       try {
@@ -144,6 +148,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
               'password': _passwordController.text,
               'first_name': _firstNameController.text,
               'last_name': _lastNameController.text,
+              'has_profile_image': _imageBytes != null,
             })}');
 
         final result = await accountProvider.register(
@@ -151,6 +156,8 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
           password: _passwordController.text,
           firstName: _firstNameController.text,
           lastName: _lastNameController.text,
+          profileImage:
+              _imageBytes, // Make sure this parameter exists in your AccountProvider
         );
 
         print('📱 Registration result: $result');
@@ -203,17 +210,37 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      final bytes = await image.readAsBytes();
-      setState(() {
-        _imageBytes = bytes;
-      });
+    try {
+      final ImagePicker picker = ImagePicker();
+      // Explicitly define maxHeight and maxWidth to optimize the image size
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxHeight: 512,
+        maxWidth: 512,
+        imageQuality: 75,
+      );
 
-      ResponsiveSnackBar.showInfo(
+      if (image != null) {
+        print('📸 Image selected: ${image.path}');
+        final bytes = await image.readAsBytes();
+        print('📸 Image size: ${bytes.length} bytes');
+
+        setState(() {
+          _imageBytes = bytes;
+        });
+
+        ResponsiveSnackBar.showInfo(
+          context: context,
+          message: TextStrings.profileImageSelected,
+        );
+      } else {
+        print('📸 No image selected');
+      }
+    } catch (e) {
+      print('📸 Image picking error: $e');
+      ResponsiveSnackBar.showError(
         context: context,
-        message: TextStrings.profileImageSelected,
+        message: "Failed to select image: ${e.toString()}",
       );
     }
   }
@@ -433,6 +460,10 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
                   setState(() {
                     _imageBytes = null;
                   });
+                  ResponsiveSnackBar.showInfo(
+                    context: context,
+                    message: "Profile image removed",
+                  );
                 },
                 child: CircleAvatar(
                   radius: 12,

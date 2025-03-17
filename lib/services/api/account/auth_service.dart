@@ -1,8 +1,9 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show TargetPlatform, Uint8List, defaultTargetPlatform, kIsWeb;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../../../models/account.dart';
 import 'api_urls.dart';
 
@@ -382,6 +383,90 @@ class AuthService {
       return {
         'success': false,
         'error': 'Sign out error: ${e.toString()}',
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> updateProfileImage(
+      String token, Uint8List imageData) async {
+    try {
+      // Convert image to base64
+      final base64Image = base64Encode(imageData);
+
+      // Send request to update profile with image
+      final response = await http.put(
+        Uri.parse(ApiUrls.updateProfile),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'profile_image': base64Image,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'user': Account.fromJson(data),
+        };
+      } else {
+        return {
+          'success': false,
+          'error':
+              'Failed to update profile with status: ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // Upload profile image
+  Future<Map<String, dynamic>> uploadProfileImage(
+      String token, Uint8List imageData) async {
+    try {
+      // Create multipart request
+      final uri = Uri.parse('${ApiUrls.profileImage}');
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Token $token';
+
+      // Add profile image
+      final multipartFile = http.MultipartFile.fromBytes(
+        'profile_image',
+        imageData,
+        filename: 'profile.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      );
+      request.files.add(multipartFile);
+
+      // Send the request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Profile image updated',
+          'profile_picture_url': data['profile_picture_url']
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to upload image with status: ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Image upload error: ${e.toString()}',
       };
     }
   }

@@ -4,7 +4,7 @@ import '../services/api/account/api_urls.dart';
 import 'api_tester.dart';
 
 class NetworkTestPage extends StatefulWidget {
-  const NetworkTestPage({Key? key}) : super(key: key);
+  const NetworkTestPage({super.key});
 
   @override
   _NetworkTestPageState createState() => _NetworkTestPageState();

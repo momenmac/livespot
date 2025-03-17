@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
                 ("last_name", models.CharField(max_length=50)),
                 (
                     "profile_picture",
-                    models.ImageField(blank=True, null=True, upload_to="profile_pics/"),
+                    models.ImageField(blank=True, null=True, upload_to="media/profile_pics/"),
                 ),
                 (
                     "google_id",
