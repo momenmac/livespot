@@ -30,4 +30,9 @@ class ApiUrls {
   static String get profileImage => '$baseUrl/accounts/profile-image/';
   static String get updateProfile => '$baseUrl/accounts/update-profile/';
   static String get getCsrfToken => '$baseUrl/get-csrf-token/';
+
+  // Email verification URLs
+  static String get verifyEmail => '$baseUrl/accounts/verify-email/';
+  static String get resendVerificationCode =>
+      '$baseUrl/accounts/resend-verification-code/';
 }

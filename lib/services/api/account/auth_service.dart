@@ -431,7 +431,7 @@ class AuthService {
       String token, Uint8List imageData) async {
     try {
       // Create multipart request
-      final uri = Uri.parse('${ApiUrls.profileImage}');
+      final uri = Uri.parse(ApiUrls.profileImage);
       final request = http.MultipartRequest('POST', uri);
 
       // Add authorization header
@@ -467,6 +467,78 @@ class AuthService {
       return {
         'success': false,
         'error': 'Image upload error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Verify email with code
+  Future<Map<String, dynamic>> verifyEmail(String token, String code) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('${ApiUrls.baseUrl}/accounts/verify-email/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
+        body: json.encode({
+          'code': code,
+        }),
+      );
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': responseData['message'] ?? 'Email verified successfully',
+          'user': responseData['user'] != null
+              ? Account.fromJson(responseData['user'])
+              : null,
+        };
+      } else {
+        return {
+          'success': false,
+          'error': responseData['error'] ?? 'Failed to verify email',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Resend verification code
+  Future<Map<String, dynamic>> resendVerificationCode(String token) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('${ApiUrls.baseUrl}/accounts/resend-verification-code/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
+      );
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': responseData['message'] ?? 'Verification code sent',
+          'email_sent': responseData['email_sent'] ?? true,
+        };
+      } else {
+        return {
+          'success': false,
+          'error':
+              responseData['error'] ?? 'Failed to resend verification code',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
       };
     }
   }

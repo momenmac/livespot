@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
-import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../models/account.dart';
 import 'auth_service.dart';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -436,6 +434,69 @@ class AccountProvider extends ChangeNotifier {
       }
     } catch (e) {
       _error = 'Failed to fetch profile: ${e.toString()}';
+    }
+  }
+
+  // Verify email with code
+  Future<bool> verifyEmail(String code) async {
+    if (_token == null) {
+      _error = 'Authentication required';
+      return false;
+    }
+
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _authService.verifyEmail(_token!, code);
+
+      if (result['success']) {
+        // Update user data if included in response
+        if (result['user'] != null) {
+          _currentUser = result['user'];
+        } else {
+          // Ensure we have the latest user data
+          await _fetchUserProfile();
+        }
+        return true;
+      } else {
+        _error = result['error'];
+        return false;
+      }
+    } catch (e) {
+      _error = 'Email verification failed: ${e.toString()}';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Resend verification code
+  Future<bool> resendVerificationCode() async {
+    if (_token == null) {
+      _error = 'Authentication required';
+      return false;
+    }
+
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _authService.resendVerificationCode(_token!);
+
+      if (result['success']) {
+        return true;
+      } else {
+        _error = result['error'];
+        return false;
+      }
+    } catch (e) {
+      _error = 'Failed to resend verification code: ${e.toString()}';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

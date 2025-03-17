@@ -12,6 +12,8 @@ import 'package:flutter_application_2/ui/widgets/verification_code_field.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:provider/provider.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String? email;
@@ -34,7 +36,6 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
-  final String _tempVerificationCode = '000000';
   bool _isResendEnabled = true;
   int _resendTimer = 30;
   Timer? _timer;
@@ -42,6 +43,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   int _attemptCount = 0;
   static const int _maxAttempts = 4;
   final GlobalKey<VerificationCodeFieldState> _verificationKey = GlobalKey();
+  bool _isVerifying = false;
 
   void _startResendTimer() {
     setState(() {
@@ -50,7 +52,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     });
 
     _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         if (_resendTimer > 0) {
           _resendTimer--;
@@ -62,25 +64,51 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     });
   }
 
-  void _handleResendCode() {
-    // TODO: Request new verification code from backend
-    // TODO: Update rate limiting in database
-    // TODO: Log verification attempts for security
+  Future<void> _handleResendCode() async {
     setState(() {
-      _attemptCount = 0;
+      _isResendEnabled = false;
     });
-    _startResendTimer();
 
-    ResponsiveSnackBar.showInfo(
-      context: context,
-      message: TextStrings.verificationCodeResent,
-    );
+    try {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+      final result = await accountProvider.resendVerificationCode();
+
+      if (result) {
+        setState(() {
+          _attemptCount = 0;
+        });
+        _startResendTimer();
+
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: TextStrings.verificationCodeResent,
+        );
+      } else {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message:
+              accountProvider.error ?? "Failed to resend verification code",
+        );
+        setState(() {
+          _isResendEnabled = true;
+        });
+      }
+    } catch (e) {
+      print('🔄 Resend code error: $e');
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error: ${e.toString()}",
+      );
+      setState(() {
+        _isResendEnabled = true;
+      });
+    }
   }
 
-  void _handleCodeCompletion(String code) {
-    // TODO: Verify code against backend verification system
-    // TODO: Update user record to mark email as verified
-    // TODO: Handle verification timeout
+  Future<void> _handleCodeCompletion(String code) async {
+    if (_isVerifying) return;
+
     if (_attemptCount >= _maxAttempts) {
       ResponsiveSnackBar.showError(
         context: context,
@@ -91,26 +119,44 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
     setState(() {
       _attemptCount++;
+      _isVerifying = true;
     });
 
-    if (code == _tempVerificationCode) {
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: TextStrings.verificationSuccessful,
-      );
-      NavigationService().replaceUntilHome(AppRoutes.home);
-    } else {
-      _verificationKey.currentState?.clearFields();
+    try {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+      final result = await accountProvider.verifyEmail(code);
 
-      if (_attemptCount >= _maxAttempts) {
-        _showTooManyAttemptsDialog();
-      } else {
-        ResponsiveSnackBar.showError(
+      if (result) {
+        ResponsiveSnackBar.showSuccess(
           context: context,
-          message: TextStrings.invalidCode
-              .replaceAll('%d', '${_maxAttempts - _attemptCount}'),
+          message: TextStrings.verificationSuccessful,
         );
+        NavigationService().replaceAllWith(AppRoutes.home);
+      } else {
+        _verificationKey.currentState?.clearFields();
+
+        if (_attemptCount >= _maxAttempts) {
+          _showTooManyAttemptsDialog();
+        } else {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: accountProvider.error ??
+                TextStrings.invalidCode
+                    .replaceAll('%d', '${_maxAttempts - _attemptCount}'),
+          );
+        }
       }
+    } catch (e) {
+      print('✉️ Verification error: $e');
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error: ${e.toString()}",
+      );
+    } finally {
+      setState(() {
+        _isVerifying = false;
+      });
     }
   }
 
@@ -120,13 +166,13 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       barrierDismissible: false,
       builder: (context) => Theme.of(context).platform == TargetPlatform.iOS
           ? CupertinoAlertDialog(
-              title: Text(TextStrings.tooManyAttemptsTitle),
-              content: Text(TextStrings.tooManyAttemptsMessage),
+              title: const Text(TextStrings.tooManyAttemptsTitle),
+              content: const Text(TextStrings.tooManyAttemptsMessage),
               actions: _buildDialogActions(context),
             )
           : AlertDialog(
-              title: Text(TextStrings.tooManyAttemptsTitle),
-              content: Text(TextStrings.tooManyAttemptsMessage),
+              title: const Text(TextStrings.tooManyAttemptsTitle),
+              content: const Text(TextStrings.tooManyAttemptsMessage),
               actions: _buildDialogActions(context),
             ),
     );
@@ -139,7 +185,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           Navigator.of(context).pop();
           Navigator.of(context).pop();
         },
-        child: Text(TextStrings.goBack),
+        child: const Text(TextStrings.goBack),
       ),
       TextButton(
         onPressed: () {
@@ -149,9 +195,27 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           });
           _handleResendCode();
         },
-        child: Text(TextStrings.requestNewCode),
+        child: const Text(TextStrings.requestNewCode),
       ),
     ];
+  }
+
+  void _checkEmailAndRedirectIfInvalid() {
+    // Prevent direct access to verification screen without a valid email
+    if (widget.email == null || widget.email!.isEmpty) {
+      print('⚠️ Attempted to access verification screen without valid email');
+
+      // Use a microtask to avoid build errors during initState
+      Future.microtask(() {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Email verification requires registration first",
+        );
+
+        // Navigate back to login screen
+        NavigationService().replaceAllWith(AppRoutes.login);
+      });
+    }
   }
 
   @override
@@ -163,6 +227,14 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
+
+    // Security check to prevent direct access without email
+    _checkEmailAndRedirectIfInvalid();
+
+    // Only start timer if we have a valid email
+    if (widget.email != null && widget.email!.isNotEmpty) {
+      _startResendTimer();
+    }
   }
 
   @override
@@ -174,9 +246,20 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Return a loading indicator if email is invalid
+    // The _checkEmailAndRedirectIfInvalid method will handle the redirection
+    if (widget.email == null || widget.email!.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final defaultWidth = 402.87;
     final defaultHeight = 442.65;
 
+    // Continue with normal build if email is valid
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(

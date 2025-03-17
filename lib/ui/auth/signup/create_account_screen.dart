@@ -103,31 +103,6 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
             _isRegistering = false;
           });
 
-          // Navigate to the debug page if server isn't reachable
-          if (mounted) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text('Server Connection Issue'),
-                content:
-                    Text('Would you like to open the network debugging tools?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('No'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      NavigationService().navigateTo(AppRoutes.directApiTest);
-                    },
-                    child: Text('Yes'),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return;
         }
 

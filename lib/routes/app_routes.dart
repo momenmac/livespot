@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/debug/direct_api_test_page.dart';
 import 'package:flutter_application_2/debug/network_test_page.dart';
 import 'package:flutter_application_2/ui/auth/get_started_screen.dart';
 import 'package:flutter_application_2/ui/auth/login/login_screen.dart';
@@ -25,7 +24,6 @@ class AppRoutes {
   static const String map = '/map';
   static const String messages = '/messages';
   static const String networkTest = '/debug/network-test';
-  static const String directApiTest = '/debug/direct-api-test';
 
   // Route map
   static Map<String, WidgetBuilder> get routes => {
@@ -53,6 +51,5 @@ class AppRoutes {
         map: (_) => const MapPage(),
         messages: (_) => const MessagesPage(),
         networkTest: (context) => const NetworkTestPage(),
-        directApiTest: (context) => const DirectApiTestPage(),
       };
 }
