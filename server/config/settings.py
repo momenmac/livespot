@@ -219,10 +219,15 @@ CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
 CSRF_COOKIE_HTTPONLY = False  # Enable JavaScript access for SPA
 CSRF_USE_SESSIONS = False  # Don't use sessions for CSRF
 CSRF_COOKIE_SAMESITE = None  # Allow cross-site requests for mobile app
-
+ALLOWED_HOSTS = ['*']
 # CSRF Trusted Origins and Exempt URLs
-CSRF_TRUSTED_ORIGINS = ['http://localhost:*', 'http://127.0.0.1:*', 'http://10.0.2.2:*']
-
+# Add your computer's IP address to the trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:*', 
+    'http://127.0.0.1:*', 
+    'http://10.0.2.2:*',
+    'http://192.168.1.*:*'  # This pattern covers the 192.168.1.x IP range
+]
 # CORS Configuration
 CORS_ALLOW_ALL_ORIGINS = True  # In production, use specific origins
 CORS_ALLOW_CREDENTIALS = True

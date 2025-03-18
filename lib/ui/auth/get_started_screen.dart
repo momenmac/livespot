@@ -173,7 +173,8 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
                       SizedBox(height: 16),
                       Center(
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 400),
+                          constraints:
+                              BoxConstraints(maxWidth: 400, minHeight: 56),
                           child: GoogleSignInButton(
                             googleSignIn: _authService.googleSignIn,
                             isLoading: _isLoading,

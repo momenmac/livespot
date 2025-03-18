@@ -20,10 +20,23 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
+// Consolidate all subprojects configurations into a single block
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
+    
+    // Apply buildConfig = true to all Android projects
+    afterEvaluate {
+        project -> if (project.hasProperty('android')) {
+            android {
+                buildFeatures {
+                    buildConfig true
+                }
+            }
+        }
+    }
+    
+    // Original dependency on app
     project.evaluationDependsOn(":app")
 }
 

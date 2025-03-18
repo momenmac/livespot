@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError('Web platform is not supported for this app.');
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -14,37 +14,51 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError('macOS is not supported for this app.');
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
-        throw UnsupportedError('Windows is not supported for this app.');
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for windows - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.linux:
-        throw UnsupportedError('Linux is not supported for this app.');
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for linux - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       default:
         throw UnsupportedError(
-          'Unknown platform ${defaultTargetPlatform.name} is not supported for this app.',
+          'DefaultFirebaseOptions are not supported for this platform.',
         );
     }
   }
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey:
-        'AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE', // Use same API key as iOS for now
-    appId:
-        '1:813529293309:android:1234567890abcdef', // Replace with your actual Android app ID
-    messagingSenderId: '813529293309',
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'YOUR-API-KEY',
+    appId: 'YOUR-APP-ID',
+    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
     projectId: 'livespot-b1eb4',
-    storageBucket: 'livespot-b1eb4.firebasestorage.app',
+    authDomain: 'livespot-b1eb4.firebaseapp.com',
+    storageBucket: 'livespot-b1eb4.appspot.com',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'YOUR-API-KEY',
+    appId: 'YOUR-APP-ID',
+    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
+    projectId: 'livespot-b1eb4',
+    storageBucket: 'livespot-b1eb4.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE',
-    appId: '1:813529293309:ios:761f2bdd7d94011a583994',
-    messagingSenderId: '813529293309',
+    apiKey: 'YOUR-API-KEY',
+    appId: 'YOUR-APP-ID',
+    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
     projectId: 'livespot-b1eb4',
-    storageBucket: 'livespot-b1eb4.firebasestorage.app',
-    iosClientId:
-        '813529293309-e6au6bm35phan94i7l5uhf9d8h4a3ka6.apps.googleusercontent.com',
-    iosBundleId:
-        'com.example.flutterApplication2', // Make sure this matches your actual bundle ID
+    storageBucket: 'livespot-b1eb4.appspot.com',
+    iosClientId: 'YOUR-IOS-CLIENT-ID',
+    iosBundleId: 'YOUR-IOS-BUNDLE-ID',
   );
 }

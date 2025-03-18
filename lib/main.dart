@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_application_2/firebase_options.dart';
@@ -11,6 +10,11 @@ import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'dart:async';
+
+// Use conditional import for Platform
+import 'dart:io'
+    if (dart.library.html) 'package:flutter_application_2/platform_web.dart'
+    show Platform;
 
 // Import the correct file for hero tag management
 import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package path
@@ -33,14 +37,18 @@ class FirebaseStatusNotifier extends ChangeNotifier {
 }
 
 Future<bool> initFirebaseSafely() async {
-  // Skip initialization if we've already tried
-  if (_isFirebaseInitialized) return _isFirebaseInitialized;
-
   try {
     print(
         '🔍 Starting Firebase initialization with options: ${DefaultFirebaseOptions.currentPlatform.projectId}');
 
-    if (Platform.isIOS) {
+    // First, check if Firebase is already initialized
+    if (Firebase.apps.isNotEmpty) {
+      print('✅ Firebase is already initialized, reusing existing instance');
+      _isFirebaseInitialized = true;
+      return true;
+    }
+
+    if (!kIsWeb && Platform.isIOS) {
       print('📱 iOS Bundle ID: ${DefaultFirebaseOptions.ios.iosBundleId}');
 
       // Check if we're on iOS simulator (which has problems with Firebase)
@@ -62,17 +70,35 @@ Future<bool> initFirebaseSafely() async {
     print('🚀 About to initialize Firebase...');
 
     // Initialize with timeout to prevent hanging
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(const Duration(seconds: 5), onTimeout: () {
-      throw TimeoutException('Firebase initialization timed out');
-    });
+    if (kIsWeb) {
+      // Use web-specific initialization
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.web,
+      ).timeout(const Duration(seconds: 5), onTimeout: () {
+        throw TimeoutException('Firebase initialization timed out');
+      });
+    } else {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 5), onTimeout: () {
+        throw TimeoutException('Firebase initialization timed out');
+      });
+    }
 
     _isFirebaseInitialized = true;
     print('✅ Firebase initialized successfully');
   } catch (e) {
+    // If the error is about duplicate app, consider it a success
+    if (e.toString().contains('duplicate-app') ||
+        e.toString().contains('already exists')) {
+      print(
+          '⚠️ Firebase app already exists error, but we can use the existing instance');
+      _isFirebaseInitialized = true;
+      return true;
+    }
+
     print('❌ Failed to initialize Firebase: $e');
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       print(
           '💡 Since you are on iOS, this failure may be due to a simulator issue.');
       print(
@@ -107,10 +133,20 @@ class SessionManager {
 }
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('🔥 Firebase initialized successfully');
+  } catch (e) {
+    print('❌ Failed to initialize Firebase: $e');
+  }
+
   // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations first
+  // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -127,8 +163,7 @@ Future<void> main() async {
 
   // Try to check if we're in debug mode on iOS simulator
   bool shouldSkipFirebase = false;
-  if (Platform.isIOS && !kIsWeb) {
-    // This is a heuristic to detect if we're in debug mode on iOS simulator
+  if (!kIsWeb && Platform.isIOS) {
     try {
       String iosInfo =
           await SystemChannels.platform.invokeMethod('SystemInfo.iosInfo') ??
@@ -146,26 +181,46 @@ Future<void> main() async {
     }
   }
 
-  // Start the app without waiting for Firebase initialization
+  // Try to get existing Firebase instance or initialize a new one BEFORE starting the app
+  bool firebaseInitializedBeforeApp = false;
+  if (!shouldSkipFirebase) {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        print('🔔 Firebase found existing instance before app start');
+        firebaseInitializedBeforeApp = true;
+        _isFirebaseInitialized = true;
+      }
+    } catch (e) {
+      print('⚠️ Error checking Firebase status: $e');
+    }
+  }
+
+  // Start the app
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AccountProvider()..initialize()),
-        // Add firebase status notifier to providers
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
       ],
       child: const MyApp(),
     ),
   );
 
-  // Try to initialize Firebase after the app has started
-  // This helps prevent startup crashes if Firebase has issues
+  // Initialize Firebase after app start ONLY if not already initialized
   Timer(const Duration(milliseconds: 1500), () async {
-    bool success = shouldSkipFirebase ? false : await initFirebaseSafely();
-    // Update the notifier with the correct Firebase status
+    bool success = firebaseInitializedBeforeApp; // Start with existing status
+
+    if (shouldSkipFirebase) {
+      success = false;
+    } else if (!firebaseInitializedBeforeApp) {
+      // Only attempt initialization if not already done
+      success = await initFirebaseSafely();
+    }
+
+    // Update the notifier with the Firebase status
     firebaseStatusNotifier.setInitialized(success);
 
-    // Print a clear message about Firebase status
+    // Print status message
     if (success) {
       print('🔔 Firebase is now available to the app');
     } else if (shouldSkipFirebase) {
@@ -201,9 +256,10 @@ class MyApp extends StatelessWidget {
         AppRoutes.messages: (context) => const MessagesPage(),
       },
       builder: (context, child) {
-        // Show a banner if Firebase is not available and we're not on iOS
+        // Show a banner if Firebase is not available and we're not on web or iOS
         // (since we deliberately skip Firebase on iOS)
-        if (!firebaseStatus.isInitialized && !Platform.isIOS) {
+        if (!firebaseStatus.isInitialized &&
+            !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
           print(
               '⚠️ App running with limited functionality (Firebase unavailable)');
           // You could show a banner or notification here if needed
@@ -252,8 +308,8 @@ class FirebaseHelper {
     }
   }
 
-  // Check if we're deliberately skipping Firebase (on iOS)
-  static bool get isSkippedPlatform => Platform.isIOS && !kIsWeb;
+  // Check if we're deliberately skipping Firebase (on iOS or web)
+  static bool get isSkippedPlatform => kIsWeb || (!kIsWeb && Platform.isIOS);
 
   // Get a user-friendly message about Firebase status
   static String getStatusMessage() {
