@@ -156,7 +156,7 @@ class LoginScreenState extends State<LoginScreen>
   }
 
   void _handleCancel() {
-    NavigationService().goBack();
+    NavigationService().replaceAllWith(AppRoutes.initial);
   }
 
   String? _validateEmail(String? value) {

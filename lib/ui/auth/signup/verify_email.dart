@@ -132,7 +132,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           context: context,
           message: TextStrings.verificationSuccessful,
         );
-        NavigationService().replaceAllWith(AppRoutes.home);
+        NavigationService().replaceAllWith(AppRoutes.login);
       } else {
         _verificationKey.currentState?.clearFields();
 

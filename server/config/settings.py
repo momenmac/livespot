@@ -168,6 +168,14 @@ print(f"EMAIL_HOST_PASSWORD: {'*****' if EMAIL_HOST_PASSWORD else 'Not Set'}")
 
 STATIC_URL = "static/"
 
+# Media files settings
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Make sure the directory exists
+if not os.path.exists(MEDIA_ROOT):
+    os.makedirs(MEDIA_ROOT)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 

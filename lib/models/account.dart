@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
+
 class Account {
   final int id;
   final String email;
@@ -28,12 +30,23 @@ class Account {
   String get fullName => '$firstName $lastName';
 
   factory Account.fromJson(Map<String, dynamic> json) {
+    String? profilePictureUrl = json['profile_picture_url'];
+
+    // Check if we need to prepend the base URL for relative URLs
+    if (profilePictureUrl != null &&
+        !profilePictureUrl.startsWith('http') &&
+        profilePictureUrl.isNotEmpty) {
+      // This is a relative URL, prepend the base API URL
+      final apiBaseUrl = ApiUrls.baseUrl;
+      profilePictureUrl = '$apiBaseUrl$profilePictureUrl';
+    }
+
     return Account(
       id: json['id'],
       email: json['email'],
       firstName: json['first_name'],
       lastName: json['last_name'],
-      profilePictureUrl: json['profile_picture_url'],
+      profilePictureUrl: profilePictureUrl,
       isVerified: json['is_verified'] ?? false,
       googleId: json['google_id'],
       token: json['token'],

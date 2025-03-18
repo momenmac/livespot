@@ -243,6 +243,7 @@ class AuthService {
     String? profilePicture,
   }) async {
     try {
+      print('🔑 Sending Google auth data to backend for: $email');
       final response = await _client.post(
         Uri.parse('$baseUrl/accounts/google-login/'),
         headers: {'Content-Type': 'application/json'},
@@ -255,27 +256,115 @@ class AuthService {
         }),
       );
 
+      print('🔑 Google auth response status: ${response.statusCode}');
+      print('🔑 Google auth response body: ${response.body}');
+
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
+        // Check if this was a new account creation or login
+        final bool isNewAccount = responseData['is_new_account'] ?? false;
+        final bool accountLinked = responseData['account_linked'] ?? false;
+
+        print('🔑 Is new account: $isNewAccount');
+        print('🔑 Existing account linked: $accountLinked');
+
         return {
           'success': true,
           'token': responseData['token'],
           'user': responseData['user'] != null
               ? Account.fromJson(responseData['user'])
               : null,
-          'message': responseData['message'] ?? 'Google login successful',
+          'message':
+              responseData['message'] ?? 'Google authentication successful',
+          'is_new_account': isNewAccount,
+          'account_linked': accountLinked,
         };
       } else {
+        print('❌ Google auth failed: ${responseData['error']}');
         return {
           'success': false,
-          'error': responseData['error'] ?? 'Google login failed',
+          'error': responseData['error'] ?? 'Google authentication failed',
         };
       }
     } catch (e) {
+      print('❌ Google auth network error: ${e.toString()}');
       return {
         'success': false,
         'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Handle complete Google sign-in flow including backend authentication
+  Future<Map<String, dynamic>> handleGoogleSignIn() async {
+    try {
+      // First perform the Google sign-in
+      print('🔍 Starting Google Sign-in flow');
+
+      // Check if already signed in to prevent duplicate sign-ins
+      final isAlreadySignedIn = await googleSignIn.isSignedIn();
+      GoogleSignInAccount? googleAccount;
+
+      if (isAlreadySignedIn) {
+        // Get the current account
+        googleAccount =
+            googleSignIn.currentUser ?? await googleSignIn.signInSilently();
+        print(
+            '🔍 Already signed in with Google, using current account: ${googleAccount?.email}');
+      } else {
+        // Start a new sign in flow
+        googleAccount = await googleSignIn.signIn();
+      }
+
+      if (googleAccount == null) {
+        print('🔍 User cancelled Google Sign-in or no account found');
+        return {
+          'success': false,
+          'error': 'Google sign-in was cancelled or failed',
+        };
+      }
+
+      print('🔍 Google Sign-in successful: ${googleAccount.email}');
+
+      // Split name into first and last name
+      String displayName = googleAccount.displayName ?? '';
+      List<String> nameParts = displayName.split(' ');
+      String firstName = nameParts.isNotEmpty ? nameParts[0] : 'User';
+      String lastName = nameParts.length > 1 ? nameParts.last : '';
+
+      print('🔍 Name parsed as: $firstName $lastName');
+
+      // Properly format the profile picture URL
+      String? photoUrl = googleAccount.photoUrl;
+      if (photoUrl != null) {
+        // Google photos usually come with a small size parameter, let's improve it
+        if (photoUrl.contains('=s')) {
+          // Replace the size parameter with larger one (s400-c for 400px cropped)
+          photoUrl = photoUrl.replaceAll(RegExp(r'=s\d+(-c)?'), '=s400-c');
+        } else if (!photoUrl.contains('=')) {
+          // If there's no size parameter, add one
+          photoUrl = '$photoUrl=s400-c';
+        }
+
+        print('🔍 Enhanced profile picture URL: $photoUrl');
+      } else {
+        print('🔍 No profile picture available');
+      }
+
+      // Now authenticate with our backend
+      return await googleLogin(
+        googleId: googleAccount.id,
+        email: googleAccount.email,
+        firstName: firstName,
+        lastName: lastName,
+        profilePicture: photoUrl,
+      );
+    } catch (e) {
+      print('❌ Google authentication error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Google authentication error: ${e.toString()}',
       };
     }
   }
@@ -308,41 +397,6 @@ class AuthService {
       return {
         'success': false,
         'error': 'Network error: ${e.toString()}',
-      };
-    }
-  }
-
-  // Handle complete Google sign-in flow including backend authentication
-  Future<Map<String, dynamic>> handleGoogleSignIn() async {
-    try {
-      // First perform the Google sign-in
-      GoogleSignInAccount? googleAccount = await signInWithGoogle();
-
-      if (googleAccount == null) {
-        return {
-          'success': false,
-          'error': 'Google sign-in was cancelled or failed',
-        };
-      }
-
-      // Split name into first and last name
-      String displayName = googleAccount.displayName ?? '';
-      List<String> nameParts = displayName.split(' ');
-      String firstName = nameParts.isNotEmpty ? nameParts[0] : 'User';
-      String lastName = nameParts.length > 1 ? nameParts.last : '';
-
-      // Now authenticate with our backend
-      return await googleLogin(
-        googleId: googleAccount.id,
-        email: googleAccount.email,
-        firstName: firstName,
-        lastName: lastName,
-        profilePicture: googleAccount.photoUrl,
-      );
-    } catch (e) {
-      return {
-        'success': false,
-        'error': 'Google authentication error: ${e.toString()}',
       };
     }
   }
@@ -463,8 +517,6 @@ class AuthService {
       };
     }
   }
-
-  // This duplicate verifyToken method was removed as it conflicts with the one defined earlier
 
   Future<Map<String, dynamic>> updateProfileImage(
       String token, Uint8List imageData) async {

@@ -43,7 +43,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
     profile_picture = models.ImageField(upload_to=user_profile_path, blank=True, null=True)
-    google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)  # To track Google users
+    google_id = models.CharField(max_length=255, blank=True, null=True)  # Google ID field (remove unique=True)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)

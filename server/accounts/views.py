@@ -134,6 +134,65 @@ def send_verification_email(user, code):
         logger.error(f"Failed to send verification email: {str(e)}")
         return False
 
+# Add profile picture helper function
+def save_profile_picture_from_url(user, profile_picture_url):
+    """Save profile picture from URL for user"""
+    if not profile_picture_url:
+        return False
+        
+    try:
+        from urllib.request import urlopen, Request
+        from django.core.files.base import ContentFile
+        import uuid
+        
+        print(f"Downloading profile picture from: {profile_picture_url}")
+        
+        # Create a proper request with user-agent to avoid 403 errors
+        request = Request(
+            profile_picture_url,
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        
+        # Open the URL with our custom request
+        img_temp = urlopen(request, timeout=10)
+        
+        # Get content type for file extension
+        content_type = img_temp.info().get_content_type()
+        print(f"Image content type: {content_type}")
+        
+        # Determine file extension
+        if 'jpeg' in content_type or 'jpg' in content_type:
+            img_temp_ext = 'jpg'
+        elif 'png' in content_type:
+            img_temp_ext = 'png'
+        else:
+            # Default to jpg
+            img_temp_ext = 'jpg'
+            
+        # Read the image data
+        img_data = img_temp.read()
+        
+        if len(img_data) < 100:
+            print(f"Warning: Very small image data received ({len(img_data)} bytes)")
+            return False
+            
+        # Save profile picture with proper filename
+        filename = f"{uuid.uuid4()}.{img_temp_ext}"
+        user.profile_picture.save(
+            filename, 
+            ContentFile(img_data), 
+            save=True
+        )
+        
+        print(f"Successfully saved profile picture as {filename}")
+        return True
+        
+    except Exception as e:
+        print(f"Failed to save profile picture: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -374,33 +433,102 @@ class GoogleLoginView(APIView):
             last_name = request.data.get('last_name')
             profile_picture = request.data.get('profile_picture')
 
+            logger.info(f"Google login request for: {email}")
+            print(f"Google login request for: {email}")
+            print(f"Profile picture URL: {profile_picture}")
+
             if not google_id or not email:
-                response = Response({"error": "Invalid Google credentials"}, status=400)
-                return add_cors_headers(response)
+                logger.warning(f"Invalid Google credentials: {request.data}")
+                return add_cors_headers(Response({"error": "Invalid Google credentials"}, status=400))
 
-            user, created = Account.objects.get_or_create(email=email, defaults={
-                "first_name": first_name,
-                "last_name": last_name,
-                "google_id": google_id
-            })
-
-            if created or not user.google_id:
-                user.google_id = google_id
+            # Try to find an existing user with this email
+            try:
+                user = Account.objects.get(email=email)
+                
+                # If user exists but doesn't have google_id, this is an existing account
+                # We should link the Google account to the existing account
+                account_linked = False
+                
+                if not user.google_id:
+                    logger.info(f"Linking Google account to existing account: {email}")
+                    print(f"Linking Google account to existing account: {email}")
+                    user.google_id = google_id
+                    account_linked = True
+                    
+                    # Update user profile with Google info if provided
+                    if first_name and not user.first_name:
+                        user.first_name = first_name
+                    if last_name and not user.last_name:
+                        user.last_name = last_name
+                    
+                    # Save profile picture if provided and user doesn't have one
+                    if profile_picture and (not user.profile_picture or not user.profile_picture.name):
+                        # Save profile picture using our helper function
+                        save_profile_picture_from_url(user, profile_picture)
+                    else:
+                        # Always save the user object since we updated google_id
+                        user.save()
+                
+                # User already exists, just log them in
+                logger.info(f"Existing user logging in via Google: {email}")
+                print(f"Existing user logging in via Google: {email}")
+                
+                login(request, user)
+                token, _ = Token.objects.get_or_create(user=user)
+                
+                user_data = AccountSerializer(user).data
+                # Ensure profile picture URL is fully qualified
+                if user.profile_picture and user.profile_picture.url:
+                    user_data['profile_picture_url'] = request.build_absolute_uri(user.profile_picture.url)
+                
+                return add_cors_headers(Response({
+                    "message": "User logged in",
+                    "user": user_data,
+                    "token": token.key,
+                    "is_new_account": False,
+                    "account_linked": account_linked
+                }))
+                
+            except Account.DoesNotExist:
+                # User doesn't exist, create a new account
+                logger.info(f"Creating new account via Google: {email}")
+                print(f"Creating new account via Google: {email}")
+                
+                user = Account.objects.create_user(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    google_id=google_id,
+                    is_verified=True  # Google accounts are pre-verified
+                )
+                
+                # Save profile picture if provided
                 if profile_picture:
-                    user.profile_picture = profile_picture
-                user.save()
+                    saved = save_profile_picture_from_url(user, profile_picture)
+                    if not saved:
+                        print(f"Couldn't save profile picture during user creation")
+                
+                login(request, user)
+                token, _ = Token.objects.get_or_create(user=user)
+                
+                user_data = AccountSerializer(user).data
+                # Ensure profile picture URL is fully qualified
+                if user.profile_picture and user.profile_picture.url:
+                    user_data['profile_picture_url'] = request.build_absolute_uri(user.profile_picture.url)
+                
+                return add_cors_headers(Response({
+                    "message": "New user created and logged in",
+                    "user": user_data,
+                    "token": token.key,
+                    "is_new_account": True,
+                    "account_linked": False
+                }))
 
-            login(request, user)
-            token, _ = Token.objects.get_or_create(user=user)
-
-            response = Response({
-                "message": "User logged in",
-                "user": AccountSerializer(user).data,
-                "token": token.key
-            })
-            return add_cors_headers(response)
         except Exception as e:
+            logger.error(f"Google login error: {str(e)}")
             print(f"Google login error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             response = Response({"error": str(e)}, status=500)
             return add_cors_headers(response)
 

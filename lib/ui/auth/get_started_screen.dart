@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/services/api/account/auth_service.dart';
 import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_application_2/ui/widgets/animated_button.dart';
 import 'package:flutter_application_2/ui/auth/widgets/google_sign_in_button.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:provider/provider.dart';
 
 class GetStartedScreen extends StatefulWidget {
   const GetStartedScreen({super.key});
@@ -19,36 +21,76 @@ class GetStartedScreen extends StatefulWidget {
 
 class _GetStartedScreenState extends State<GetStartedScreen> {
   final AuthService _authService = AuthService();
+  bool _isLoading = false;
 
   Future<void> _handleGoogleSignIn() async {
+    // Prevent duplicate calls
+    if (_isLoading) return;
+
     try {
-      final account = await _authService.signInWithGoogle();
-      if (account != null && mounted) {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+
+      // Show loading indicator
+      setState(() {
+        _isLoading = true;
+      });
+
+      final result = await accountProvider.signInWithGoogle();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (result['success']) {
+        // Check whether this was a new account, a linked account, or regular login
+        final bool isNewAccount = result['is_new_account'] ?? false;
+        final bool accountLinked = result['account_linked'] ?? false;
+
+        String message;
+        if (isNewAccount) {
+          message = "Welcome! Your account has been created.";
+        } else if (accountLinked) {
+          message = "Google account linked to your existing account.";
+        } else {
+          message = "Welcome back!";
+        }
+
         // Show success message with longer duration
         ResponsiveSnackBar.showSuccess(
           context: context,
-          message: TextStrings.successfulLoginWithGoogle,
-          duration: Duration(seconds: 2), // Increased from 1 to 2 seconds
+          message: message,
+          duration: const Duration(seconds: 2),
         );
 
         // Delay navigation slightly to ensure the toast is visible
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 500));
 
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => Home()),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        // Replace SnackBar with TopToast via ResponsiveSnackBar
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const Home()),
+        );
+      } else {
         ResponsiveSnackBar.showError(
           context: context,
-          message: TextStrings.failedToLoginWithGoogle,
+          message: accountProvider.error ?? "Failed to sign in with Google",
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error: ${e.toString()}",
+      );
     }
   }
 
@@ -134,9 +176,13 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
                           constraints: BoxConstraints(maxWidth: 400),
                           child: GoogleSignInButton(
                             googleSignIn: _authService.googleSignIn,
-                            onSignIn: (account) async {
+                            isLoading: _isLoading,
+                            onSignIn: (account) {
                               if (account != null) {
-                                await _handleGoogleSignIn();
+                                // Only proceed if not already loading
+                                if (!_isLoading) {
+                                  _handleGoogleSignIn();
+                                }
                               }
                             },
                           ),

@@ -396,30 +396,58 @@ class AccountProvider extends ChangeNotifier {
   }
 
   // Sign in with Google and handle backend authentication
-  Future<bool> signInWithGoogle() async {
+  Future<Map<String, dynamic>> signInWithGoogle() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      // Avoid duplicate requests if user is already authenticated
+      if (isAuthenticated &&
+          _currentUser != null &&
+          _currentUser?.googleId != null) {
+        print(
+            '🔑 User is already authenticated with Google, returning current user');
+        return {
+          'success': true,
+          'is_new_account': false,
+          'account_linked': false,
+          'user': _currentUser,
+        };
+      }
+
       final result = await _authService.handleGoogleSignIn();
 
       if (result['success']) {
         _token = result['token'];
         _currentUser = result['user'];
 
-        // Save token to persistent storage
+        // Save auth data
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _token!);
 
-        return true;
+        // Save if user wants to be remembered (always true for social auth)
+        await prefs.setBool('remember_me', true);
+
+        return {
+          'success': true,
+          'is_new_account': result['is_new_account'] ?? false,
+          'account_linked': result['account_linked'] ?? false,
+          'user': _currentUser,
+        };
       } else {
         _error = result['error'];
-        return false;
+        return {
+          'success': false,
+          'error': _error,
+        };
       }
     } catch (e) {
       _error = 'Google sign-in failed: ${e.toString()}';
-      return false;
+      return {
+        'success': false,
+        'error': _error,
+      };
     } finally {
       _isLoading = false;
       notifyListeners();
