@@ -228,12 +228,39 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
 
+    // Check if the user is already verified
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkVerificationStatus();
+    });
+
     // Security check to prevent direct access without email
     _checkEmailAndRedirectIfInvalid();
 
     // Only start timer if we have a valid email
     if (widget.email != null && widget.email!.isNotEmpty) {
       _startResendTimer();
+    }
+  }
+
+  // Check if the user is already verified
+  void _checkVerificationStatus() {
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    if (accountProvider.isUserVerified) {
+      print('✅ User is already verified. Redirecting to home...');
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: "Your email is already verified",
+      );
+
+      Future.delayed(Duration(seconds: 1), () {
+        if (mounted) {
+          NavigationService().replaceAllWith(AppRoutes.home);
+        }
+      });
+    } else {
+      print('⏳ User not verified. Showing verification screen...');
     }
   }
 

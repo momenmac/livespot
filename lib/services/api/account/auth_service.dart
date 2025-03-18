@@ -178,33 +178,58 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/accounts/login/'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
+      print('🔑 Login attempt for: $email');
+      final response = await http.post(
+        Uri.parse(ApiUrls.login),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
           'email': email,
           'password': password,
         }),
       );
 
-      final responseData = json.decode(response.body);
+      print('🔑 Login response status: ${response.statusCode}');
+      print('🔑 Login response body: ${response.body}');
+
+      final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        Account? user;
+
+        // Parse user data if available
+        if (data['user'] != null) {
+          // Create a user object with the token included
+          Map<String, dynamic> userData =
+              Map<String, dynamic>.from(data['user']);
+          userData['token'] = data['token']; // Include token in the user object
+          user = Account.fromJson(userData);
+
+          // Log verification status for debugging
+          print(
+              '🔑 User verification status from API: ${userData['is_verified']}');
+        } else {
+          print('🔑 No user data in login response, will fetch separately');
+        }
+
         return {
           'success': true,
-          'token': responseData['token'],
-          'message': responseData['message'] ?? 'Login successful',
+          'token': data['token'],
+          'user': user,
         };
       } else {
         return {
           'success': false,
-          'error': responseData['error'] ?? 'Invalid credentials',
+          'error': data['error'] ?? 'Login failed. Please try again.',
         };
       }
     } catch (e) {
+      print('🔑 Login error: ${e.toString()}');
       return {
         'success': false,
-        'error': 'Network error: ${e.toString()}',
+        'error':
+            'An error occurred during login. Please check your internet connection.',
       };
     }
   }
@@ -322,21 +347,61 @@ class AuthService {
     }
   }
 
-  // Verify token with backend
+  // Get CSRF token
+  Future<String?> getCsrfToken() async {
+    try {
+      final response = await _client.get(
+        Uri.parse('${ApiUrls.baseUrl}/accounts/csrf-token/'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      // Extract the CSRF token from cookies
+      String? csrfToken;
+      String? cookies = response.headers['set-cookie'];
+      if (cookies != null) {
+        final csrfCookie = cookies
+            .split(';')
+            .where((cookie) => cookie.trim().startsWith('csrftoken='))
+            .firstOrNull;
+        if (csrfCookie != null) {
+          csrfToken = csrfCookie.split('=')[1];
+        }
+      }
+
+      return csrfToken;
+    } catch (e) {
+      print('Failed to get CSRF token: ${e.toString()}');
+      return null;
+    }
+  }
+
+  // Verify token with backend (updated to handle CSRF)
   Future<Map<String, dynamic>> verifyToken(String token) async {
     try {
+      // Get CSRF token (optional, only if the server requires it)
+      String? csrfToken = await getCsrfToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      };
+
+      // Add CSRF token if available
+      if (csrfToken != null) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
       final response = await _client.post(
         Uri.parse('${ApiUrls.baseUrl}/accounts/verify-token/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
+        headers: headers,
+        body: jsonEncode({'token': token}),
       );
 
       if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         return {
           'success': true,
-          'valid': true,
+          'valid': data['valid'] ?? false,
         };
       } else {
         return {
@@ -345,6 +410,7 @@ class AuthService {
         };
       }
     } catch (e) {
+      print('Token verification error: ${e.toString()}');
       return {
         'success': false,
         'error': 'Network error during token verification: ${e.toString()}',
@@ -353,7 +419,7 @@ class AuthService {
     }
   }
 
-  // Sign out from both Google and our backend
+  // Sign out from both Google and our backend (updated to handle CSRF)
   Future<Map<String, dynamic>> completeSignOut(String? token) async {
     try {
       // Sign out from Google
@@ -362,12 +428,23 @@ class AuthService {
       // Sign out from our backend if we have a token
       if (token != null) {
         try {
+          // Get CSRF token (optional, only if the server requires it)
+          String? csrfToken = await getCsrfToken();
+
+          final headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Token $token',
+          };
+
+          // Add CSRF token if available
+          if (csrfToken != null) {
+            headers['X-CSRFToken'] = csrfToken;
+          }
+
           await _client.post(
             Uri.parse('${ApiUrls.baseUrl}/accounts/logout/'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Token $token',
-            },
+            headers: headers,
+            body: jsonEncode({'token': token}),
           );
         } catch (e) {
           print('Backend logout error: ${e.toString()}');
@@ -386,6 +463,8 @@ class AuthService {
       };
     }
   }
+
+  // This duplicate verifyToken method was removed as it conflicts with the one defined earlier
 
   Future<Map<String, dynamic>> updateProfileImage(
       String token, Uint8List imageData) async {
@@ -533,6 +612,128 @@ class AuthService {
           'success': false,
           'error':
               responseData['error'] ?? 'Failed to resend verification code',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Request password reset with improved debugging
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      print('📧 Sending password reset request to API for: $email');
+
+      final response = await _client.post(
+        Uri.parse(ApiUrls.forgotPassword),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email}),
+      );
+
+      print('📧 Reset API response status: ${response.statusCode}');
+      print('📧 Reset API response body: ${response.body}');
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        // Check if the email exists flag is included in the response
+        final bool exists = responseData['exists'] ?? false;
+        final bool emailSent = responseData['email_sent'] ?? false;
+
+        print('📧 Email exists: $exists, Email sent: $emailSent');
+
+        return {
+          'success': true,
+          'message':
+              responseData['message'] ?? 'Reset code sent if email exists',
+          'email_sent': emailSent,
+          'exists': exists,
+        };
+      } else {
+        print('📧 Reset API failed with error: ${responseData['error']}');
+        return {
+          'success': false,
+          'error': responseData['error'] ?? 'Failed to send reset code',
+        };
+      }
+    } catch (e) {
+      print('📧 Forgot password network error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Verify reset code with better logging
+  Future<Map<String, dynamic>> verifyResetCode(
+      String email, String code) async {
+    try {
+      print('🔎 Verifying reset code for email: $email');
+
+      final response = await _client.post(
+        Uri.parse(ApiUrls.verifyResetCode),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'code': code,
+        }),
+      );
+
+      print('🔎 Verify code API response status: ${response.statusCode}');
+      print('🔎 Verify code API response body: ${response.body}');
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': responseData['message'] ?? 'Code verified successfully',
+          'reset_token': responseData['reset_token'],
+        };
+      } else {
+        return {
+          'success': false,
+          'error': responseData['error'] ?? 'Invalid or expired code',
+        };
+      }
+    } catch (e) {
+      print('🔎 Verify code error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Reset password with token
+  Future<Map<String, dynamic>> resetPassword(
+      String resetToken, String newPassword) async {
+    try {
+      final response = await _client.post(
+        Uri.parse(ApiUrls.resetPassword),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'reset_token': resetToken,
+          'new_password': newPassword,
+        }),
+      );
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': responseData['message'] ?? 'Password reset successfully',
+          'token': responseData['token'],
+        };
+      } else {
+        return {
+          'success': false,
+          'error': responseData['error'] ?? 'Failed to reset password',
         };
       }
     } catch (e) {

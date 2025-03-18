@@ -152,6 +152,16 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
+# Print email settings for debugging
+print(f"EMAIL_HOST: {EMAIL_HOST}")
+print(f"EMAIL_PORT: {EMAIL_PORT}")
+print(f"EMAIL_USE_TLS: {EMAIL_USE_TLS}")
+print(f"EMAIL_HOST_USER: {EMAIL_HOST_USER}")
+print(f"EMAIL_HOST_PASSWORD: {'*****' if EMAIL_HOST_PASSWORD else 'Not Set'}")
+
+# For testing only - use this to simulate sending emails without actually sending them
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
@@ -194,4 +204,29 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
+]
+
+# CSRF Configuration
+CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Enable JavaScript access for SPA
+CSRF_USE_SESSIONS = False  # Don't use sessions for CSRF
+CSRF_COOKIE_SAMESITE = None  # Allow cross-site requests for mobile app
+
+# CSRF Trusted Origins and Exempt URLs
+CSRF_TRUSTED_ORIGINS = ['http://localhost:*', 'http://127.0.0.1:*', 'http://10.0.2.2:*']
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True  # In production, use specific origins
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]

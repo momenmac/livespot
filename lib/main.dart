@@ -85,6 +85,27 @@ Future<bool> initFirebaseSafely() async {
   return _isFirebaseInitialized;
 }
 
+// Session management for AccountProvider
+class SessionManager {
+  static Future<void> initialize() async {
+    // Monitor app lifecycle to properly handle sessions
+    AppLifecycleListener(
+      onResume: () {
+        // When app resumes, verify token and record activity
+        if (navigatorKey.currentContext != null) {
+          Provider.of<AccountProvider>(
+            navigatorKey.currentContext!,
+            listen: false,
+          ).recordActivity();
+        }
+      },
+      onDetach: () {
+        // App is detached, could save state if needed
+      },
+    );
+  }
+}
+
 Future<void> main() async {
   // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,6 +121,9 @@ Future<void> main() async {
 
   // Reset hero tag registry on app start
   HeroTagRegistry.reset();
+
+  // Initialize session manager
+  await SessionManager.initialize();
 
   // Try to check if we're in debug mode on iOS simulator
   bool shouldSkipFirebase = false;
@@ -126,7 +150,7 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AccountProvider()),
+        ChangeNotifierProvider(create: (_) => AccountProvider()..initialize()),
         // Add firebase status notifier to providers
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
       ],

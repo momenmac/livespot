@@ -8,7 +8,7 @@ from .models import Account, VerificationCode
 from .serializers import AccountSerializer
 import json
 import logging
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 import random
 import string
@@ -335,7 +335,20 @@ class LoginView(APIView):
             if user:
                 login(request, user)
                 token, _ = Token.objects.get_or_create(user=user)
-                response = Response({"message": "Logged in", "token": token.key})
+                
+                # Return user data including verification status
+                response = Response({
+                    "message": "Logged in",
+                    "token": token.key,
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "is_verified": user.is_verified,
+                        "profile_picture_url": user.profile_picture.url if user.profile_picture else None
+                    }
+                })
                 return add_cors_headers(response)
             
             response = Response({"error": "Invalid credentials"}, status=401)
@@ -444,3 +457,336 @@ class ProfileImageView(APIView):
             logger.error(f"Profile image upload error: {str(e)}")
             print(f"Profile image upload error: {str(e)}")
             return add_cors_headers(Response({"error": str(e)}, status=500))
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            
+            logger.info(f"Received password reset request for email: {email}")
+            print(f"Received password reset request for email: {email}")
+            
+            if not email:
+                logger.warning("Missing email in password reset request")
+                return add_cors_headers(Response({"error": "Email is required"}, status=400))
+            
+            # Check if user exists with this email
+            try:
+                user = Account.objects.get(email=email)
+                logger.info(f"Found user for password reset: {email}")
+                print(f"Found user for password reset: {email}")
+                
+                # Generate a verification code
+                verification_code = generate_verification_code()
+                expires_at = datetime.now() + timedelta(minutes=15)
+                
+                # Save code for password reset
+                VerificationCode.objects.filter(user=user).update(is_used=True)  # Mark any existing codes as used
+                reset_code = VerificationCode.objects.create(
+                    user=user,
+                    code=verification_code,
+                    expires_at=expires_at
+                )
+                print(f"Created reset code: {verification_code} for user: {user.email}")
+                
+                # Send verification email
+                subject = 'Password Reset Code'
+                
+                # Plain text version as fallback
+                text_message = f'Hello {user.first_name},\n\nYour password reset code is: {verification_code}\n\nThis code will expire in 15 minutes.\n\nIf you did not request a password reset, please ignore this email.'
+                
+                # HTML version with styling
+                html_message = f'''
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body {{
+                            font-family: Arial, sans-serif;
+                            line-height: 1.6;
+                            color: #202020;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                        .container {{
+                            max-width: 600px;
+                            margin: 0 auto;
+                            padding: 20px;
+                        }}
+                        .header {{
+                            background: linear-gradient(to right, #004CFF, #004CFF, rgba(0, 76, 255, 0.73));
+                            padding: 20px;
+                            text-align: center;
+                            color: white;
+                            border-radius: 5px 5px 0 0;
+                        }}
+                        .content {{
+                            background-color: #F2F5FE;
+                            padding: 30px;
+                            border-radius: 0 0 5px 5px;
+                        }}
+                        .code-container {{
+                            background-color: white;
+                            padding: 15px;
+                            text-align: center;
+                            border-radius: 5px;
+                            margin: 20px 0;
+                            border: 1px solid #d9e4ff;
+                        }}
+                        .code {{
+                            font-size: 32px;
+                            font-weight: bold;
+                            color: #004CFF;
+                            letter-spacing: 5px;
+                        }}
+                        .expiration {{
+                            color: #F34D75;
+                            font-weight: bold;
+                            margin-top: 10px;
+                        }}
+                        .footer {{
+                            margin-top: 20px;
+                            text-align: center;
+                            font-size: 12px;
+                            color: #707070;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2>Password Reset</h2>
+                        </div>
+                        <div class="content">
+                            <p>Hello <strong>{user.first_name}</strong>,</p>
+                            <p>We received a request to reset your password. Please use the code below to reset your password:</p>
+                            <div class="code-container">
+                                <div class="code">{verification_code}</div>
+                            </div>
+                            <p class="expiration">This code will expire in 15 minutes.</p>
+                            <p>If you didn't request a password reset, please ignore this email.</p>
+                        </div>
+                        <div class="footer">
+                            <p>This is an automated message, please do not reply to this email.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                '''
+                
+                email_from = settings.EMAIL_HOST_USER
+                recipient_list = [user.email]
+                
+                # Print email configuration for debugging
+                print(f"Email host: {settings.EMAIL_HOST}")
+                print(f"Email port: {settings.EMAIL_PORT}")
+                print(f"Email host user: {settings.EMAIL_HOST_USER}")
+                print(f"Email using TLS: {settings.EMAIL_USE_TLS}")
+                print(f"Email recipient: {recipient_list}")
+                
+                try:
+                    send_mail(
+                        subject, 
+                        text_message, 
+                        email_from, 
+                        recipient_list, 
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+                    logger.info(f"Password reset email sent to: {user.email}")
+                    print(f"Password reset email sent to: {user.email}")
+                    email_sent = True
+                except Exception as e:
+                    logger.error(f"Failed to send password reset email: {str(e)}")
+                    print(f"Failed to send password reset email: {str(e)}")
+                    email_sent = False
+                
+                # Return success response
+                return add_cors_headers(Response({
+                    "message": "Password reset code sent to your email",
+                    "email_sent": email_sent,
+                    "exists": True  # Add flag to indicate email exists
+                }))
+                
+            except Account.DoesNotExist:
+                # Email doesn't exist in the database
+                logger.warning(f"Password reset requested for non-existent email: {email}")
+                print(f"Password reset requested for non-existent email: {email}")
+                
+                return add_cors_headers(Response({
+                    "message": "If your email is registered, you will receive a password reset code",
+                    "email_sent": False,
+                    "exists": False  # Add flag to indicate email doesn't exist
+                }))
+            
+        except Exception as e:
+            logger.error(f"Forgot password error: {str(e)}")
+            print(f"Forgot password error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+@method_decorator(csrf_exempt, name='dispatch')
+class VerifyResetCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+    
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            code = request.data.get('code')
+            
+            if not email or not code:
+                return add_cors_headers(Response({"error": "Email and code are required"}, status=400))
+            
+            try:
+                user = Account.objects.get(email=email)
+            except Account.DoesNotExist:
+                return add_cors_headers(Response({"error": "Invalid email or code"}, status=400))
+            
+            # Check if verification code exists and is valid
+            code_obj = VerificationCode.objects.filter(
+                user=user,
+                code=code,
+                expires_at__gt=datetime.now(),
+                is_used=False
+            ).first()
+            
+            if not code_obj:
+                return add_cors_headers(Response({"error": "Invalid or expired code"}, status=400))
+            
+            # Generate a temporary token for resetting password
+            reset_token, _ = Token.objects.get_or_create(user=user)
+            
+            return add_cors_headers(Response({
+                "message": "Code verified successfully",
+                "reset_token": reset_token.key
+            }))
+            
+        except Exception as e:
+            logger.error(f"Verify reset code error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+    
+    def post(self, request):
+        try:
+            reset_token = request.data.get('reset_token')
+            new_password = request.data.get('new_password')
+            
+            if not reset_token or not new_password:
+                return add_cors_headers(Response(
+                    {"error": "Reset token and new password are required"}, 
+                    status=400
+                ))
+            
+            try:
+                token = Token.objects.get(key=reset_token)
+                user = token.user
+            except Token.DoesNotExist:
+                return add_cors_headers(Response({"error": "Invalid reset token"}, status=400))
+            
+            # Check if password meets minimum requirements
+            if len(new_password) < 6:
+                return add_cors_headers(Response(
+                    {"error": "Password must be at least 6 characters long"}, 
+                    status=400
+                ))
+            
+            # Update user password
+            user.set_password(new_password)
+            user.save()
+            
+            # Mark all verification codes as used
+            VerificationCode.objects.filter(user=user).update(is_used=True)
+            
+            # Optional: Generate a new token for immediate login
+            token.delete()  # Delete old token
+            new_token, _ = Token.objects.get_or_create(user=user)
+            
+            return add_cors_headers(Response({
+                "message": "Password reset successfully",
+                "token": new_token.key
+            }))
+            
+        except Exception as e:
+            logger.error(f"Reset password error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+@method_decorator(csrf_exempt, name='dispatch')
+class VerifyTokenView(APIView):
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+        
+    def post(self, request):
+        try:
+            token_key = request.data.get('token') or request.META.get('HTTP_AUTHORIZATION', '').replace('Token ', '')
+            
+            if not token_key:
+                return add_cors_headers(Response({"error": "Token is required"}, status=400))
+                
+            try:
+                token = Token.objects.get(key=token_key)
+                user = token.user
+                
+                # Check if token is still valid (e.g., not expired)
+                # You could add token expiration logic here
+                
+                return add_cors_headers(Response({
+                    "valid": True,
+                    "user_id": user.id
+                }))
+            except Token.DoesNotExist:
+                return add_cors_headers(Response({"valid": False}, status=200))
+                
+        except Exception as e:
+            logger.error(f"Token verification error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LogoutView(APIView):
+    def options(self, request, *args, **kwargs):
+        response = Response(status=200)
+        return add_cors_headers(response)
+        
+    def post(self, request):
+        try:
+            token_key = request.data.get('token') or request.META.get('HTTP_AUTHORIZATION', '').replace('Token ', '')
+            
+            if token_key:
+                try:
+                    token = Token.objects.get(key=token_key)
+                    token.delete()
+                    return add_cors_headers(Response({"message": "Successfully logged out"}))
+                except Token.DoesNotExist:
+                    pass  # Token already deleted or invalid
+            
+            # Even if token doesn't exist, we return success to be consistent
+            return add_cors_headers(Response({"message": "Successfully logged out"}))
+            
+        except Exception as e:
+            logger.error(f"Logout error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+# Add a CSRF token endpoint
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class GetCSRFToken(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return add_cors_headers(Response({"message": "CSRF cookie set"}))

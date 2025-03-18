@@ -44,12 +44,24 @@ class AppRoutes {
         },
         resetPassword: (context) {
           final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>;
-          return ResetPasswordScreen(email: args['email']);
+              as Map<String, dynamic>?;
+          if (args == null) {
+            // If no arguments provided, redirect to forgot password screen
+            return const ForgotPasswordScreen();
+          }
+          return ResetPasswordScreen(
+            email: args['email'] ?? '',
+            resetToken: args['resetToken'],
+          );
         },
         camera: (_) => const CameraPage(),
         map: (_) => const MapPage(),
         messages: (_) => const MessagesPage(),
         networkTest: (context) => const NetworkTestPage(),
       };
+
+  // This method should be in the NavigationService class
+  static dynamic extractArguments(BuildContext context) {
+    return ModalRoute.of(context)?.settings.arguments;
+  }
 }

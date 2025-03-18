@@ -1,79 +1,94 @@
 import 'dart:convert';
 
 class Account {
-  final int? id;
+  final int id;
   final String email;
   final String firstName;
   final String lastName;
-  final String? profilePicture;
+  final String? profilePictureUrl;
+  final bool isVerified;
   final String? googleId;
-  String? token;
+  final String? token;
+  final DateTime? createdAt;
+  final DateTime? lastLogin;
 
   Account({
-    this.id,
+    required this.id,
     required this.email,
     required this.firstName,
     required this.lastName,
-    this.profilePicture,
+    this.profilePictureUrl,
+    this.isVerified = false,
     this.googleId,
     this.token,
+    this.createdAt,
+    this.lastLogin,
   });
 
-  // Create a copy of the account with modified fields
-  Account copyWith({
-    int? id,
-    String? email,
-    String? firstName,
-    String? lastName,
-    String? profilePicture,
-    String? googleId,
-    String? token,
-  }) {
-    return Account(
-      id: id ?? this.id,
-      email: email ?? this.email,
-      firstName: firstName ?? this.firstName,
-      lastName: lastName ?? this.lastName,
-      profilePicture: profilePicture ?? this.profilePicture,
-      googleId: googleId ?? this.googleId,
-      token: token ?? this.token,
-    );
-  }
+  String get fullName => '$firstName $lastName';
 
-  // Convert Account object to a Map for JSON serialization
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'email': email,
-      'first_name': firstName,
-      'last_name': lastName,
-      'profile_picture': profilePicture,
-      'google_id': googleId,
-    };
-  }
-
-  // Create Account object from JSON Map
   factory Account.fromJson(Map<String, dynamic> json) {
     return Account(
       id: json['id'],
       email: json['email'],
       firstName: json['first_name'],
       lastName: json['last_name'],
-      profilePicture: json['profile_picture'],
+      profilePictureUrl: json['profile_picture_url'],
+      isVerified: json['is_verified'] ?? false,
       googleId: json['google_id'],
+      token: json['token'],
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : null,
+      lastLogin: json['last_login'] != null
+          ? DateTime.parse(json['last_login'])
+          : null,
     );
   }
 
-  // Create Account from JSON string
-  factory Account.fromJsonString(String jsonString) {
-    return Account.fromJson(json.decode(jsonString));
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'first_name': firstName,
+      'last_name': lastName,
+      'profile_picture_url': profilePictureUrl,
+      'is_verified': isVerified,
+      'google_id': googleId,
+      'token': token,
+      'created_at': createdAt?.toIso8601String(),
+      'last_login': lastLogin?.toIso8601String(),
+    };
   }
-
-  // Get full name (convenience method)
-  String get fullName => '$firstName $lastName';
 
   @override
   String toString() {
-    return 'Account{id: $id, email: $email, firstName: $firstName, lastName: $lastName}';
+    return jsonEncode(toJson());
+  }
+
+  Account copyWith({
+    int? id,
+    String? email,
+    String? firstName,
+    String? lastName,
+    String? profilePictureUrl,
+    bool? isVerified,
+    String? googleId,
+    String? token,
+    DateTime? createdAt,
+    DateTime? lastLogin,
+  }) {
+    return Account(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      isVerified: isVerified ?? this.isVerified,
+      googleId: googleId ?? this.googleId,
+      token: token ?? this.token,
+      createdAt: createdAt ?? this.createdAt,
+      lastLogin: lastLogin ?? this.lastLogin,
+    );
   }
 }

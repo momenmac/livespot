@@ -11,6 +11,8 @@ import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -38,6 +40,8 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   bool _isResendEnabled = false;
   int _resendTimer = 30;
   Timer? _timer;
+  String? _resetToken;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -78,53 +82,177 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     });
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
     // Dismiss keyboard first
     FocusScope.of(context).unfocus();
 
     _textFieldKeys[0].currentState?.triggerValidation();
 
     if (_formKey.currentState!.validate()) {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+
       setState(() {
-        _codeSent = true;
+        _isLoading = true;
       });
 
-      // Start the resend timer
-      _startResendTimer();
+      try {
+        // Request password reset code
+        final Map<String, dynamic> result =
+            await accountProvider.forgotPassword(_emailController.text);
 
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: TextStrings.codeSentTo.replaceAll('%s', _emailController.text),
-      );
+        if (!mounted) return;
+
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (result['success'] == true) {
+          // Check if email exists and if the email was sent
+          final bool emailExists = result['email_exists'] ?? false;
+          final bool emailSent = result['email_sent'] ?? false;
+
+          print(
+              "🔑 Password reset status - Email exists: $emailExists, Email sent: $emailSent");
+
+          if (emailExists && emailSent) {
+            // Email exists and code was sent successfully
+            setState(() {
+              _codeSent = true;
+            });
+
+            // Start the resend timer
+            _startResendTimer();
+
+            ResponsiveSnackBar.showSuccess(
+              context: context,
+              message: TextStrings.codeSentTo
+                  .replaceAll('%s', _emailController.text),
+            );
+          } else if (emailExists && !emailSent) {
+            // Email exists but failed to send code
+            ResponsiveSnackBar.showError(
+              context: context,
+              message:
+                  "Failed to send email. Please try again or contact support.",
+            );
+          } else {
+            // Email doesn't exist - for security, we show a generic message
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message:
+                  "If your email is registered, you'll receive a recovery code shortly.",
+            );
+          }
+        } else {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: accountProvider.error ??
+                "Failed to process request. Please try again.",
+          );
+        }
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        print("🔑 Forgot password error: ${e.toString()}");
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Error sending reset code. Please try again.",
+        );
+      }
     }
   }
 
-  void _handleResendCode() {
+  void _handleResendCode() async {
     if (!_isResendEnabled) return;
 
-    // TODO: Actual code resend logic here
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
 
-    // Reset the timer
-    _startResendTimer();
+    setState(() {
+      _isLoading = true;
+    });
 
-    ResponsiveSnackBar.showInfo(
-      context: context,
-      message: TextStrings.verificationCodeResent,
-    );
+    try {
+      final Map<String, dynamic> result =
+          await accountProvider.forgotPassword(_emailController.text);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // Reset the timer
+        _startResendTimer();
+
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: TextStrings.verificationCodeResent,
+        );
+      } else {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: accountProvider.error ?? "Failed to resend reset code",
+        );
+      }
+    } catch (e) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error: ${e.toString()}",
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  void _handleCodeVerification(String code) {
-    if (code == "123456") {
-      NavigationService().replaceTo(
-        AppRoutes.resetPassword,
-        arguments: {'email': _emailController.text},
-      );
-    } else {
+  void _handleCodeVerification(String code) async {
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result =
+          await accountProvider.verifyResetCode(_emailController.text, code);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _resetToken = result['reset_token'];
+
+        // Navigate to reset password screen
+        NavigationService().replaceTo(
+          AppRoutes.resetPassword,
+          arguments: {
+            'email': _emailController.text,
+            'resetToken': _resetToken,
+          },
+        );
+      } else {
+        _verificationKey.currentState?.clearFields();
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: accountProvider.error ?? TextStrings.invalidVerificationCode,
+        );
+      }
+    } catch (e) {
       _verificationKey.currentState?.clearFields();
       ResponsiveSnackBar.showError(
         context: context,
-        message: TextStrings.invalidVerificationCode,
+        message: "Error: ${e.toString()}",
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -140,6 +268,8 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
+    final accountProvider = Provider.of<AccountProvider>(context);
+    final bool isLoading = _isLoading || accountProvider.isLoading;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return GestureDetector(
@@ -233,8 +363,11 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                     ),
                                     SizedBox(height: 24),
                                     AnimatedButton(
-                                      onPressed: _handleSubmit,
-                                      text: TextStrings.sendCode,
+                                      onPressed:
+                                          isLoading ? null : _handleSubmit,
+                                      text: isLoading
+                                          ? 'Sending...'
+                                          : TextStrings.sendCode,
                                     ),
                                   ] else ...[
                                     VerificationCodeField(

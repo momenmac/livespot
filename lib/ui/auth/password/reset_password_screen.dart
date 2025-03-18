@@ -9,11 +9,18 @@ import 'package:flutter_application_2/services/utils/validation_helper.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
+  final String? resetToken;
 
-  const ResetPasswordScreen({super.key, required this.email});
+  const ResetPasswordScreen({
+    super.key,
+    required this.email,
+    this.resetToken,
+  });
 
   @override
   ResetPasswordScreenState createState() => ResetPasswordScreenState();
@@ -26,6 +33,7 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
 
   final List<GlobalKey<CustomTextFieldState>> _textFieldKeys = [
     GlobalKey<CustomTextFieldState>(),
@@ -41,6 +49,20 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
+
+    // Check if we have a valid reset token
+    if (widget.resetToken == null || widget.resetToken!.isEmpty) {
+      // Schedule navigation after build completes
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Missing reset token. Please request a new password reset.",
+        );
+
+        // Navigate back to forgot password screen
+        NavigationService().replaceTo(AppRoutes.forgotPassword);
+      });
+    }
   }
 
   @override
@@ -51,17 +73,78 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
     super.dispose();
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
     for (var key in _textFieldKeys) {
       key.currentState?.triggerValidation();
     }
 
     if (_formKey.currentState!.validate()) {
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: TextStrings.passwordUpdateSuccess,
-      );
-      NavigationService().replaceUntilHome(AppRoutes.login);
+      if (widget.resetToken == null || widget.resetToken!.isEmpty) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Reset token is missing. Please try again.",
+        );
+        return;
+      }
+
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      print(
+          "🔑 Attempting password reset with token: ${widget.resetToken!.substring(0, 5)}...");
+
+      try {
+        // Reset password using token
+        final success = await accountProvider.resetPassword(
+          widget.resetToken!,
+          _passwordController.text,
+        );
+
+        if (!mounted) return;
+
+        if (success) {
+          print("🔑 Password reset successful");
+          ResponsiveSnackBar.showSuccess(
+            context: context,
+            message: TextStrings.passwordUpdateSuccess,
+          );
+
+          // Delay to show success message
+          await Future.delayed(Duration(seconds: 1));
+
+          if (!mounted) return;
+
+          // If user was logged in automatically, go to home
+          // Otherwise go to login
+          if (accountProvider.isAuthenticated) {
+            NavigationService().replaceAllWith(AppRoutes.home);
+          } else {
+            NavigationService().replaceUntilHome(AppRoutes.login);
+          }
+        } else {
+          print("🔑 Password reset failed: ${accountProvider.error}");
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: accountProvider.error ?? "Failed to reset password",
+          );
+        }
+      } catch (e) {
+        print("🔑 Password reset error: ${e.toString()}");
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Error: ${e.toString()}",
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
@@ -75,6 +158,9 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
+    final accountProvider = Provider.of<AccountProvider>(context);
+    final bool isLoading = _isLoading || accountProvider.isLoading;
+
     return Scaffold(
       body: OrientationBuilder(
         builder: (context, orientation) {
@@ -143,8 +229,10 @@ class ResetPasswordScreenState extends State<ResetPasswordScreen>
                               ),
                               SizedBox(height: 37),
                               AnimatedButton(
-                                onPressed: _handleSubmit,
-                                text: TextStrings.updatePassword,
+                                onPressed: isLoading ? null : _handleSubmit,
+                                text: isLoading
+                                    ? 'Please wait...'
+                                    : TextStrings.updatePassword,
                               ),
                               SizedBox(height: 24),
                               TextButton(

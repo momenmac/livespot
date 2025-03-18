@@ -8,6 +8,10 @@ import 'package:flutter_application_2/ui/widgets/responsive_container.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,17 +28,12 @@ class LoginScreenState extends State<LoginScreen>
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  // Temporary credentials for testing
-  final String _tempEmail = 'test';
-  final String _tempPassword = '123';
+  bool _rememberMe = false;
 
   final List<GlobalKey<CustomTextFieldState>> _textFieldKeys = [
     GlobalKey<CustomTextFieldState>(),
     GlobalKey<CustomTextFieldState>(),
   ];
-
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -45,6 +44,27 @@ class LoginScreenState extends State<LoginScreen>
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
+    _loadSavedEmail();
+
+    // Record activity when screen loads to maintain session
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AccountProvider>(context, listen: false).recordActivity();
+    });
+  }
+
+  // Load saved email if remember me was selected
+  Future<void> _loadSavedEmail() async {
+    // This would be implemented with SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email');
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+
+    if (savedEmail != null && rememberMe) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _rememberMe = rememberMe;
+      });
+    }
   }
 
   @override
@@ -56,11 +76,9 @@ class LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleDonePressed() async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    if (accountProvider.isLoading) return;
 
     try {
       for (var key in _textFieldKeys) {
@@ -68,41 +86,72 @@ class LoginScreenState extends State<LoginScreen>
       }
 
       if (_formKey.currentState!.validate()) {
-        // TODO: Replace temporary credentials with actual backend authentication
-        // TODO: Implement proper JWT/token storage after successful login
-        // TODO: Add proper error handling for network issues
-        if (_emailController.text == _tempEmail &&
-            _passwordController.text == _tempPassword) {
-          if (!mounted) return;
+        final email = _emailController.text.trim();
+        final password = _passwordController.text;
 
-          ResponsiveSnackBar.showSuccess(
-            context: context,
-            message: TextStrings.loginSucessful,
-            duration: const Duration(seconds: 1),
-          );
+        // Store email if remember me is checked
+        if (_rememberMe) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_email', email);
+        }
 
-          // Add a small delay before navigation
-          await Future.delayed(Duration(milliseconds: 1500));
+        final result = await accountProvider.login(
+          email: email,
+          password: password,
+          rememberMe: _rememberMe,
+        );
 
-          if (!mounted) return;
+        if (!mounted) return;
 
-          // Update navigation to keep only GetStarted screen in stack
-          NavigationService().replaceAllWith(AppRoutes.home);
+        if (result) {
+          // Check if the user is verified
+          if (accountProvider.isUserVerified) {
+            // User is verified, show success message and navigate to home
+            ResponsiveSnackBar.showSuccess(
+              context: context,
+              message: TextStrings.loginSucessful,
+              duration: const Duration(seconds: 1),
+            );
+
+            await Future.delayed(Duration(milliseconds: 500));
+            if (!mounted) return;
+            NavigationService().replaceAllWith(AppRoutes.home);
+          } else {
+            // User is NOT verified, show verification needed message and navigate to verification screen
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message: "Please verify your email to continue",
+              duration: const Duration(seconds: 2),
+            );
+
+            await Future.delayed(Duration(milliseconds: 500));
+            if (!mounted) return;
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VerifyEmailScreen(
+                  email: email,
+                  censorEmail: false, // Don't censor on login flow
+                ),
+              ),
+            );
+          }
         } else {
           if (!mounted) return;
 
           ResponsiveSnackBar.showError(
             context: context,
-            message: TextStrings.invalidCredentials,
+            message: accountProvider.error ?? TextStrings.invalidCredentials,
           );
         }
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    } catch (e) {
+      if (!mounted) return;
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error: ${e.toString()}",
+      );
     }
   }
 
@@ -126,6 +175,9 @@ class LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final accountProvider = Provider.of<AccountProvider>(context);
+    final bool isLoading = accountProvider.isLoading;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: OrientationBuilder(
@@ -212,30 +264,49 @@ class LoginScreenState extends State<LoginScreen>
                                 obscureText: true,
                                 validator: _validatePassword,
                               ),
-                              Center(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: 400,
-                                    minWidth: 400,
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: () => NavigationService()
-                                          .navigateTo(AppRoutes.forgotPassword),
+                              SizedBox(height: 8),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: 400,
+                                  minWidth: 400,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Checkbox(
+                                          value: _rememberMe,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _rememberMe = value ?? false;
+                                            });
+                                          },
+                                        ),
+                                        Text('Remember me'),
+                                      ],
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          AppRoutes.forgotPassword,
+                                        );
+                                      },
                                       child: Text(TextStrings.forgotPassword),
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: 10),
                               AnimatedButton(
-                                onPressed: _isLoading
+                                onPressed: isLoading
                                     ? () {}
                                     : () {
                                         _handleDonePressed();
                                       },
-                                text: _isLoading
+                                text: isLoading
                                     ? 'Please wait...'
                                     : TextStrings.done,
                               ),

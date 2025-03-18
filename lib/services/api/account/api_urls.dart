@@ -23,8 +23,11 @@ class ApiUrls {
   static String get login => '$baseUrl/accounts/login/';
   static String get googleLogin => '$baseUrl/accounts/google-login/';
   static String get profile => '$baseUrl/accounts/profile/';
+
+  // Token management
   static String get verifyToken => '$baseUrl/accounts/verify-token/';
   static String get logout => '$baseUrl/accounts/logout/';
+  static String get csrfToken => '$baseUrl/accounts/csrf-token/';
 
   // Profile image upload - updated paths based on server configuration
   static String get profileImage => '$baseUrl/accounts/profile-image/';
@@ -35,4 +38,9 @@ class ApiUrls {
   static String get verifyEmail => '$baseUrl/accounts/verify-email/';
   static String get resendVerificationCode =>
       '$baseUrl/accounts/resend-verification-code/';
+
+  // Password reset endpoints
+  static String get forgotPassword => '$baseUrl/accounts/forgot-password/';
+  static String get verifyResetCode => '$baseUrl/accounts/verify-reset-code/';
+  static String get resetPassword => '$baseUrl/accounts/reset-password/';
 }

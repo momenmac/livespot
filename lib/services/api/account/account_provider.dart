@@ -20,7 +20,7 @@ class AccountProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _token != null;
 
-  // Initialize provider and check for existing token
+  // Initialize provider with session management
   Future<void> initialize() async {
     _isLoading = true;
     notifyListeners();
@@ -30,9 +30,41 @@ class AccountProvider extends ChangeNotifier {
       _token = prefs.getString('auth_token');
 
       if (_token != null) {
-        await _fetchUserProfile();
+        print('💼 Found existing token, checking session validity...');
+        // First check if token is still valid
+        final tokenValid = await verifyToken();
+
+        if (tokenValid) {
+          print('💼 Token is valid, fetching user profile...');
+          await _fetchUserProfile();
+
+          // Check session timeout settings
+          final rememberMe = prefs.getBool('remember_me') ?? false;
+          if (!rememberMe) {
+            // Check if session has expired
+            final lastActivity = prefs.getString('last_activity');
+            if (lastActivity != null) {
+              final lastActivityTime = DateTime.parse(lastActivity);
+              final currentTime = DateTime.now();
+              // Session timeout after 24 hours if not "remember me"
+              if (currentTime.difference(lastActivityTime).inHours > 24) {
+                print('💼 Session expired, logging out...');
+                await logout();
+                return;
+              }
+            }
+
+            // Update last activity time
+            await prefs.setString(
+                'last_activity', DateTime.now().toIso8601String());
+          }
+        } else {
+          print('💼 Token is invalid, clearing session...');
+          await _clearSession();
+        }
       }
     } catch (e) {
+      print('💼 Error during initialization: ${e.toString()}');
       _error = 'Failed to initialize: ${e.toString()}';
     } finally {
       _isLoading = false;
@@ -263,10 +295,11 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
-  // Login with email and password
+  // Login with email and password with session management
   Future<bool> login({
     required String email,
     required String password,
+    bool rememberMe = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -280,18 +313,34 @@ class AccountProvider extends ChangeNotifier {
 
       if (result['success']) {
         _token = result['token'];
-        // Save token to persistent storage
+
+        // If user object is included in the response, use it
+        if (result['user'] != null) {
+          _currentUser = result['user'] as Account;
+          print('👤 User verification status: ${_currentUser?.isVerified}');
+        }
+
+        // Save token and session state to persistent storage
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _token!);
+        await prefs.setBool('remember_me', rememberMe);
+        await prefs.setString(
+            'last_activity', DateTime.now().toIso8601String());
 
-        // Fetch user profile
-        await _fetchUserProfile();
+        // Fetch user profile if needed
+        if (_currentUser == null) {
+          await _fetchUserProfile();
+          print(
+              '👤 Fetched user verification status: ${_currentUser?.isVerified}');
+        }
+
         return true;
       } else {
         _error = result['error'];
         return false;
       }
     } catch (e) {
+      print('🔑 Login error: ${e.toString()}');
       _error = 'Login failed: ${e.toString()}';
       return false;
     } finally {
@@ -299,6 +348,9 @@ class AccountProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // Helper getter to check if the current user is verified
+  bool get isUserVerified => _currentUser?.isVerified ?? false;
 
   // Google login/signup
   Future<bool> googleLogin({
@@ -374,7 +426,7 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
-  // Enhanced logout to handle both Google and backend logout
+  // Enhanced logout to handle both Google and backend logout with session cleanup
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
@@ -383,13 +435,8 @@ class AccountProvider extends ChangeNotifier {
       // Complete logout from both Google and backend
       await _authService.completeSignOut(_token);
 
-      _currentUser = null;
-      _token = null;
-      _error = null;
-
-      // Clear token from persistent storage
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
+      // Clear all session data
+      await _clearSession();
     } catch (e) {
       _error = 'Logout failed: ${e.toString()}';
     } finally {
@@ -500,6 +547,122 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
+  // Request password reset with better error handling
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      print('🔐 Sending password reset request for: $email');
+      final result = await _authService.forgotPassword(email);
+
+      if (result['success']) {
+        print('🔐 Reset code request processed');
+
+        // Extract additional information
+        final bool emailExists = result['exists'] ?? false;
+        final bool emailSent = result['email_sent'] ?? false;
+
+        return {
+          'success': true,
+          'message': result['message'],
+          'email_exists': emailExists,
+          'email_sent': emailSent,
+        };
+      } else {
+        _error = result['error'];
+        print('🔐 Reset code error: $_error');
+        return {
+          'success': false,
+          'error': _error,
+        };
+      }
+    } catch (e) {
+      _error = 'Failed to request password reset: ${e.toString()}';
+      print('🔐 Reset code exception: $_error');
+      return {
+        'success': false,
+        'error': _error,
+      };
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Verify reset code with improved logging
+  Future<Map<String, dynamic>> verifyResetCode(
+      String email, String code) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      print('🔐 Verifying reset code for: $email');
+      final result = await _authService.verifyResetCode(email, code);
+
+      if (result['success']) {
+        print('🔐 Code verification successful');
+        return {
+          'success': true,
+          'reset_token': result['reset_token'],
+        };
+      } else {
+        _error = result['error'];
+        print('🔐 Code verification error: $_error');
+        return {
+          'success': false,
+        };
+      }
+    } catch (e) {
+      _error = 'Failed to verify reset code: ${e.toString()}';
+      print('🔐 Code verification exception: $_error');
+      return {
+        'success': false,
+      };
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Reset password with token
+  Future<bool> resetPassword(String resetToken, String newPassword) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.resetPassword(resetToken, newPassword);
+
+      if (result['success']) {
+        // If login token is provided, use it
+        if (result['token'] != null) {
+          _token = result['token'];
+
+          // Save token to persistent storage
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('auth_token', _token!);
+
+          // Fetch user profile
+          await _fetchUserProfile();
+        }
+
+        return true;
+      } else {
+        _error = result['error'];
+        return false;
+      }
+    } catch (e) {
+      _error = 'Failed to reset password: ${e.toString()}';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   // Helper method to extract error message from response
   String _extractErrorMessage(http.Response response) {
     try {
@@ -512,6 +675,43 @@ class AccountProvider extends ChangeNotifier {
       return 'Registration failed with status code: ${response.statusCode}';
     } catch (e) {
       return 'Registration failed with status code: ${response.statusCode}';
+    }
+  }
+
+  // Clear session if remember me is not enabled
+  Future<void> clearSessionIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+
+    if (!rememberMe) {
+      await prefs.remove('auth_token');
+      _token = null;
+      _currentUser = null;
+      notifyListeners();
+    }
+  }
+
+  // Helper method to clear all session data
+  Future<void> _clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('remember_me');
+    await prefs.remove('last_activity');
+    _token = null;
+    _currentUser = null;
+  }
+
+  // Record user activity to maintain session
+  Future<void> recordActivity() async {
+    if (_token != null) {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberMe = prefs.getBool('remember_me') ?? false;
+
+      if (!rememberMe) {
+        // Only update activity time for session-based logins
+        await prefs.setString(
+            'last_activity', DateTime.now().toIso8601String());
+      }
     }
   }
 }
