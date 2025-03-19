@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
@@ -9,7 +10,7 @@ import 'package:intl/intl.dart';
 import 'notification_filter.dart';
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
+  const NotificationsPage({Key? key}) : super(key: key);
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -183,38 +184,90 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 textAlign: TextAlign.left, // Changed from center to left
               ),
             ),
-            ...notificationsForDate.map((notification) => Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  color: isDark
-                      ? ThemeConstants.darkCardColor
-                      : ThemeConstants.greyLight,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Icon(
-                          notification.icon,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            notification.message,
-                            style: isDark
-                                ? TNotificationTheme.notificationTextStyleDark
-                                : TNotificationTheme.notificationTextStyleLight,
+            ...notificationsForDate
+                .map((notification) => Card(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      color: notification.isRead
+                          ? (isDark
+                              ? ThemeConstants.darkCardColor
+                              : ThemeConstants.greyLight)
+                          : (isDark
+                              // ignore: deprecated_member_use
+                              ? Colors.blue.withOpacity(0.2)
+                              // ignore: deprecated_member_use
+                              : Colors.blue.withOpacity(0.1)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: notification.isRead
+                            ? BorderSide.none
+                            : const BorderSide(color: Colors.blue, width: 1),
+                      ),
+                      elevation: 0,
+                      child: InkWell(
+                        onTap: () => _markAsRead(notification),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Stack(
+                                children: [
+                                  Icon(
+                                    notification.icon,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.black54,
+                                    size: 24,
+                                  ),
+                                  if (!notification.isRead)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.blue,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      notification.message,
+                                      style: isDark
+                                          ? TNotificationTheme
+                                              .notificationTextStyleDark
+                                          : TNotificationTheme
+                                              .notificationTextStyleLight,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _getRelativeTime(notification.dateTime),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black45,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                )),
+                      ),
+                    ))
+                .toList(),
           ],
         );
       },
