@@ -36,29 +36,30 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
-    projectId: 'livespot-b1eb4',
-    authDomain: 'livespot-b1eb4.firebaseapp.com',
-    storageBucket: 'livespot-b1eb4.appspot.com',
-  );
+      apiKey: "AIzaSyBX9NWqWe-gn51e-Hh69617rBUXK9Q38Bs",
+      authDomain: "livespot-b1eb4.firebaseapp.com",
+      projectId: "livespot-b1eb4",
+      storageBucket: "livespot-b1eb4.firebasestorage.app",
+      messagingSenderId: "813529293309",
+      appId: "1:813529293309:web:46f5d27446a52292583994",
+      measurementId: "G-TR331VFEQ6");
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
+    apiKey: 'AIzaSyAqJRKJ3mFY0C7onZdDzW1pX-SYB4ts-rA',
+    appId: '1:813529293309:android:ad33ed367ab91367583994',
+    messagingSenderId: '813529293309',
     projectId: 'livespot-b1eb4',
-    storageBucket: 'livespot-b1eb4.appspot.com',
+    storageBucket: 'livespot-b1eb4.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-MESSAGING-SENDER-ID',
+    apiKey: 'AIzaSyCw4B7orLCy8Fmdwym3O-jScIs_bUG9UUE',
+    appId: '1:813529293309:ios:761f2bdd7d94011a583994',
+    messagingSenderId: '813529293309',
     projectId: 'livespot-b1eb4',
-    storageBucket: 'livespot-b1eb4.appspot.com',
-    iosClientId: 'YOUR-IOS-CLIENT-ID',
-    iosBundleId: 'YOUR-IOS-BUNDLE-ID',
+    storageBucket: 'livespot-b1eb4.firebasestorage.app',
+    iosClientId:
+        '813529293309-e6au6bm35phan94i7l5uhf9d8h4a3ka6.apps.googleusercontent.com',
+    iosBundleId: 'com.example.flutterApplication2',
   );
 }

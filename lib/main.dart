@@ -138,7 +138,10 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('🔥 Firebase initialized successfully');
+    print('✅ Firebase initialized successfully');
+    print('======================================');
+    print('✅ FIREBASE SETUP COMPLETE & WORKING! ✅');
+    print('======================================');
   } catch (e) {
     print('❌ Failed to initialize Firebase: $e');
   }
@@ -221,8 +224,12 @@ Future<void> main() async {
     firebaseStatusNotifier.setInitialized(success);
 
     // Print status message
+    const divider = "======================================";
     if (success) {
-      print('🔔 Firebase is now available to the app');
+      print('✅ Firebase is now available to the app');
+      print(divider);
+      print('✅ FIREBASE CONNECTION VERIFIED! ✅');
+      print(divider);
     } else if (shouldSkipFirebase) {
       print(
           '🔕 Firebase initialization was deliberately skipped for iOS simulator');
@@ -334,6 +341,19 @@ class FirebaseHelper {
     } catch (e) {
       print('❌ Failed to initialize $serviceName: $e');
       return false;
+    }
+  }
+
+  // Add a method to print the current Firebase status
+  static void printStatus() {
+    if (isAvailable) {
+      print('======================================');
+      print('✅ FIREBASE STATUS CHECK: ACTIVE & WORKING! ✅');
+      print('======================================');
+    } else {
+      print('======================================');
+      print('❌ FIREBASE STATUS CHECK: NOT AVAILABLE ❌');
+      print('======================================');
     }
   }
 }

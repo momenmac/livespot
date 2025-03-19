@@ -69,5 +69,28 @@
   </head>
   <body>
     <script src="flutter_bootstrap.js" async></script>
+
+    <script>
+      // Your web app's Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyBX9NWqWe-gn51e-Hh69617rBUXK9Q38Bs",
+        authDomain: "livespot-b1eb4.firebaseapp.com",
+        projectId: "livespot-b1eb4",
+        storageBucket: "livespot-b1eb4.firebasestorage.app",
+        messagingSenderId: "813529293309",
+        appId: "1:813529293309:web:46f5d27446a52292583994",
+        measurementId: "G-TR331VFEQ6",
+      };
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+
+      // Replace the deprecated serviceWorkerVersion variable usage on line 74
+      // OLD: serviceWorkerVersion = null;
+      // Use the Flutter template token instead:
+      window.flutterConfiguration = {
+        serviceWorkerVersion: "{{flutter_service_worker_version}}",
+      };
+    </script>
+    <script src="main.dart.js" type="application/javascript"></script>
   </body>
 </html>
