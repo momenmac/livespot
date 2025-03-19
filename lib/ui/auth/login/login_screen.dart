@@ -11,7 +11,7 @@ import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_2/data/shared_prefs.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,14 +52,12 @@ class LoginScreenState extends State<LoginScreen>
     });
   }
 
-  // Load saved email if remember me was selected
+  // Load saved email if available
   Future<void> _loadSavedEmail() async {
-    // This would be implemented with SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final savedEmail = prefs.getString('saved_email');
-    final rememberMe = prefs.getBool('remember_me') ?? false;
+    final savedEmail = await SharedPrefs.getLastUsedEmail();
+    final rememberMe = await SharedPrefs.getRememberMe();
 
-    if (savedEmail != null && rememberMe) {
+    if (savedEmail != null) {
       setState(() {
         _emailController.text = savedEmail;
         _rememberMe = rememberMe;
@@ -89,11 +87,8 @@ class LoginScreenState extends State<LoginScreen>
         final email = _emailController.text.trim();
         final password = _passwordController.text;
 
-        // Store email if remember me is checked
-        if (_rememberMe) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('saved_email', email);
-        }
+        // Store email for future convenience
+        await SharedPrefs.setLastUsedEmail(email);
 
         final result = await accountProvider.login(
           email: email,

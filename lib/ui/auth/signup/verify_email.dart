@@ -125,6 +125,10 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     try {
       final accountProvider =
           Provider.of<AccountProvider>(context, listen: false);
+
+      // First make sure the token is not expired
+      await accountProvider.verifyAndRefreshTokenIfNeeded();
+
       final result = await accountProvider.verifyEmail(code);
 
       if (result) {

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 import os
 import uuid
+from rest_framework_simplejwt.tokens import RefreshToken
 
 def user_profile_path(instance, filename):
     # Get the file extension
@@ -62,6 +63,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
     @property
     def is_staff(self):
         return self.is_admin
+
+    def get_tokens(self):
+        """Generate JWT tokens for the user"""
+        refresh = RefreshToken.for_user(self)
+        return {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
 
 class VerificationCode(models.Model):
     user = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='verification_codes')

@@ -10,7 +10,6 @@ class Account {
   final String? profilePictureUrl;
   final bool isVerified;
   final String? googleId;
-  final String? token;
   final DateTime? createdAt;
   final DateTime? lastLogin;
 
@@ -22,7 +21,6 @@ class Account {
     this.profilePictureUrl,
     this.isVerified = false,
     this.googleId,
-    this.token,
     this.createdAt,
     this.lastLogin,
   });
@@ -49,7 +47,6 @@ class Account {
       profilePictureUrl: profilePictureUrl,
       isVerified: json['is_verified'] ?? false,
       googleId: json['google_id'],
-      token: json['token'],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
@@ -68,7 +65,6 @@ class Account {
       'profile_picture_url': profilePictureUrl,
       'is_verified': isVerified,
       'google_id': googleId,
-      'token': token,
       'created_at': createdAt?.toIso8601String(),
       'last_login': lastLogin?.toIso8601String(),
     };
@@ -87,7 +83,6 @@ class Account {
     String? profilePictureUrl,
     bool? isVerified,
     String? googleId,
-    String? token,
     DateTime? createdAt,
     DateTime? lastLogin,
   }) {
@@ -99,7 +94,6 @@ class Account {
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
       isVerified: isVerified ?? this.isVerified,
       googleId: googleId ?? this.googleId,
-      token: token ?? this.token,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
     );

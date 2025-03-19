@@ -24,15 +24,18 @@ class ApiUrls {
   static String get googleLogin => '$baseUrl/accounts/google-login/';
   static String get profile => '$baseUrl/accounts/profile/';
 
-  // Token management
-  static String get verifyToken => '$baseUrl/accounts/verify-token/';
+  // Token management for JWT - remove CSRF endpoint
+  static String get tokenRefresh => '$baseUrl/accounts/token/refresh/';
+  static String get verifyToken => '$baseUrl/accounts/token/verify/';
   static String get logout => '$baseUrl/accounts/logout/';
-  static String get csrfToken => '$baseUrl/accounts/csrf-token/';
 
   // Profile image upload - updated paths based on server configuration
   static String get profileImage => '$baseUrl/accounts/profile-image/';
   static String get updateProfile => '$baseUrl/accounts/update-profile/';
-  static String get getCsrfToken => '$baseUrl/get-csrf-token/';
+
+  // Remove CSRF-related endpoints
+  // static String get csrfToken => '$baseUrl/accounts/csrf-token/';
+  // static String get getCsrfToken => '$baseUrl/get-csrf-token/';
 
   // Email verification URLs
   static String get verifyEmail => '$baseUrl/accounts/verify-email/';

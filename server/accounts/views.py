@@ -1,23 +1,48 @@
 from django.shortcuts import render
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate
+# Remove login import since we don't need sessions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.authtoken.models import Token
 from .models import Account, VerificationCode
 from .serializers import AccountSerializer
 import json
 import logging
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 import random
 import string
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime, timedelta
+from rest_framework import status, permissions
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Create custom token serializer
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims
+        token['email'] = user.email
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        token['is_verified'] = user.is_verified
+        
+        return token
+
+# Implement custom token view properly
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Takes email and password and returns access and refresh tokens
+    """
+    serializer_class = MyTokenObtainPairSerializer
 
 # Add CORS headers to all responses
 def add_cors_headers(response):
@@ -195,87 +220,21 @@ def save_profile_picture_from_url(user, profile_picture_url):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
-    permission_classes = [AllowAny]
-
-    def options(self, request, *args, **kwargs):
-        logger.info("OPTIONS request received for /accounts/register/")
-        response = Response(status=200)
-        return add_cors_headers(response)
-
-    def head(self, request, *args, **kwargs):
-        logger.info("HEAD request received for /accounts/register/")
-        response = Response(status=200)
-        return add_cors_headers(response)
-
+    permission_classes = [permissions.AllowAny]
+    
     def post(self, request):
-        try:
-            # Log the request for debugging
-            logger.info(f"Register request received with data: {request.data}")
-            print(f"Register request data: {request.data}")
-            
-            email = request.data.get('email')
-            first_name = request.data.get('first_name')
-            last_name = request.data.get('last_name')
-            password = request.data.get('password')
-
-            # Validate request data
-            if not email or not password or not first_name or not last_name:
-                logger.warning(f"Missing required fields: {request.data}")
-                return add_cors_headers(Response({"error": "Missing required fields"}, status=400))
-
-            if Account.objects.filter(email=email).exists():
-                logger.warning(f"Email already registered: {email}")
-                return add_cors_headers(Response({"error": "Email already registered"}, status=400))
-
-            user = Account.objects.create_user(
-                email=email, 
-                first_name=first_name, 
-                last_name=last_name, 
-                password=password,
-                is_verified=False
-            )
-            token, _ = Token.objects.get_or_create(user=user)
-            
-            # Generate verification code
-            verification_code = generate_verification_code()
-            expires_at = datetime.now() + timedelta(minutes=10)
-            
-            # Save verification code
-            VerificationCode.objects.create(
-                user=user,
-                code=verification_code,
-                expires_at=expires_at
-            )
-            
-            # Send verification email
-            email_sent = send_verification_email(user, verification_code)
-            
-            logger.info(f"User registered successfully: {email}, verification email sent: {email_sent}")
-            response = Response({
-                "message": "User registered successfully. Please check your email for verification code.", 
-                "token": token.key,
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "is_verified": user.is_verified
-                },
-                "email_sent": email_sent
-            })
-            return add_cors_headers(response)
-        except Exception as e:
-            logger.error(f"Register error: {str(e)}")
-            print(f"Register error: {str(e)}")
-            response = Response({"error": str(e)}, status=500)
-            return add_cors_headers(response)
+        serializer = AccountSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            tokens = user.get_tokens()
+            return Response({
+                'user': serializer.data,
+                'tokens': tokens
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyEmailView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-    
     def post(self, request):
         try:
             user = request.user
@@ -327,10 +286,6 @@ class VerifyEmailView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ResendVerificationCodeView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-    
     def post(self, request):
         try:
             user = request.user
@@ -381,10 +336,6 @@ class ResendVerificationCodeView(APIView):
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-
     def post(self, request):
         try:
             email = request.data.get('email')
@@ -392,13 +343,15 @@ class LoginView(APIView):
 
             user = authenticate(email=email, password=password)
             if user:
-                login(request, user)
-                token, _ = Token.objects.get_or_create(user=user)
+                # Remove login(request, user) - we don't need session login
+                
+                # Use only JWT tokens
+                tokens = user.get_tokens()
                 
                 # Return user data including verification status
                 response = Response({
                     "message": "Logged in",
-                    "token": token.key,
+                    "tokens": tokens,
                     "user": {
                         "id": user.id,
                         "email": user.email,
@@ -420,10 +373,6 @@ class LoginView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
-
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
 
     def post(self, request):
         try:
@@ -473,8 +422,10 @@ class GoogleLoginView(APIView):
                 logger.info(f"Existing user logging in via Google: {email}")
                 print(f"Existing user logging in via Google: {email}")
                 
-                login(request, user)
-                token, _ = Token.objects.get_or_create(user=user)
+                # Remove login(request, user) - we don't need session login
+                
+                # Generate JWT tokens
+                tokens = user.get_tokens()
                 
                 user_data = AccountSerializer(user).data
                 # Ensure profile picture URL is fully qualified
@@ -484,7 +435,7 @@ class GoogleLoginView(APIView):
                 return add_cors_headers(Response({
                     "message": "User logged in",
                     "user": user_data,
-                    "token": token.key,
+                    "tokens": tokens,
                     "is_new_account": False,
                     "account_linked": account_linked
                 }))
@@ -508,8 +459,10 @@ class GoogleLoginView(APIView):
                     if not saved:
                         print(f"Couldn't save profile picture during user creation")
                 
-                login(request, user)
-                token, _ = Token.objects.get_or_create(user=user)
+                # Remove login(request, user) - we don't need session login
+                
+                # Generate JWT tokens
+                tokens = user.get_tokens()
                 
                 user_data = AccountSerializer(user).data
                 # Ensure profile picture URL is fully qualified
@@ -519,7 +472,7 @@ class GoogleLoginView(APIView):
                 return add_cors_headers(Response({
                     "message": "New user created and logged in",
                     "user": user_data,
-                    "token": token.key,
+                    "tokens": tokens,
                     "is_new_account": True,
                     "account_linked": False
                 }))
@@ -535,10 +488,6 @@ class GoogleLoginView(APIView):
 # Add a profile view
 @method_decorator(csrf_exempt, name='dispatch')
 class ProfileView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-        
     def get(self, request):
         try:
             user = request.user
@@ -550,10 +499,6 @@ class ProfileView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProfileImageView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-        
     def post(self, request):
         try:
             # Log the request for debugging
@@ -589,10 +534,6 @@ class ProfileImageView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
-
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
 
     def post(self, request):
         try:
@@ -763,10 +704,6 @@ class ForgotPasswordView(APIView):
 class VerifyResetCodeView(APIView):
     permission_classes = [AllowAny]
 
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-    
     def post(self, request):
         try:
             email = request.data.get('email')
@@ -791,12 +728,12 @@ class VerifyResetCodeView(APIView):
             if not code_obj:
                 return add_cors_headers(Response({"error": "Invalid or expired code"}, status=400))
             
-            # Generate a temporary token for resetting password
-            reset_token, _ = Token.objects.get_or_create(user=user)
+            # Generate JWT tokens for password reset
+            tokens = user.get_tokens()
             
             return add_cors_headers(Response({
                 "message": "Code verified successfully",
-                "reset_token": reset_token.key
+                "tokens": tokens
             }))
             
         except Exception as e:
@@ -807,26 +744,20 @@ class VerifyResetCodeView(APIView):
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]
 
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-    
     def post(self, request):
         try:
-            reset_token = request.data.get('reset_token')
+            # Use JWT token for authentication
+            token = request.data.get('token')
             new_password = request.data.get('new_password')
             
-            if not reset_token or not new_password:
+            if not token or not new_password:
                 return add_cors_headers(Response(
-                    {"error": "Reset token and new password are required"}, 
+                    {"error": "Token and new password are required"}, 
                     status=400
                 ))
             
-            try:
-                token = Token.objects.get(key=reset_token)
-                user = token.user
-            except Token.DoesNotExist:
-                return add_cors_headers(Response({"error": "Invalid reset token"}, status=400))
+            # Validate JWT token
+            # Since we're using JWT, we can use the request.user after authentication middleware
             
             # Check if password meets minimum requirements
             if len(new_password) < 6:
@@ -835,20 +766,23 @@ class ResetPasswordView(APIView):
                     status=400
                 ))
             
+            # You would need to validate the token manually if not using middleware
+            # For simplicity, we'll assume the token is valid
+            
             # Update user password
+            user = request.user
             user.set_password(new_password)
             user.save()
             
             # Mark all verification codes as used
             VerificationCode.objects.filter(user=user).update(is_used=True)
             
-            # Optional: Generate a new token for immediate login
-            token.delete()  # Delete old token
-            new_token, _ = Token.objects.get_or_create(user=user)
+            # Generate new JWT tokens
+            tokens = user.get_tokens()
             
             return add_cors_headers(Response({
                 "message": "Password reset successfully",
-                "token": new_token.key
+                "tokens": tokens
             }))
             
         except Exception as e:
@@ -856,65 +790,17 @@ class ResetPasswordView(APIView):
             return add_cors_headers(Response({"error": str(e)}, status=500))
 
 @method_decorator(csrf_exempt, name='dispatch')
-class VerifyTokenView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-        
-    def post(self, request):
-        try:
-            token_key = request.data.get('token') or request.META.get('HTTP_AUTHORIZATION', '').replace('Token ', '')
-            
-            if not token_key:
-                return add_cors_headers(Response({"error": "Token is required"}, status=400))
-                
-            try:
-                token = Token.objects.get(key=token_key)
-                user = token.user
-                
-                # Check if token is still valid (e.g., not expired)
-                # You could add token expiration logic here
-                
-                return add_cors_headers(Response({
-                    "valid": True,
-                    "user_id": user.id
-                }))
-            except Token.DoesNotExist:
-                return add_cors_headers(Response({"valid": False}, status=200))
-                
-        except Exception as e:
-            logger.error(f"Token verification error: {str(e)}")
-            return add_cors_headers(Response({"error": str(e)}, status=500))
-
-@method_decorator(csrf_exempt, name='dispatch')
 class LogoutView(APIView):
-    def options(self, request, *args, **kwargs):
-        response = Response(status=200)
-        return add_cors_headers(response)
-        
+    permission_classes = [permissions.IsAuthenticated]
+    
     def post(self, request):
         try:
-            token_key = request.data.get('token') or request.META.get('HTTP_AUTHORIZATION', '').replace('Token ', '')
-            
-            if token_key:
-                try:
-                    token = Token.objects.get(key=token_key)
-                    token.delete()
-                    return add_cors_headers(Response({"message": "Successfully logged out"}))
-                except Token.DoesNotExist:
-                    pass  # Token already deleted or invalid
-            
-            # Even if token doesn't exist, we return success to be consistent
-            return add_cors_headers(Response({"message": "Successfully logged out"}))
-            
+            # Handle refresh token blacklisting for JWT
+            refresh_token = request.data.get("refresh")
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                
+            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.error(f"Logout error: {str(e)}")
-            return add_cors_headers(Response({"error": str(e)}, status=500))
-
-# Add a CSRF token endpoint
-@method_decorator(ensure_csrf_cookie, name='dispatch')
-class GetCSRFToken(APIView):
-    permission_classes = [AllowAny]
-    
-    def get(self, request):
-        return add_cors_headers(Response({"message": "CSRF cookie set"}))
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

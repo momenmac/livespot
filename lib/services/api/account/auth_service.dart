@@ -5,6 +5,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../../models/account.dart';
+import '../../../models/jwt_token.dart';
+import '../../../models/api/auth_response.dart';
+import '../../../models/api/api_response.dart';
 import 'api_urls.dart';
 
 class AuthService {
@@ -102,6 +105,80 @@ class AuthService {
     }
   }
 
+  // Common method to handle HTTP requests and parse responses
+  Future<AuthResponse> _makeAuthRequest({
+    required Uri url,
+    required String method,
+    Map<String, String>? headers,
+    Object? body,
+    String? token,
+  }) async {
+    try {
+      http.Response response;
+
+      // Add authorization header if token is provided
+      final Map<String, String> requestHeaders = headers ?? {};
+      if (token != null) {
+        requestHeaders['Authorization'] = 'Bearer $token';
+      }
+
+      // Make the appropriate HTTP request based on the method
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await _client.get(url, headers: requestHeaders);
+          break;
+        case 'POST':
+          response =
+              await _client.post(url, headers: requestHeaders, body: body);
+          break;
+        case 'PUT':
+          response =
+              await _client.put(url, headers: requestHeaders, body: body);
+          break;
+        case 'DELETE':
+          response = await _client.delete(url, headers: requestHeaders);
+          break;
+        default:
+          throw Exception('Unsupported HTTP method: $method');
+      }
+
+      // Debug logging
+      print('🌐 ${method.toUpperCase()} request to: ${url.toString()}');
+      if (body != null) {
+        print('🌐 Request body: $body');
+      }
+      print('🌐 Response status: ${response.statusCode}');
+      print('🌐 Response body: ${response.body}');
+
+      // Parse the response
+      final Map<String, dynamic> responseData =
+          json.decode(response.body) as Map<String, dynamic>;
+
+      // Handle common status codes
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Success
+        responseData['success'] = true;
+      } else if (response.statusCode == 401) {
+        // Unauthorized - token expired
+        responseData['token_expired'] = true;
+        responseData['success'] = false;
+        responseData['error'] =
+            responseData['error'] ?? 'Authentication token expired';
+      } else {
+        // Other errors
+        responseData['success'] = false;
+      }
+
+      return AuthResponse.fromJson(responseData);
+    } catch (e) {
+      print('🌐 Request error: $e');
+      return AuthResponse(
+        success: false,
+        error: 'Network error: ${e.toString()}',
+      );
+    }
+  }
+
   // Register a new user
   Future<Map<String, dynamic>> register({
     required String email,
@@ -111,58 +188,23 @@ class AuthService {
   }) async {
     try {
       final url = Uri.parse('$baseUrl/accounts/register/');
-      print('🌐 API Request to: ${url.toString()}');
-      print('🌐 Request body: ${jsonEncode({
-            'email': email,
-            'password': password,
-            'first_name': firstName,
-            'last_name': lastName,
-          })}');
 
-      final response = await _client
-          .post(
-        url,
+      final body = jsonEncode({
+        'email': email,
+        'password': password,
+        'first_name': firstName,
+        'last_name': lastName,
+      });
+
+      final response = await _makeAuthRequest(
+        url: url,
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'first_name': firstName,
-          'last_name': lastName,
-        }),
-      )
-          .timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          print('🌐 Request timeout');
-          return http.Response('{"error": "Request timed out"}', 408);
-        },
+        body: body,
       );
 
-      print('🌐 Response status: ${response.statusCode}');
-      print('🌐 Response body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final result = {
-          'success': true,
-          'token': responseData['token'],
-          'message': responseData['message'] ?? 'Registration successful',
-        };
-
-        // Include user data if available
-        if (responseData['user'] != null) {
-          result['user'] = Account.fromJson(responseData['user']);
-        }
-
-        return result;
-      } else {
-        return {
-          'success': false,
-          'error': responseData['error'] ??
-              'Registration failed with status code: ${response.statusCode}',
-        };
-      }
+      // Convert to standard response format for backward compatibility
+      return response.toMap();
     } catch (e) {
       print('🌐 Registration error: $e');
       return {
@@ -179,51 +221,25 @@ class AuthService {
   }) async {
     try {
       print('🔑 Login attempt for: $email');
-      final response = await http.post(
-        Uri.parse(ApiUrls.login),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.login),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
           'password': password,
         }),
       );
 
-      print('🔑 Login response status: ${response.statusCode}');
-      print('🔑 Login response body: ${response.body}');
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        Account? user;
-
-        // Parse user data if available
-        if (data['user'] != null) {
-          // Create a user object with the token included
-          Map<String, dynamic> userData =
-              Map<String, dynamic>.from(data['user']);
-          userData['token'] = data['token']; // Include token in the user object
-          user = Account.fromJson(userData);
-
-          // Log verification status for debugging
-          print(
-              '🔑 User verification status from API: ${userData['is_verified']}');
-        } else {
-          print('🔑 No user data in login response, will fetch separately');
-        }
-
-        return {
-          'success': true,
-          'token': data['token'],
-          'user': user,
-        };
+      if (response.user != null) {
+        print(
+            '🔑 User verification status from API: ${response.user!.isVerified}');
       } else {
-        return {
-          'success': false,
-          'error': data['error'] ?? 'Login failed. Please try again.',
-        };
+        print('🔑 No user data in login response, will fetch separately');
       }
+
+      return response.toMap();
     } catch (e) {
       print('🔑 Login error: ${e.toString()}');
       return {
@@ -244,10 +260,12 @@ class AuthService {
   }) async {
     try {
       print('🔑 Sending Google auth data to backend for: $email');
-      final response = await _client.post(
-        Uri.parse('$baseUrl/accounts/google-login/'),
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse('$baseUrl/accounts/google-login/'),
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
+        body: jsonEncode({
           'google_id': googleId,
           'email': email,
           'first_name': firstName,
@@ -256,37 +274,14 @@ class AuthService {
         }),
       );
 
-      print('🔑 Google auth response status: ${response.statusCode}');
-      print('🔑 Google auth response body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        // Check if this was a new account creation or login
-        final bool isNewAccount = responseData['is_new_account'] ?? false;
-        final bool accountLinked = responseData['account_linked'] ?? false;
-
-        print('🔑 Is new account: $isNewAccount');
-        print('🔑 Existing account linked: $accountLinked');
-
-        return {
-          'success': true,
-          'token': responseData['token'],
-          'user': responseData['user'] != null
-              ? Account.fromJson(responseData['user'])
-              : null,
-          'message':
-              responseData['message'] ?? 'Google authentication successful',
-          'is_new_account': isNewAccount,
-          'account_linked': accountLinked,
-        };
+      if (response.success) {
+        print('🔑 Is new account: ${response.isNewAccount}');
+        print('🔑 Existing account linked: ${response.accountLinked}');
       } else {
-        print('❌ Google auth failed: ${responseData['error']}');
-        return {
-          'success': false,
-          'error': responseData['error'] ?? 'Google authentication failed',
-        };
+        print('❌ Google auth failed: ${response.error}');
       }
+
+      return response.toMap();
     } catch (e) {
       print('❌ Google auth network error: ${e.toString()}');
       return {
@@ -296,7 +291,7 @@ class AuthService {
     }
   }
 
-  // Handle complete Google sign-in flow including backend authentication
+  // Handle complete Google sign-in flow
   Future<Map<String, dynamic>> handleGoogleSignIn() async {
     try {
       // First perform the Google sign-in
@@ -369,28 +364,26 @@ class AuthService {
     }
   }
 
-  // Get user profile with token
+  // Get user profile with JWT token
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/accounts/profile/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
+      final response = await _makeAuthRequest(
+        url: Uri.parse('$baseUrl/accounts/profile/'),
+        method: 'GET',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
       );
 
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
+      if (response.success) {
         return {
           'success': true,
-          'user': Account.fromJson(responseData),
+          'user': response.user,
         };
       } else {
         return {
           'success': false,
-          'error': responseData['error'] ?? 'Failed to get user profile',
+          'error': response.error ?? 'Failed to get user profile',
+          'token_expired': response.tokenExpired,
         };
       }
     } catch (e) {
@@ -401,79 +394,56 @@ class AuthService {
     }
   }
 
-  // Get CSRF token
-  Future<String?> getCsrfToken() async {
+  // Refresh JWT token
+  Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${ApiUrls.baseUrl}/accounts/csrf-token/'),
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.tokenRefresh),
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': refreshToken}),
       );
 
-      // Extract the CSRF token from cookies
-      String? csrfToken;
-      String? cookies = response.headers['set-cookie'];
-      if (cookies != null) {
-        final csrfCookie = cookies
-            .split(';')
-            .where((cookie) => cookie.trim().startsWith('csrftoken='))
-            .firstOrNull;
-        if (csrfCookie != null) {
-          csrfToken = csrfCookie.split('=')[1];
-        }
-      }
-
-      return csrfToken;
+      return response.toMap();
     } catch (e) {
-      print('Failed to get CSRF token: ${e.toString()}');
-      return null;
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
     }
   }
 
-  // Verify token with backend (updated to handle CSRF)
+  // Token verification not needed for JWT as it's self-contained, but keeping for compatibility
   Future<Map<String, dynamic>> verifyToken(String token) async {
     try {
-      // Get CSRF token (optional, only if the server requires it)
-      String? csrfToken = await getCsrfToken();
+      // For JWT, check if token is expired by decoding it
+      final jwtToken = JwtToken.fromJson({'access': token, 'refresh': ''});
 
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Token $token',
-      };
-
-      // Add CSRF token if available
-      if (csrfToken != null) {
-        headers['X-CSRFToken'] = csrfToken;
-      }
-
-      final response = await _client.post(
-        Uri.parse('${ApiUrls.baseUrl}/accounts/verify-token/'),
-        headers: headers,
-        body: jsonEncode({'token': token}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'valid': data['valid'] ?? false,
-        };
-      } else {
+      if (jwtToken.isAccessTokenExpired) {
         return {
           'success': true,
           'valid': false,
+          'expired': true,
         };
       }
+
+      // We could make an API call to a protected endpoint to verify with server
+      // but it's optional since JWT tokens are self-contained
+      return {
+        'success': true,
+        'valid': true,
+      };
     } catch (e) {
       print('Token verification error: ${e.toString()}');
       return {
         'success': false,
-        'error': 'Network error during token verification: ${e.toString()}',
+        'error': 'Error during token verification: ${e.toString()}',
         'valid': false,
       };
     }
   }
 
-  // Sign out from both Google and our backend (updated to handle CSRF)
+  // Sign out from both Google and our backend - clean up legacy references
   Future<Map<String, dynamic>> completeSignOut(String? token) async {
     try {
       // Sign out from Google
@@ -482,23 +452,15 @@ class AuthService {
       // Sign out from our backend if we have a token
       if (token != null) {
         try {
-          // Get CSRF token (optional, only if the server requires it)
-          String? csrfToken = await getCsrfToken();
-
-          final headers = {
-            'Content-Type': 'application/json',
-            'Authorization': 'Token $token',
-          };
-
-          // Add CSRF token if available
-          if (csrfToken != null) {
-            headers['X-CSRFToken'] = csrfToken;
-          }
-
+          // For JWT, blacklist the token on the server
           await _client.post(
             Uri.parse('${ApiUrls.baseUrl}/accounts/logout/'),
-            headers: headers,
-            body: jsonEncode({'token': token}),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token', // Ensure Bearer prefix is used
+            },
+            // Pass refresh token in the body for blacklisting
+            body: jsonEncode({'refresh': token}),
           );
         } catch (e) {
           print('Backend logout error: ${e.toString()}');
@@ -518,6 +480,45 @@ class AuthService {
     }
   }
 
+  // Verify email with code (JWT version)
+  Future<Map<String, dynamic>> verifyEmail(String token, String code) async {
+    try {
+      final response = await _makeAuthRequest(
+        url: Uri.parse('${ApiUrls.baseUrl}/accounts/verify-email/'),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+        body: jsonEncode({'code': code}),
+      );
+
+      return response.toMap();
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Resend verification code (JWT version)
+  Future<Map<String, dynamic>> resendVerificationCode(String token) async {
+    try {
+      final response = await _makeAuthRequest(
+        url: Uri.parse('${ApiUrls.baseUrl}/accounts/resend-verification-code/'),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+      );
+
+      return response.toMap();
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> updateProfileImage(
       String token, Uint8List imageData) async {
     try {
@@ -525,8 +526,9 @@ class AuthService {
       final base64Image = base64Encode(imageData);
 
       // Send request to update profile with image
-      final response = await http.put(
-        Uri.parse(ApiUrls.updateProfile),
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.updateProfile),
+        method: 'PUT',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -536,19 +538,7 @@ class AuthService {
         }),
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return {
-          'success': true,
-          'user': Account.fromJson(data),
-        };
-      } else {
-        return {
-          'success': false,
-          'error':
-              'Failed to update profile with status: ${response.statusCode}',
-        };
-      }
+      return response.toMap();
     } catch (e) {
       return {
         'success': false,
@@ -557,7 +547,7 @@ class AuthService {
     }
   }
 
-  // Upload profile image
+  // Upload profile image with JWT authentication - remove CSRF references
   Future<Map<String, dynamic>> uploadProfileImage(
       String token, Uint8List imageData) async {
     try {
@@ -565,8 +555,8 @@ class AuthService {
       final uri = Uri.parse(ApiUrls.profileImage);
       final request = http.MultipartRequest('POST', uri);
 
-      // Add authorization header
-      request.headers['Authorization'] = 'Token $token';
+      // Add authorization header with Bearer token for JWT
+      request.headers['Authorization'] = 'Bearer $token';
 
       // Add profile image
       final multipartFile = http.MultipartFile.fromBytes(
@@ -581,17 +571,19 @@ class AuthService {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      final responseData = json.decode(response.body);
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
         return {
           'success': true,
-          'message': data['message'] ?? 'Profile image updated',
-          'profile_picture_url': data['profile_picture_url']
+          'message': responseData['message'] ?? 'Profile image updated',
+          'profile_picture_url': responseData['profile_picture_url']
         };
       } else {
         return {
           'success': false,
           'error': 'Failed to upload image with status: ${response.statusCode}',
+          'token_expired': response.statusCode == 401,
         };
       }
     } catch (e) {
@@ -602,115 +594,19 @@ class AuthService {
     }
   }
 
-  // Verify email with code
-  Future<Map<String, dynamic>> verifyEmail(String token, String code) async {
-    try {
-      final response = await _client.post(
-        Uri.parse('${ApiUrls.baseUrl}/accounts/verify-email/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-        body: json.encode({
-          'code': code,
-        }),
-      );
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Email verified successfully',
-          'user': responseData['user'] != null
-              ? Account.fromJson(responseData['user'])
-              : null,
-        };
-      } else {
-        return {
-          'success': false,
-          'error': responseData['error'] ?? 'Failed to verify email',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
-    }
-  }
-
-  // Resend verification code
-  Future<Map<String, dynamic>> resendVerificationCode(String token) async {
-    try {
-      final response = await _client.post(
-        Uri.parse('${ApiUrls.baseUrl}/accounts/resend-verification-code/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Verification code sent',
-          'email_sent': responseData['email_sent'] ?? true,
-        };
-      } else {
-        return {
-          'success': false,
-          'error':
-              responseData['error'] ?? 'Failed to resend verification code',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'error': 'Network error: ${e.toString()}',
-      };
-    }
-  }
-
   // Request password reset with improved debugging
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     try {
       print('📧 Sending password reset request to API for: $email');
 
-      final response = await _client.post(
-        Uri.parse(ApiUrls.forgotPassword),
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.forgotPassword),
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'email': email}),
       );
 
-      print('📧 Reset API response status: ${response.statusCode}');
-      print('📧 Reset API response body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        // Check if the email exists flag is included in the response
-        final bool exists = responseData['exists'] ?? false;
-        final bool emailSent = responseData['email_sent'] ?? false;
-
-        print('📧 Email exists: $exists, Email sent: $emailSent');
-
-        return {
-          'success': true,
-          'message':
-              responseData['message'] ?? 'Reset code sent if email exists',
-          'email_sent': emailSent,
-          'exists': exists,
-        };
-      } else {
-        print('📧 Reset API failed with error: ${responseData['error']}');
-        return {
-          'success': false,
-          'error': responseData['error'] ?? 'Failed to send reset code',
-        };
-      }
+      return response.toMap();
     } catch (e) {
       print('📧 Forgot password network error: ${e.toString()}');
       return {
@@ -726,8 +622,9 @@ class AuthService {
     try {
       print('🔎 Verifying reset code for email: $email');
 
-      final response = await _client.post(
-        Uri.parse(ApiUrls.verifyResetCode),
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.verifyResetCode),
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': email,
@@ -735,23 +632,7 @@ class AuthService {
         }),
       );
 
-      print('🔎 Verify code API response status: ${response.statusCode}');
-      print('🔎 Verify code API response body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Code verified successfully',
-          'reset_token': responseData['reset_token'],
-        };
-      } else {
-        return {
-          'success': false,
-          'error': responseData['error'] ?? 'Invalid or expired code',
-        };
-      }
+      return response.toMap();
     } catch (e) {
       print('🔎 Verify code error: ${e.toString()}');
       return {
@@ -761,12 +642,13 @@ class AuthService {
     }
   }
 
-  // Reset password with token
+  // Reset password - remove any legacy token references
   Future<Map<String, dynamic>> resetPassword(
       String resetToken, String newPassword) async {
     try {
-      final response = await _client.post(
-        Uri.parse(ApiUrls.resetPassword),
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.resetPassword),
+        method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'reset_token': resetToken,
@@ -774,20 +656,7 @@ class AuthService {
         }),
       );
 
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Password reset successfully',
-          'token': responseData['token'],
-        };
-      } else {
-        return {
-          'success': false,
-          'error': responseData['error'] ?? 'Failed to reset password',
-        };
-      }
+      return response.toMap();
     } catch (e) {
       return {
         'success': false,

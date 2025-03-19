@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+from datetime import timedelta
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -36,24 +37,25 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.2.2']
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "django.contrib.admin",  # Keep for admin interface
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
+    # "django.contrib.sessions",  # Remove sessions
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "accounts",  # Moved accounts before rest_framework.authtoken
+    "accounts",
     'rest_framework',
-    'rest_framework.authtoken',
-    'corsheaders',  # Added CORS headers app
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Add CORS middleware before CommonMiddleware
+    "django.contrib.sessions.middleware.SessionMiddleware",  # Remove session middleware
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",  # Keep for admin interface
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -123,11 +125,25 @@ AUTH_PASSWORD_VALIDATORS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ]
+}
+
+# JWT settings - streamlined
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
 }
 
 
@@ -152,12 +168,6 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
-# Print email settings for debugging
-print(f"EMAIL_HOST: {EMAIL_HOST}")
-print(f"EMAIL_PORT: {EMAIL_PORT}")
-print(f"EMAIL_USE_TLS: {EMAIL_USE_TLS}")
-print(f"EMAIL_HOST_USER: {EMAIL_HOST_USER}")
-print(f"EMAIL_HOST_PASSWORD: {'*****' if EMAIL_HOST_PASSWORD else 'Not Set'}")
 
 # For testing only - use this to simulate sending emails without actually sending them
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -186,13 +196,7 @@ AUTH_USER_MODEL = 'accounts.Account'
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True  # For development only
-# For production, specify exact origins:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:8000",
-#     "http://127.0.0.1:8000",
-#     "https://yourfrontendapp.com",
-# ]
-
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     "DELETE",
     "GET",
@@ -201,7 +205,6 @@ CORS_ALLOW_METHODS = [
     "POST",
     "PUT",
 ]
-
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -214,32 +217,8 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
 ]
 
-# CSRF Configuration
-CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
-CSRF_COOKIE_HTTPONLY = False  # Enable JavaScript access for SPA
-CSRF_USE_SESSIONS = False  # Don't use sessions for CSRF
-CSRF_COOKIE_SAMESITE = None  # Allow cross-site requests for mobile app
-ALLOWED_HOSTS = ['*']
-# CSRF Trusted Origins and Exempt URLs
-# Add your computer's IP address to the trusted origins
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:*', 
-    'http://127.0.0.1:*', 
-    'http://10.0.2.2:*',
-    'http://192.168.1.*:*'  # This pattern covers the 192.168.1.x IP range
-]
-# CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = True  # In production, use specific origins
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
+# Remove all CSRF-specific settings since we're using JWT authentication
+# JWT tokens are sent in headers, not cookies, so CSRF isn't needed
+
+# Simplify ALLOWED_HOSTS - keeping this part
+ALLOWED_HOSTS = ['*']  # In production, define specific hosts

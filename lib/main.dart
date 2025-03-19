@@ -10,6 +10,7 @@ import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'dart:async';
+import 'package:flutter_application_2/data/shared_prefs.dart';
 
 // Use conditional import for Platform
 import 'dart:io'
@@ -111,24 +112,33 @@ Future<bool> initFirebaseSafely() async {
   return _isFirebaseInitialized;
 }
 
-// Session management for AccountProvider
+// Session management for AccountProvider - simplify for JWT
 class SessionManager {
   static Future<void> initialize() async {
-    // Monitor app lifecycle to properly handle sessions
+    // Monitor app lifecycle to properly handle JWT token refreshing
     AppLifecycleListener(
       onResume: () {
-        // When app resumes, verify token and record activity
+        // When app resumes, verify JWT token and refresh if needed
         if (navigatorKey.currentContext != null) {
           Provider.of<AccountProvider>(
             navigatorKey.currentContext!,
             listen: false,
-          ).recordActivity();
+          ).verifyAndRefreshTokenIfNeeded();
+
+          // Update last activity time
+          SharedPrefs.setLastActivity();
         }
       },
-      onDetach: () {
-        // App is detached, could save state if needed
-      },
     );
+  }
+
+  /// Refresh JWT token if it's about to expire
+  static Future<void> refreshTokenIfNeeded(BuildContext context) async {
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    if (accountProvider.isAuthenticated && accountProvider.shouldRefreshToken) {
+      await accountProvider.refreshToken();
+    }
   }
 }
 
