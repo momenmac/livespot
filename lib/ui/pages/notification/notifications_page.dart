@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
@@ -10,7 +9,7 @@ import 'package:intl/intl.dart';
 import 'notification_filter.dart';
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({Key? key}) : super(key: key);
+  const NotificationsPage({super.key});
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -267,7 +266,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         ),
                       ),
                     ))
-                .toList(),
+                ,
           ],
         );
       },

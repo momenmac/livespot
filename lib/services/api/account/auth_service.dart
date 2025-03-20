@@ -4,10 +4,8 @@ import 'package:flutter/foundation.dart'
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import '../../../models/account.dart';
 import '../../../models/jwt_token.dart';
 import '../../../models/api/auth_response.dart';
-import '../../../models/api/api_response.dart';
 import 'api_urls.dart';
 
 class AuthService {

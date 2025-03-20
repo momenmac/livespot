@@ -66,4 +66,19 @@ class ResponsiveSnackBar {
       icon: Icons.info_outline,
     );
   }
+
+  /// Show a warning SnackBar
+  static void showWarning({
+    required BuildContext context,
+    required String message,
+    Duration? duration,
+  }) {
+    show(
+      context: context,
+      message: message,
+      backgroundColor: Colors.orange,
+      icon: Icons.warning_amber_rounded,
+      duration: duration ?? const Duration(seconds: 3),
+    );
+  }
 }

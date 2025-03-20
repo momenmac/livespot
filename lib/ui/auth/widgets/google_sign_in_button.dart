@@ -8,11 +8,11 @@ class GoogleSignInButton extends StatefulWidget {
   final bool isLoading;
 
   const GoogleSignInButton({
-    Key? key,
+    super.key,
     required this.googleSignIn,
     required this.onSignIn,
     this.isLoading = false,
-  }) : super(key: key);
+  });
 
   @override
   State<GoogleSignInButton> createState() => _GoogleSignInButtonState();

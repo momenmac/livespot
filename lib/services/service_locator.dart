@@ -1,6 +1,6 @@
 import 'package:flutter_application_2/services/interfaces/message_service.dart';
-import 'package:flutter_application_2/services/implementations/mock_message_service.dart';
-import 'package:flutter_application_2/services/implementations/firebase_message_service.dart';
+import 'package:flutter_application_2/services/interfaces/mock_message_service.dart';
+import 'package:flutter_application_2/services/interfaces/firebase_message_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter/foundation.dart';
 

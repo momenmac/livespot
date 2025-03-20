@@ -62,6 +62,7 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
         widget.onPressed();
       },
       icon: Stack(
+        clipBehavior: Clip.none, // Allow badge to overflow
         children: [
           AnimatedBuilder(
             animation: _animation,
@@ -76,26 +77,30 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
           ),
           if (widget.badgeCount != null && widget.badgeCount! > 0)
             Positioned(
-              right: 0,
-              top: 0,
+              right: -4,
+              top: -2,
               child: Container(
-                padding: const EdgeInsets.all(2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white, width: 1),
                 ),
                 constraints: const BoxConstraints(
-                  minWidth: 14,
-                  minHeight: 14,
+                  minWidth: 16,
+                  maxHeight: 16, // Ensure height doesn't exceed width
                 ),
-                child: Text(
-                  widget.badgeCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
+                child: Center(
+                  child: Text(
+                    widget.badgeCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0, // Removes extra vertical space in text
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
             ),
@@ -109,12 +114,16 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
   final int currentIndex;
   final Function(int) onTap;
   final bool rounded;
+  final int? unreadMessageCount;
+  final int? unreadNotificationCount;
 
   const TopNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
     required this.rounded,
+    this.unreadMessageCount,
+    this.unreadNotificationCount,
   });
 
   @override
@@ -174,6 +183,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     : theme.iconTheme.color!,
                 size: 28, // Customize icon size
                 onPressed: () => onTap(1),
+                badgeCount: unreadMessageCount,
               ),
             ),
             Container(
@@ -193,6 +203,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     : theme.iconTheme.color!,
                 size: 28, // Customize icon size
                 onPressed: () => onTap(3),
+                badgeCount: unreadNotificationCount,
               ),
             ),
             Container(
@@ -224,13 +235,15 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
 class CustomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
-  final int? unreadCount;
+  final int? unreadNotificationCount;
+  final int? unreadMessageCount;
 
   const CustomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.unreadCount,
+    this.unreadNotificationCount,
+    this.unreadMessageCount,
   });
 
   @override
@@ -264,6 +277,7 @@ class CustomNavigationBar extends StatelessWidget {
                   : theme.iconTheme.color!,
               size: 28,
               onPressed: () => onTap(1),
+              badgeCount: unreadMessageCount,
             ),
             const SizedBox(width: 40),
             AnimatedIconButton(
@@ -275,7 +289,7 @@ class CustomNavigationBar extends StatelessWidget {
                   : theme.iconTheme.color!,
               size: theme.iconTheme.size!,
               onPressed: () => onTap(3),
-              badgeCount: unreadCount,
+              badgeCount: unreadNotificationCount,
             ),
             AnimatedIconButton(
               selectedIcon: Icons.person,
@@ -298,19 +312,25 @@ class CustomScaffold extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
   final Widget body;
-  final int? unreadCount; // Add this
+  final int? unreadNotificationCount;
+  final int? unreadMessageCount;
 
   const CustomScaffold({
     super.key,
     required this.currentIndex,
     required this.onTap,
     required this.body,
-    this.unreadCount, // Add this
+    this.unreadNotificationCount,
+    this.unreadMessageCount,
   });
 
   @override
   Widget build(BuildContext context) {
     final isLargeScreen = MediaQuery.of(context).size.width > 900;
+
+    // Test values for badges - remove these lines in production
+    final testMessageCount = unreadMessageCount ?? 5;
+    final testNotificationCount = unreadNotificationCount ?? 3;
 
     return Scaffold(
       appBar: isLargeScreen
@@ -318,6 +338,8 @@ class CustomScaffold extends StatelessWidget {
               currentIndex: currentIndex,
               onTap: onTap,
               rounded: true,
+              unreadMessageCount: testMessageCount, // Use test value
+              unreadNotificationCount: testNotificationCount, // Use test value
             )
           : null,
       bottomNavigationBar: isLargeScreen
@@ -325,7 +347,8 @@ class CustomScaffold extends StatelessWidget {
           : CustomNavigationBar(
               currentIndex: currentIndex,
               onTap: onTap,
-              unreadCount: unreadCount, // Add this
+              unreadNotificationCount: testNotificationCount, // Use test value
+              unreadMessageCount: testMessageCount, // Use test value
             ),
       floatingActionButton: isLargeScreen
           ? null

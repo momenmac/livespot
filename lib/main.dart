@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_application_2/services/auth/session_monitor.dart';
+import 'package:flutter_application_2/routes/route_guard.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_application_2/firebase_options.dart';
+import 'package:flutter_application_2/services/config/firebase_options.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
@@ -112,36 +114,6 @@ Future<bool> initFirebaseSafely() async {
   return _isFirebaseInitialized;
 }
 
-// Session management for AccountProvider - simplify for JWT
-class SessionManager {
-  static Future<void> initialize() async {
-    // Monitor app lifecycle to properly handle JWT token refreshing
-    AppLifecycleListener(
-      onResume: () {
-        // When app resumes, verify JWT token and refresh if needed
-        if (navigatorKey.currentContext != null) {
-          Provider.of<AccountProvider>(
-            navigatorKey.currentContext!,
-            listen: false,
-          ).verifyAndRefreshTokenIfNeeded();
-
-          // Update last activity time
-          SharedPrefs.setLastActivity();
-        }
-      },
-    );
-  }
-
-  /// Refresh JWT token if it's about to expire
-  static Future<void> refreshTokenIfNeeded(BuildContext context) async {
-    final accountProvider =
-        Provider.of<AccountProvider>(context, listen: false);
-    if (accountProvider.isAuthenticated && accountProvider.shouldRefreshToken) {
-      await accountProvider.refreshToken();
-    }
-  }
-}
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -170,9 +142,6 @@ Future<void> main() async {
 
   // Reset hero tag registry on app start
   HeroTagRegistry.reset();
-
-  // Initialize session manager
-  await SessionManager.initialize();
 
   // Try to check if we're in debug mode on iOS simulator
   bool shouldSkipFirebase = false;
@@ -260,49 +229,56 @@ class MyApp extends StatelessWidget {
     // Get the Firebase status
     final firebaseStatus = Provider.of<FirebaseStatusNotifier>(context);
 
-    return MaterialApp(
-      title: 'My App',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: TAppTheme.lightTheme,
-      darkTheme: TAppTheme.darkTheme,
-      navigatorKey: NavigationService().navigatorKey,
-      initialRoute: AppRoutes.initial,
-      routes: {
-        ...AppRoutes.routes,
-        AppRoutes.messages: (context) => const MessagesPage(),
-      },
-      builder: (context, child) {
-        // Show a banner if Firebase is not available and we're not on web or iOS
-        // (since we deliberately skip Firebase on iOS)
-        if (!firebaseStatus.isInitialized &&
-            !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
-          print(
-              '⚠️ App running with limited functionality (Firebase unavailable)');
-          // You could show a banner or notification here if needed
-        }
+    // Wrap MaterialApp with SessionMonitor
+    return SessionMonitor(
+      child: MaterialApp(
+        title: 'My App',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.system,
+        theme: TAppTheme.lightTheme,
+        darkTheme: TAppTheme.darkTheme,
+        navigatorKey: NavigationService().navigatorKey,
+        initialRoute: AppRoutes.initial,
 
-        // This ensures overlay entries work correctly
-        return MediaQuery(
-          // Prevent text scaling to avoid layout issues
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(1.0)),
-          // Wrap with GestureDetector to dismiss keyboard on tap outside input fields
-          child: GestureDetector(
-            onTap: () {
-              // Hide keyboard when tapping outside text fields
-              FocusScopeNode currentFocus = FocusScope.of(context);
-              if (!currentFocus.hasPrimaryFocus &&
-                  currentFocus.focusedChild != null) {
-                FocusManager.instance.primaryFocus?.unfocus();
-              }
-            },
-            child: child!,
-          ),
-        );
-      },
+        // Replace onGenerateRoute with our enhanced RouteGuard
+        onGenerateRoute: RouteGuard.generateRoute,
+
+        builder: (context, child) {
+          // Show a banner if Firebase is not available and we're not on web or iOS
+          // (since we deliberately skip Firebase on iOS)
+          if (!firebaseStatus.isInitialized &&
+              !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
+            print(
+                '⚠️ App running with limited functionality (Firebase unavailable)');
+            // You could show a banner or notification here if needed
+          }
+
+          // This ensures overlay entries work correctly
+          return MediaQuery(
+            // Prevent text scaling to avoid layout issues
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(1.0)),
+            // Wrap with GestureDetector to dismiss keyboard on tap outside input fields
+            child: GestureDetector(
+              onTap: () {
+                // Hide keyboard when tapping outside text fields
+                FocusScopeNode currentFocus = FocusScope.of(context);
+                if (!currentFocus.hasPrimaryFocus &&
+                    currentFocus.focusedChild != null) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                }
+              },
+              child: child!,
+            ),
+          );
+        },
+      ),
     );
   }
+
+  // Remove these methods as they're now handled by RouteGuard
+  // void _checkRouteAuth(BuildContext context, String? routeName) {...}
+  // Widget _getPageForRoute(String? routeName, dynamic args) {...}
 }
 
 // Create a more robust helper class to access Firebase safely

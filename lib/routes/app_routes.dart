@@ -11,6 +11,9 @@ import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 
+// Route builder type with dynamic arguments
+typedef RouteBuilder = Widget Function(Map<String, dynamic> arguments);
+
 class AppRoutes {
   // Route names
   static const String initial = '/';
@@ -23,32 +26,23 @@ class AppRoutes {
   static const String camera = '/camera';
   static const String map = '/map';
   static const String messages = '/messages';
-  static const String networkTest = '/debug/network-test';
+  static const String networkTest = '/network-test';
 
-  // Route map
-  static Map<String, WidgetBuilder> get routes => {
-        initial: (_) => const GetStartedScreen(), // Initial route handler
-        // initial: (_) => const Home(), // Initial route handler
+  // Route map with builders that accept arguments
+  static Map<String, RouteBuilder> get routes => {
+        initial: (_) => const GetStartedScreen(),
         home: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
         forgotPassword: (_) => const ForgotPasswordScreen(),
-        verifyEmail: (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>?;
+        verifyEmail: (args) {
           return VerifyEmailScreen(
-            email: args?['email'],
-            profileImage: args?['profileImage'],
-            censorEmail: args?['censorEmail'] ?? true,
+            email: args['email'],
+            profileImage: args['profileImage'],
+            censorEmail: args['censorEmail'] ?? true,
           );
         },
-        resetPassword: (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>?;
-          if (args == null) {
-            // If no arguments provided, redirect to forgot password screen
-            return const ForgotPasswordScreen();
-          }
+        resetPassword: (args) {
           return ResetPasswordScreen(
             email: args['email'] ?? '',
             resetToken: args['resetToken'],
@@ -57,11 +51,6 @@ class AppRoutes {
         camera: (_) => const CameraPage(),
         map: (_) => const MapPage(),
         messages: (_) => const MessagesPage(),
-        networkTest: (context) => const NetworkTestPage(),
+        networkTest: (_) => const NetworkTestPage(),
       };
-
-  // This method should be in the NavigationService class
-  static dynamic extractArguments(BuildContext context) {
-    return ModalRoute.of(context)?.settings.arguments;
-  }
 }
