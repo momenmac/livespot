@@ -5,6 +5,7 @@ import 'map/map_page.dart';
 import 'camera_page.dart';
 import 'notification/notifications_page.dart';
 import 'profile_page.dart';
+import 'home/components/home_content.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -18,12 +19,13 @@ class _HomeState extends State<Home> {
   bool _showMap = false;
   double? dragStartX;
 
-  static const List<Widget> _pages = <Widget>[
-    HomeContent(),
-    MessagesPage(),
-    CameraPage(),
-    NotificationsPage(),
-    ProfilePage(),
+  // Create pages list with the callback passed to HomeContent
+  late final List<Widget> _pages = <Widget>[
+    HomeContent(onMapToggle: _toggleMap), // Pass the callback
+    const MessagesPage(),
+    const CameraPage(),
+    const NotificationsPage(),
+    const ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
@@ -112,35 +114,6 @@ class _HomeState extends State<Home> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class HomeContent extends StatelessWidget {
-  const HomeContent({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 900;
-
-    return Scaffold(
-      appBar: isLargeScreen
-          ? null
-          : AppBar(
-              title: const Text('Home'),
-              leading: IconButton(
-                onPressed: () {
-                  final homeState =
-                      context.findAncestorStateOfType<_HomeState>();
-                  homeState?._toggleMap();
-                },
-                icon: const Icon(Icons.location_on_outlined),
-              ),
-              automaticallyImplyLeading: false,
-            ),
-      body: const Center(
-        child: Text('Home Page'),
       ),
     );
   }

@@ -116,10 +116,8 @@ class TextStrings {
   static const String food = 'Food';
   static const String shopping = 'Shopping';
   static const String hotels = 'Hotels';
-  static const String entertainment = 'Entertainment';
   static const String mainCategories = 'Main Categories';
   static const String activities = 'Activities';
-  static const String sports = 'Sports';
   static const String arts = 'Arts';
   static const String music = 'Music';
   static const String places = 'Places';
@@ -254,4 +252,45 @@ class TextStrings {
   static const String registrationFailed =
       "Registration failed. Please try again.";
   static const String creatingAccount = "Creating account...";
+
+  //! Home Page
+  static const String searchPlaceholder = 'Search posts, locations, users...';
+  static const String trendingNow = 'Trending Now';
+  static const String happening = 'Happening';
+  static const String categories = 'Categories';
+  static const String war = 'War';
+  static const String politics = 'Politics';
+  static const String crime = 'Crime';
+  static const String weather = 'Weather';
+  static const String health = 'Health';
+  static const String education = 'Education';
+  static const String technology = 'Technology';
+  static const String economy = 'Economy';
+  static const String entertainment = 'Entertainment';
+  static const String sports = 'Sports';
+  static const String environment = 'Environment';
+  static const String localNews = 'Local News';
+  static const String newsNearby = 'News Nearby';
+  static const String recommendedRooms = 'Recommended Rooms';
+  static const String externalNews = 'From Around the Web';
+  static const String liveStreams = 'Live Now';
+  static const String joinStream = 'Join';
+  static const String watching = 'watching';
+  static const String reportPost = 'Report';
+  static const String showMore = 'Show More';
+  static const String showLess = 'Show Less';
+  static const String relatedThreads = 'Related Threads';
+  static const String verified = 'Verified';
+  static const String honestyRating = 'Honesty Rating';
+  static const String selectDate = 'Select Date';
+  static const String filterByDate = 'Filter by Date';
+  static const String showingResultsFor = 'Showing results for';
+  static const String joinRoom = 'Join Room';
+  static const String viewAll = 'View All';
+  static const String active = 'Active';
+  static const String upvote = 'Upvote';
+  static const String downvote = 'Downvote';
+  static const String comments = 'Comments';
+  static const String share = 'Share';
+  static const String readMore = 'Read More';
 }
