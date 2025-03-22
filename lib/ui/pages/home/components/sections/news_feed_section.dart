@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'dart:math' as math;
-import 'package:flutter_application_2/ui/pages/post_detail/post_detail_page.dart';
+import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
 
 class NewsFeedSection extends StatelessWidget {
   final DateTime selectedDate;
@@ -23,6 +23,9 @@ class NewsFeedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -55,8 +58,7 @@ class NewsFeedSection extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     TextStrings.happening,
-                    style: const TextStyle(
-                      fontSize: 22,
+                    style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
                     ),
@@ -100,7 +102,7 @@ class NewsFeedSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildFeatureStory(
-            context, // Pass context here
+            context,
             title: "Major Storm Approaching Eastern Coast",
             description:
                 "Residents advised to prepare for high winds and flooding as category 3 hurricane approaches.",
@@ -190,6 +192,18 @@ class NewsFeedSection extends StatelessWidget {
     required int comments,
     required bool isVerified,
   }) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Card background and shadow colors based on theme
+    final cardBackground = isDarkMode ? theme.cardColor : Colors.white;
+    final shadowColor = isDarkMode
+        ? Colors.black.withOpacity(0.15)
+        : Colors.black.withOpacity(0.06);
+
+    // Text colors for overlay
+    final overlayTextColor = Colors.white;
+
     return InkWell(
       // Fix: Remove context parameter from onTap callback
       onTap: () => _navigateToPostDetail(context, title, description, imageUrl,
@@ -198,11 +212,11 @@ class NewsFeedSection extends StatelessWidget {
       child: Container(
         height: 360,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBackground,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: shadowColor,
               blurRadius: 20,
               offset: const Offset(0, 5),
             ),
@@ -430,6 +444,19 @@ class NewsFeedSection extends StatelessWidget {
     required bool isVerified,
     required Color color,
   }) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    final cardBackgroundColor = isDarkMode ? theme.cardColor : Colors.white;
+    final textColor =
+        isDarkMode ? theme.textTheme.bodyLarge?.color : ThemeConstants.black;
+    final secondaryTextColor = isDarkMode
+        ? theme.textTheme.bodyMedium?.color?.withOpacity(0.7)
+        : ThemeConstants.grey;
+
+    // For the subtitle color error
+    final subtitleColor = secondaryTextColor;
+
     return InkWell(
       // Fix: Remove context parameter from onTap callback
       onTap: () => _navigateToPostDetail(context, title, description, imageUrl,
@@ -442,7 +469,7 @@ class NewsFeedSection extends StatelessWidget {
         margin: const EdgeInsets.only(
             right: 16, bottom: 4), // Reduced bottom margin
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBackgroundColor,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
@@ -550,10 +577,11 @@ class NewsFeedSection extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       height: 1.2,
+                      color: textColor,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -565,24 +593,24 @@ class NewsFeedSection extends StatelessWidget {
                   Row(
                     children: [
                       Icon(Icons.location_on,
-                          size: 12, color: ThemeConstants.grey),
+                          size: 12, color: secondaryTextColor),
                       const SizedBox(width: 2),
                       Text(
                         location,
                         style: TextStyle(
                           fontSize: 10,
-                          color: ThemeConstants.grey,
+                          color: secondaryTextColor,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Icon(Icons.access_time,
-                          size: 12, color: ThemeConstants.grey),
+                          size: 12, color: secondaryTextColor),
                       const SizedBox(width: 2),
                       Text(
                         time,
                         style: TextStyle(
                           fontSize: 10,
-                          color: ThemeConstants.grey,
+                          color: secondaryTextColor,
                         ),
                       ),
                     ],

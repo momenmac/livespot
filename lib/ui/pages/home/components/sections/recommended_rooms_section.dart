@@ -7,10 +7,13 @@ class RecommendedRoomsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header section - no changes needed
+        // Header section
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Row(
@@ -18,8 +21,7 @@ class RecommendedRoomsSection extends StatelessWidget {
             children: [
               Text(
                 TextStrings.recommendedRooms,
-                style: const TextStyle(
-                  fontSize: 18,
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -50,25 +52,28 @@ class RecommendedRoomsSection extends StatelessWidget {
 
         // FIXED: Increased height to prevent overflow
         SizedBox(
-          height: 170, // Increased from 140px to 170px (+30px)
+          height: 170,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
                 _buildRoomCard(
+                  context,
                   "Current Events Discussion",
                   "Discussion on today's major events",
                   58,
                   true,
                 ),
                 _buildRoomCard(
+                  context,
                   "Local City Updates",
                   "Latest city developments and news",
                   24,
                   false,
                 ),
                 _buildRoomCard(
+                  context,
                   "Weather Watch Group",
                   "Tracking the incoming storm",
                   42,
@@ -83,11 +88,15 @@ class RecommendedRoomsSection extends StatelessWidget {
   }
 
   Widget _buildRoomCard(
+    BuildContext context,
     String title,
     String description,
     int participantCount,
     bool isActive,
   ) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     // Create room colors
     final Color accentColor = title.contains("Weather")
         ? ThemeConstants.orange
@@ -97,15 +106,36 @@ class RecommendedRoomsSection extends StatelessWidget {
 
     final Color roomColor = accentColor.withOpacity(0.1);
 
+    // Card background color based on theme
+    final cardBackgroundColor = isDarkMode ? theme.cardColor : Colors.white;
+    // We'll use this variable instead of backgroundColor
+    final backgroundColor = cardBackgroundColor;
+
+    // Shadow color based on theme
+    final shadowColor = isDarkMode
+        ? Colors.black.withOpacity(0.2)
+        : Colors.black.withOpacity(0.05);
+
+    // Text colors based on theme
+    final textColor =
+        isDarkMode ? theme.textTheme.bodyLarge?.color : ThemeConstants.black;
+
+    final secondaryTextColor = isDarkMode
+        ? theme.textTheme.bodyMedium?.color?.withOpacity(0.7)
+        : ThemeConstants.black.withOpacity(0.7);
+
+    // Border color for chips
+    final borderColor = isDarkMode ? theme.dividerColor : ThemeConstants.grey;
+
     return Container(
       width: 250,
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
+        color: cardBackgroundColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: shadowColor,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -127,8 +157,7 @@ class RecommendedRoomsSection extends StatelessWidget {
           // Content with optimized spacing
           Expanded(
             child: Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(12, 8, 12, 8), // Reduced padding
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -138,9 +167,8 @@ class RecommendedRoomsSection extends StatelessWidget {
                       Expanded(
                         child: Text(
                           title,
-                          style: const TextStyle(
+                          style: theme.textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -180,22 +208,22 @@ class RecommendedRoomsSection extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 4), // Reduced from 6 to 4
+                  const SizedBox(height: 4),
 
                   // Description
                   Text(
                     description,
                     style: TextStyle(
                       fontSize: 13,
-                      color: ThemeConstants.black.withOpacity(0.7),
+                      color: secondaryTextColor,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  const Spacer(flex: 1), // Use less space
+                  const Spacer(flex: 1),
 
-                  // Members & Join button - UPDATED to remove duplication
+                  // Members & Join button
                   Row(
                     children: [
                       // Members count with icon
@@ -207,7 +235,9 @@ class RecommendedRoomsSection extends StatelessWidget {
                             '$participantCount ${participantCount == 1 ? 'person' : 'people'}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: ThemeConstants.grey,
+                              color: isDarkMode
+                                  ? theme.textTheme.bodySmall?.color
+                                  : ThemeConstants.grey,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -246,7 +276,6 @@ class RecommendedRoomsSection extends StatelessWidget {
     );
   }
 
-  // Helper to get a random initial for member avatars
   String _getInitial(int index) {
     const List<String> initials = [
       'A',

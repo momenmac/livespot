@@ -39,4 +39,7 @@ class ThemeConstants {
     ],
     stops: [0.0, 0.15, 1.0], // Adjusted stops to prevent gaps
   );
+
+  // Add this new static constant
+  static const Color darkBackground = Color(0xFF121212);
 }

@@ -7,39 +7,47 @@ class CategoriesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4), // Reduced padding
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(
             TextStrings.categories,
-            style: const TextStyle(
-              fontSize: 16, // Slightly smaller font
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
         SizedBox(
-          height: 38, // Reduced height
+          height: 38,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             children: [
+              _buildCategoryChip(context, TextStrings.trendingNow,
+                  ThemeConstants.primaryColor, true),
+              _buildCategoryChip(context, TextStrings.war, ThemeConstants.red),
               _buildCategoryChip(
-                  TextStrings.trendingNow, ThemeConstants.primaryColor, true),
-              _buildCategoryChip(TextStrings.war, ThemeConstants.red),
-              _buildCategoryChip(TextStrings.politics, ThemeConstants.orange),
-              _buildCategoryChip(TextStrings.crime, ThemeConstants.pink),
-              _buildCategoryChip(TextStrings.weather, ThemeConstants.yellow),
-              _buildCategoryChip(TextStrings.health, ThemeConstants.green),
+                  context, TextStrings.politics, ThemeConstants.orange),
               _buildCategoryChip(
-                  TextStrings.technology, ThemeConstants.primaryColor),
-              _buildCategoryChip(TextStrings.economy, ThemeConstants.orange),
-              _buildCategoryChip(TextStrings.sports, ThemeConstants.green),
+                  context, TextStrings.crime, ThemeConstants.pink),
               _buildCategoryChip(
-                  TextStrings.entertainment, ThemeConstants.pink),
-              _buildCategoryChip(TextStrings.environment, ThemeConstants.green),
+                  context, TextStrings.weather, ThemeConstants.yellow),
+              _buildCategoryChip(
+                  context, TextStrings.health, ThemeConstants.green),
+              _buildCategoryChip(
+                  context, TextStrings.technology, ThemeConstants.primaryColor),
+              _buildCategoryChip(
+                  context, TextStrings.economy, ThemeConstants.orange),
+              _buildCategoryChip(
+                  context, TextStrings.sports, ThemeConstants.green),
+              _buildCategoryChip(
+                  context, TextStrings.entertainment, ThemeConstants.pink),
+              _buildCategoryChip(
+                  context, TextStrings.environment, ThemeConstants.green),
             ],
           ),
         ),
@@ -47,28 +55,42 @@ class CategoriesSection extends StatelessWidget {
     );
   }
 
-  Widget _buildCategoryChip(String label, Color color,
+  Widget _buildCategoryChip(BuildContext context, String label, Color color,
       [bool isSelected = false]) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Chip background colors based on theme
+    final chipBackground = isDarkMode ? theme.cardColor : Colors.white;
+
+    // Border and text colors based on theme and selection state
+    final borderColor = isSelected
+        ? color
+        : (isDarkMode ? theme.dividerColor : ThemeConstants.grey);
+    final textColor = isSelected
+        ? color
+        : (isDarkMode
+            ? theme.textTheme.bodyMedium?.color
+            : ThemeConstants.black);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4), // Reduced padding
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: FilterChip(
         selected: isSelected,
         label: Text(
           label,
           style: TextStyle(
-            fontSize: 12, // Smaller text
-            color: isSelected ? color : ThemeConstants.black,
+            fontSize: 12,
+            color: textColor,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
-        backgroundColor: Colors.white,
-        selectedColor: color.withOpacity(0.2),
-        side: BorderSide(color: isSelected ? color : ThemeConstants.grey),
+        backgroundColor: chipBackground,
+        selectedColor: color.withOpacity(isDarkMode ? 0.3 : 0.2),
+        side: BorderSide(color: borderColor),
         checkmarkColor: color,
-        padding: const EdgeInsets.symmetric(
-            horizontal: 6, vertical: 0), // Reduced padding
-        materialTapTargetSize:
-            MaterialTapTargetSize.shrinkWrap, // Smaller tap target
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         onSelected: (selected) {
           // Handle filter selection
         },

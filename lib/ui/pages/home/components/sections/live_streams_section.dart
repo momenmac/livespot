@@ -17,6 +17,13 @@ class LiveStreamsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Use theme.scaffoldBackgroundColor or define a dark background color variable
+    final darkBackgroundColor =
+        isDarkMode ? ThemeConstants.darkBackground : Colors.white;
+
     // Check if there are any live streams - for now, we'll assume there are
     final hasLiveStreams = true;
 
@@ -49,8 +56,7 @@ class LiveStreamsSection extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     TextStrings.liveStreams,
-                    style: const TextStyle(
-                      fontSize: 18,
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -87,6 +93,7 @@ class LiveStreamsSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             children: [
               _buildLiveStreamCard(
+                context,
                 "Breaking: Protest Downtown",
                 "Reporter on the scene",
                 _getRandomImageUrl(),
@@ -94,6 +101,7 @@ class LiveStreamsSection extends StatelessWidget {
                 1243,
               ),
               _buildLiveStreamCard(
+                context,
                 "City Council Meeting",
                 "Live coverage of today's session",
                 _getRandomImageUrl(),
@@ -101,6 +109,7 @@ class LiveStreamsSection extends StatelessWidget {
                 578,
               ),
               _buildLiveStreamCard(
+                context,
                 "Traffic Update: Major Accident",
                 "Live from the highway",
                 _getRandomImageUrl(),
@@ -120,12 +129,32 @@ class LiveStreamsSection extends StatelessWidget {
   }
 
   Widget _buildLiveStreamCard(
+    BuildContext context,
     String title,
     String description,
     String imageUrl,
     String location,
     int viewerCount,
   ) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Card background color based on theme
+    final cardBackgroundColor = isDarkMode ? theme.cardColor : Colors.white;
+
+    // Shadow color based on theme
+    final shadowColor = isDarkMode
+        ? Colors.black.withOpacity(0.2)
+        : Colors.black.withOpacity(0.1);
+
+    // Text colors based on theme
+    final titleTextColor = isDarkMode
+        ? theme.textTheme.bodyLarge?.color
+        : null; // Use default for light mode
+
+    final secondaryTextColor =
+        isDarkMode ? theme.textTheme.bodySmall?.color : ThemeConstants.grey;
+
     return Container(
       width: 280,
       height: 200, // Reduced height to avoid overflow
@@ -133,10 +162,10 @@ class LiveStreamsSection extends StatelessWidget {
           horizontal: 8, vertical: 2), // Reduced vertical margin
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
+        color: cardBackgroundColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: shadowColor,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -170,12 +199,14 @@ class LiveStreamsSection extends StatelessWidget {
                     },
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
-                        color: ThemeConstants.greyLight,
+                        color: isDarkMode
+                            ? theme.canvasColor
+                            : ThemeConstants.greyLight,
                         child: Center(
                           child: Icon(
                             Icons.videocam,
                             size: 48,
-                            color: ThemeConstants.grey,
+                            color: secondaryTextColor,
                           ),
                         ),
                       );
@@ -254,9 +285,10 @@ class LiveStreamsSection extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14, // Reduced font size
+                    color: titleTextColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -266,34 +298,31 @@ class LiveStreamsSection extends StatelessWidget {
                   description,
                   style: TextStyle(
                     fontSize: 12,
-                    color: ThemeConstants.grey,
+                    color: secondaryTextColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4), // Smaller gap
                 Row(
-                  mainAxisAlignment: MainAxisAlignment
-                      .spaceBetween, // FIXED: Use proper MainAxisAlignment
-                  mainAxisSize:
-                      MainAxisSize.max, // Use max to fill container width
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisSize: MainAxisSize.max,
                   children: [
-                    // Fixed: Replace the Row + Flexible with a simple Row that has bounded width
+                    // Fixed width for location section
                     SizedBox(
-                      width: 140, // Fixed width for location section
+                      width: 140,
                       child: Row(
-                        mainAxisSize:
-                            MainAxisSize.min, // Use minimum required width
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.location_on,
-                              size: 14, color: ThemeConstants.grey),
+                              size: 14, color: secondaryTextColor),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               location,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: ThemeConstants.grey,
+                                color: secondaryTextColor,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),

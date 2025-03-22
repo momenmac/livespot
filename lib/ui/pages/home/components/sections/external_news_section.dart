@@ -27,6 +27,14 @@ class ExternalNewsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Use theme.scaffoldBackgroundColor or ThemeConstants.darkBackground based on existence
+    final backgroundColor = isDarkMode
+        ? ThemeConstants.darkBackground
+        : theme.scaffoldBackgroundColor;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -52,8 +60,7 @@ class ExternalNewsSection extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     TextStrings.externalNews,
-                    style: const TextStyle(
-                      fontSize: 18,
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -84,14 +91,15 @@ class ExternalNewsSection extends StatelessWidget {
           ),
         ),
 
-        // Horizontal scrolling news cards - FIXED: further reduced height
+        // Horizontal scrolling news cards
         SizedBox(
-          height: 200, // Further reduced from 215px to 200px
+          height: 200,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
               _buildExternalNewsCard(
+                context,
                 "Global Markets Report: Tech Stocks Surge",
                 "Major tech companies see significant gains amid positive quarterly earnings reports.",
                 "Financial Times",
@@ -100,6 +108,7 @@ class ExternalNewsSection extends StatelessWidget {
                 ThemeConstants.primaryColor,
               ),
               _buildExternalNewsCard(
+                context,
                 "New Health Study Reveals Benefits of Mediterranean Diet",
                 "Research shows significant health improvements for participants following the diet for six months.",
                 "Health Journal",
@@ -108,6 +117,7 @@ class ExternalNewsSection extends StatelessWidget {
                 ThemeConstants.green,
               ),
               _buildExternalNewsCard(
+                context,
                 "Climate Summit Announces New Global Initiatives",
                 "World leaders agree on ambitious carbon reduction targets at international conference.",
                 "Reuters",
@@ -123,6 +133,7 @@ class ExternalNewsSection extends StatelessWidget {
   }
 
   Widget _buildExternalNewsCard(
+    BuildContext context,
     String title,
     String description,
     String source,
@@ -130,16 +141,38 @@ class ExternalNewsSection extends StatelessWidget {
     String imageUrl,
     Color accentColor,
   ) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Card background color based on theme
+    final cardBackgroundColor = isDarkMode ? theme.cardColor : Colors.white;
+
+    // Shadow color based on theme
+    final shadowColor = isDarkMode
+        ? Colors.black.withOpacity(0.15)
+        : Colors.black.withOpacity(0.08);
+
+    // Text colors based on theme
+    final titleTextColor = isDarkMode
+        ? theme.textTheme.bodyLarge?.color
+        : null; // Use default for light mode
+
+    final descriptionTextColor = isDarkMode
+        ? theme.textTheme.bodyMedium?.color
+        : ThemeConstants.black.withOpacity(0.8);
+
+    final secondaryTextColor =
+        isDarkMode ? theme.textTheme.bodySmall?.color : ThemeConstants.grey;
+
     return Container(
       width: 280,
-      margin: const EdgeInsets.only(
-          right: 16, bottom: 0), // Eliminated bottom margin completely
+      margin: const EdgeInsets.only(right: 16, bottom: 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBackgroundColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: shadowColor,
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -154,7 +187,7 @@ class ExternalNewsSection extends StatelessWidget {
           Stack(
             children: [
               SizedBox(
-                height: 105, // Further reduced from 115px to 105px
+                height: 105,
                 width: double.infinity,
                 child: Image.network(
                   imageUrl,
@@ -172,12 +205,16 @@ class ExternalNewsSection extends StatelessWidget {
                   },
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: ThemeConstants.greyLight,
+                      color: isDarkMode
+                          ? theme.canvasColor
+                          : ThemeConstants.greyLight,
                       child: Center(
                         child: Icon(
                           Icons.image,
                           size: 48,
-                          color: ThemeConstants.grey.withOpacity(0.5),
+                          color: isDarkMode
+                              ? theme.disabledColor
+                              : ThemeConstants.grey.withOpacity(0.5),
                         ),
                       ),
                     );
@@ -211,39 +248,40 @@ class ExternalNewsSection extends StatelessWidget {
 
           // Content with further reduced padding
           Padding(
-            padding: const EdgeInsets.all(6), // Further reduced from 8px to 6px
+            padding: const EdgeInsets.all(6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Title
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 14, // Reduced from 15px to 14px
-                    height: 1.1, // Added tight line height
+                    fontSize: 14,
+                    height: 1.1,
+                    color: titleTextColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
 
-                const SizedBox(height: 2), // Reduced from 4px to 2px
+                const SizedBox(height: 2),
 
                 // Description
                 Text(
                   description,
                   style: TextStyle(
-                    fontSize: 12, // Reduced from 13px to 12px
-                    height: 1.2, // Added tight line height
-                    color: ThemeConstants.black.withOpacity(0.8),
+                    fontSize: 12,
+                    height: 1.2,
+                    color: descriptionTextColor,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
 
-                const SizedBox(height: 3), // Reduced from 5px to 3px
+                const SizedBox(height: 3),
 
-                // Time info and read more button - same as before
+                // Time info and read more button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -253,14 +291,14 @@ class ExternalNewsSection extends StatelessWidget {
                         Icon(
                           Icons.access_time,
                           size: 14,
-                          color: ThemeConstants.grey,
+                          color: secondaryTextColor,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           time,
                           style: TextStyle(
                             fontSize: 12,
-                            color: ThemeConstants.grey,
+                            color: secondaryTextColor,
                           ),
                         ),
                       ],
