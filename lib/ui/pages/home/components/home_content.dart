@@ -8,12 +8,12 @@ import 'sections/news_feed_section.dart';
 import 'sections/live_streams_section.dart';
 import 'sections/recommended_rooms_section.dart';
 import 'sections/external_news_section.dart';
+import 'sections/story_section.dart'; // Add this import
 import 'widgets/search_bar_widget.dart';
 import 'widgets/date_picker_widget.dart';
 
 class HomeContent extends StatefulWidget {
-  final VoidCallback?
-      onMapToggle; // This callback will be used by MapPreviewSection
+  final VoidCallback? onMapToggle;
 
   const HomeContent({
     super.key,
@@ -48,7 +48,7 @@ class _HomeContentState extends State<HomeContent> {
       appBar: AppBar(
         title: const Text(TextStrings.appName),
         leading: IconButton(
-          onPressed: widget.onMapToggle, // Use the callback directly
+          onPressed: widget.onMapToggle,
           icon: const Icon(Icons.location_on_outlined),
         ),
         actions: [
@@ -81,7 +81,6 @@ class _HomeContentState extends State<HomeContent> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          // Refresh data
           await Future.delayed(const Duration(seconds: 1));
         },
         child: ListView(
@@ -100,14 +99,26 @@ class _HomeContentState extends State<HomeContent> {
                 ),
               ),
 
-            // Categories Section - MOVED to top position
+            // Stories Section - NEW: add at the very top
+            const StorySection(),
+
+            // Add a divider after stories
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Divider(height: 1),
+            ),
+
+            // Categories Section
             const CategoriesSection(),
 
             // Map Preview Section
             const MapPreviewSection(),
 
             // News Feed Section
-            NewsFeedSection(selectedDate: _selectedDate),
+            NewsFeedSection(
+              selectedDate: _selectedDate,
+              onMapToggle: widget.onMapToggle,
+            ),
 
             // Recommended Rooms Section
             const RecommendedRoomsSection(),

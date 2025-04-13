@@ -3,7 +3,6 @@ import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_application_2/ui/theme/notification_theme.dart';
 import 'package:flutter_application_2/ui/pages/notification/notification_model.dart';
 import 'package:intl/intl.dart';
 import 'notification_filter.dart';

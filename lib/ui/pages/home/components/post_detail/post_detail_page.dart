@@ -709,9 +709,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   Widget _buildHonestyRating(int rating) {
     Color color;
-    if (rating >= 80)
+    if (rating >= 80) {
       color = ThemeConstants.green;
-    else if (rating >= 60)
+    } else if (rating >= 60)
       color = ThemeConstants.orange;
     else
       color = ThemeConstants.red;

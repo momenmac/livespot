@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/pages/settings/account_settings_page.dart';
@@ -350,9 +349,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildHonestyRating(int rating) {
     Color color;
-    if (rating >= 80)
+    if (rating >= 80) {
       color = ThemeConstants.green;
-    else if (rating >= 60)
+    } else if (rating >= 60)
       color = ThemeConstants.orange;
     else
       color = ThemeConstants.red;

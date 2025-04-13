@@ -6,6 +6,7 @@ import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_
 
 class NewsFeedSection extends StatelessWidget {
   final DateTime selectedDate;
+  final VoidCallback? onMapToggle;
 
   // Updated image URLs with reliable placeholders
   final List<String> _imageUrls = const [
@@ -19,6 +20,7 @@ class NewsFeedSection extends StatelessWidget {
   const NewsFeedSection({
     super.key,
     required this.selectedDate,
+    this.onMapToggle,
   });
 
   @override
@@ -29,8 +31,9 @@ class NewsFeedSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Rest of the feed content
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -649,9 +652,9 @@ class NewsFeedSection extends StatelessWidget {
 
   Widget _buildHonestyPill(int rating, {bool isSmall = false}) {
     Color color;
-    if (rating >= 80)
+    if (rating >= 80) {
       color = ThemeConstants.green;
-    else if (rating >= 60)
+    } else if (rating >= 60)
       color = ThemeConstants.orange;
     else
       color = ThemeConstants.red;
@@ -830,15 +833,19 @@ class NewsFeedSection extends StatelessWidget {
 
   // Helper to get a category from the title
   String _getCategoryFromTitle(String title) {
-    if (title.contains("Storm") || title.contains("Weather"))
+    if (title.contains("Storm") || title.contains("Weather")) {
       return TextStrings.weather;
+    }
     if (title.contains("Tech")) return TextStrings.technology;
-    if (title.contains("Festival") || title.contains("Concert"))
+    if (title.contains("Festival") || title.contains("Concert")) {
       return TextStrings.entertainment;
-    if (title.contains("Council") || title.contains("Mayor"))
+    }
+    if (title.contains("Council") || title.contains("Mayor")) {
       return TextStrings.politics;
-    if (title.contains("Arrest") || title.contains("Police"))
+    }
+    if (title.contains("Arrest") || title.contains("Police")) {
       return TextStrings.crime;
+    }
     return TextStrings.localNews;
   }
 }
