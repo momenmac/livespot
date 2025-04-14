@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'dart:io' show Platform;
 
 class GoogleSignInButton extends StatefulWidget {
   final GoogleSignIn googleSignIn;
@@ -20,48 +21,95 @@ class GoogleSignInButton extends StatefulWidget {
 
 class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   bool _isSigningIn = false;
+  int _retryCount = 0;
+  static const int _maxRetries = 2;
+
+  Future<void> _attemptSignIn() async {
+    if (_isSigningIn) return;
+
+    setState(() {
+      _isSigningIn = true;
+    });
+
+    try {
+      // First check if already signed in to avoid duplicate requests
+      final alreadySignedIn = await widget.googleSignIn.isSignedIn();
+      GoogleSignInAccount? account;
+
+      if (alreadySignedIn) {
+        // Just get the current account
+        print('Already signed in with Google, retrieving current account');
+        account = widget.googleSignIn.currentUser ??
+            await widget.googleSignIn.signInSilently();
+      } else {
+        // Detailed logging before sign in attempt
+        print('Starting Google Sign In flow, attempt #${_retryCount + 1}');
+        if (Platform.isIOS) {
+          print('Running on iOS ${Platform.operatingSystemVersion}');
+        }
+
+        // Perform the regular sign in
+        account = await widget.googleSignIn.signIn();
+
+        print(
+            'Sign in completed: ${account != null ? 'Success' : 'Cancelled/Failed'}');
+      }
+
+      widget.onSignIn(account);
+      // Reset retry count on success
+      _retryCount = 0;
+    } catch (e) {
+      print('Google Sign In Error (detailed): $e');
+
+      // Only retry if we haven't exceeded max retries
+      if (_retryCount < _maxRetries) {
+        _retryCount++;
+        print('Retrying sign in (attempt $_retryCount of $_maxRetries)...');
+
+        // Add a small delay before retrying
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            _attemptSignIn();
+          }
+        });
+        return;
+      } else {
+        _retryCount = 0;
+        // Show a more helpful error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Unable to sign in with Google. Please check your internet connection and try again.',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red[700],
+            duration: Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'RETRY',
+              textColor: Colors.white,
+              onPressed: () {
+                if (mounted) {
+                  _attemptSignIn();
+                }
+              },
+            ),
+          ),
+        );
+        widget.onSignIn(null);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSigningIn = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
-      onPressed: widget.isLoading || _isSigningIn
-          ? null
-          : () async {
-              // Prevent multiple sign-in attempts
-              if (_isSigningIn) return;
-
-              setState(() {
-                _isSigningIn = true;
-              });
-
-              try {
-                // First check if already signed in to avoid duplicate requests
-                final alreadySignedIn = await widget.googleSignIn.isSignedIn();
-                GoogleSignInAccount? account;
-
-                if (alreadySignedIn) {
-                  // Just get the current account
-                  print(
-                      'Already signed in with Google, retrieving current account');
-                  account = widget.googleSignIn.currentUser ??
-                      await widget.googleSignIn.signInSilently();
-                } else {
-                  // Perform the regular sign in
-                  account = await widget.googleSignIn.signIn();
-                }
-
-                widget.onSignIn(account);
-              } catch (e) {
-                print('Google Sign In Error: $e');
-                widget.onSignIn(null);
-              } finally {
-                if (mounted) {
-                  setState(() {
-                    _isSigningIn = false;
-                  });
-                }
-              }
-            },
+      onPressed: widget.isLoading || _isSigningIn ? null : _attemptSignIn,
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: ThemeConstants.primaryColor, width: 1.5),
         padding: const EdgeInsets.symmetric(vertical: 14),

@@ -27,6 +27,8 @@ class ApiUrls {
   // Token management for JWT - remove CSRF endpoint
   static String get tokenRefresh => '$baseUrl/accounts/token/refresh/';
   static String get verifyToken => '$baseUrl/accounts/token/verify/';
+  static String get tokenValidate =>
+      '$baseUrl/accounts/token/validate/'; // New endpoint
   static String get logout => '$baseUrl/accounts/logout/';
 
   // Profile image upload - updated paths based on server configuration

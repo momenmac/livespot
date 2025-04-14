@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 import os
 import uuid
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 def user_profile_path(instance, filename):
@@ -13,28 +14,22 @@ def user_profile_path(instance, filename):
     return os.path.join('profile_pics', str(instance.id), filename)
 
 class AccountManager(BaseUserManager):
-    def create_user(self, email, first_name, last_name, password=None, google_id=None, is_verified=False):
+    def create_user(self, email, password=None, **extra_fields):
         if not email:
-            raise ValueError("Users must have an email address")
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
         
-        user = self.model(
-            email=self.normalize_email(email),
-            first_name=first_name,
-            last_name=last_name,
-            google_id=google_id,
-            is_verified=is_verified
-        )
-
-        if password:
-            user.set_password(password)
-        else:
-            user.set_unusable_password()  # For Google users
-
+        # Set last_login automatically if not provided
+        if 'last_login' not in extra_fields:
+            extra_fields['last_login'] = timezone.now()
+            
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
         user.save(using=self._db)
         return user
 
     def create_superuser(self, email, first_name, last_name, password):
-        user = self.create_user(email, first_name, last_name, password, is_verified=True)
+        user = self.create_user(email, password, first_name=first_name, last_name=last_name, is_verified=True)
         user.is_admin = True
         user.save(using=self._db)
         return user

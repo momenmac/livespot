@@ -1,111 +1,148 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// A service that shows toast messages at the top of the screen
-/// This avoids all the issues with SnackBar positioning
 class TopToast {
-  static OverlayEntry? _currentToast;
-  static bool _isVisible = false;
-  static const Duration _defaultDuration = Duration(seconds: 3);
+  static OverlayEntry? _overlayEntry;
+  static Timer? _timer;
 
-  /// Show a toast message at the top of the screen
   static void show({
     required BuildContext context,
     required String message,
-    Color? backgroundColor,
-    Duration duration = _defaultDuration,
+    Color backgroundColor = Colors.black87,
+    Duration duration = const Duration(seconds: 3),
     IconData? icon,
   }) {
-    // Remove any existing toast first
-    _hideToast();
+    // Safely hide any existing toast first
+    _safelyHideToast();
 
-    // Create new toast
-    _currentToast = _createToastEntry(
-      context: context,
-      message: message,
-      backgroundColor: backgroundColor ?? Colors.black.withOpacity(0.7),
-      icon: icon,
+    // Verify we have a valid overlay using maybeOf instead of nullOk
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null || !context.mounted) {
+      print(
+          '⚠️ TopToast: Overlay not available or context not mounted, skipping toast');
+      return;
+    }
+
+    // Create and insert the new overlay entry
+    _overlayEntry = OverlayEntry(
+      builder: (BuildContext context) => _ToastWidget(
+        message: message,
+        backgroundColor: backgroundColor,
+        icon: icon,
+      ),
     );
 
-    // Show the toast
-    Overlay.of(context).insert(_currentToast!);
-    _isVisible = true;
+    try {
+      overlay.insert(_overlayEntry!);
 
-    // Automatically hide the toast after specified duration
-    Future.delayed(duration, () {
-      if (_isVisible) {
-        _hideToast();
-      }
-    });
+      // Set timer to automatically hide the toast
+      _timer = Timer(duration, () {
+        _safelyHideToast();
+      });
+    } catch (e) {
+      print('⚠️ TopToast: Error showing toast: $e');
+      _overlayEntry = null;
+    }
   }
 
-  /// Create a toast overlay entry
-  static OverlayEntry _createToastEntry({
-    required BuildContext context,
-    required String message,
-    required Color backgroundColor,
-    IconData? icon,
-  }) {
-    final screenSize = MediaQuery.of(context).size;
-    // Position the toast slightly lower if it's a success message
-    final topPadding = MediaQuery.of(context).padding.top + 80;
+  // Safely hide toast to prevent errors
+  static void _safelyHideToast() {
+    _timer?.cancel();
+    _timer = null;
 
-    return OverlayEntry(
-      builder: (context) => Positioned(
-        top: topPadding,
-        left: screenSize.width > 900 ? 450 * 0.1 : screenSize.width * 0.1,
-        width: screenSize.width > 900 ? 450 * 0.8 : screenSize.width * 0.8,
-        child: Material(
-          color: Colors.transparent,
-          // Increasing elevation to ensure it shows above other UI elements
-          elevation: 10,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.0, end: 1.0),
-            // Slow down the animation slightly
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(
-                      0, (1 - value) * -30), // Increased animation distance
-                  child: child,
-                ),
-              );
-            },
-            child: Container(
+    try {
+      if (_overlayEntry != null) {
+        _overlayEntry!.remove();
+        _overlayEntry = null;
+      }
+    } catch (e) {
+      print('⚠️ TopToast: Error hiding toast: $e');
+      _overlayEntry = null;
+    }
+  }
+}
+
+class _ToastWidget extends StatefulWidget {
+  final String message;
+  final Color backgroundColor;
+  final IconData? icon;
+
+  const _ToastWidget({
+    required this.message,
+    required this.backgroundColor,
+    this.icon,
+  });
+
+  @override
+  _ToastWidgetState createState() => _ToastWidgetState();
+}
+
+class _ToastWidgetState extends State<_ToastWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final topPadding = mediaQuery.padding.top + 10;
+
+    return Positioned(
+      top: topPadding,
+      left: 16,
+      right: 16,
+      child: SafeArea(
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, -1),
+            end: Offset.zero,
+          ).animate(_animation),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            color: widget.backgroundColor,
+            child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 14), // Slightly larger padding
-              decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(8)),
+                horizontal: 16,
+                vertical: 12,
+              ),
               child: Row(
                 children: [
-                  if (icon != null) ...[
-                    Icon(icon, color: Colors.white, size: 24), // Larger icon
-                    SizedBox(width: 12),
+                  if (widget.icon != null) ...[
+                    Icon(
+                      widget.icon,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 12),
                   ],
                   Expanded(
                     child: Text(
-                      message,
+                      widget.message,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 15, // Slightly larger font
-                        fontWeight: FontWeight.w500, // Semibold text
+                        fontSize: 16,
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: _hideToast,
-                    icon: Icon(
-                      Icons.close,
-                      color: Colors.white.withOpacity(0.9),
-                      size: 18,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints(),
-                    splashRadius: 18,
-                    mouseCursor: SystemMouseCursors.click,
                   ),
                 ],
               ),
@@ -114,14 +151,5 @@ class TopToast {
         ),
       ),
     );
-  }
-
-  /// Hide the current toast if it exists
-  static void _hideToast() {
-    if (_currentToast != null) {
-      _currentToast!.remove();
-      _currentToast = null;
-      _isVisible = false;
-    }
   }
 }

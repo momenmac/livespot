@@ -1,155 +1,117 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/services/auth/session_manager.dart'; // Add this import
-import 'package:flutter_application_2/services/utils/navigation_service.dart';
-import 'package:flutter_application_2/routes/route_guard.dart';
-import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:provider/provider.dart';
 
 class SessionMonitor extends StatefulWidget {
   final Widget child;
 
-  const SessionMonitor({super.key, required this.child});
+  const SessionMonitor({
+    Key? key,
+    required this.child,
+  }) : super(key: key);
 
   @override
   SessionMonitorState createState() => SessionMonitorState();
 }
 
-class SessionMonitorState extends State<SessionMonitor>
-    with WidgetsBindingObserver {
-  // Add debounce mechanism
-  DateTime? _lastNavigationAttempt;
-  String? _currentRouteName;
-
+class SessionMonitorState extends State<SessionMonitor> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    _initializeSessionMonitoring();
+  }
 
-    // Subscribe to session state changes
-    SessionManager().onStateChanged.listen(_handleSessionStateChange);
+  void _initializeSessionMonitoring() {
+    // Use Future.microtask to ensure this runs after build
+    Future.microtask(() {
+      if (!mounted) return;
 
-    // Check routes on app start
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkCurrentRoute();
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+
+      // Listen for session state changes
+      accountProvider.addListener(_checkSessionStatus);
+
+      // Perform initial check
+      _checkSessionStatus();
     });
   }
 
-  void _checkCurrentRoute() {
+  void _checkSessionStatus() {
     if (!mounted) return;
 
-    final route = ModalRoute.of(context);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
 
-    if (route != null && route.settings.name != null) {
-      _currentRouteName = route.settings.name;
-
-      // Check if this route should be protected
-      if (_currentRouteName != null &&
-          RouteGuard.isProtectedRoute(_currentRouteName!)) {
-        RouteGuard.handleRouteSecurity(context, _currentRouteName!);
-      }
+    // Check if token needs refreshing
+    if (accountProvider.shouldRefreshToken) {
+      accountProvider.refreshToken();
     }
   }
 
-  void _handleSessionStateChange(SessionState state) {
+  // This safer method only shows notifications if the context is valid and has an Overlay
+  void _safelyShowNotification(BuildContext context, String message,
+      {bool isError = false}) {
+    // Skip any UI notifications during initialization
     if (!mounted) return;
 
-    // Prevent rapid navigation attempts
-    final now = DateTime.now();
-    if (_lastNavigationAttempt != null &&
-        now.difference(_lastNavigationAttempt!) <
-            const Duration(milliseconds: 500)) {
-      print('⚠️ Ignoring rapid session state navigation');
-      return;
+    // Check if we have a valid overlay
+    try {
+      final overlay = Overlay.of(context, debugRequiredFor: widget);
+      if (overlay != null) {
+        if (isError) {
+          ResponsiveSnackBar.showError(context: context, message: message);
+        } else {
+          ResponsiveSnackBar.showInfo(context: context, message: message);
+        }
+      } else {
+        print(
+            '⚠️ SessionMonitor: Overlay not available yet, skipping notification: $message');
+      }
+    } catch (e) {
+      print('⚠️ SessionMonitor: Error showing notification: $e');
+      // Just print the notification message to console since we can't show UI
+      print('📢 Notification (${isError ? 'ERROR' : 'INFO'}): $message');
     }
-    _lastNavigationAttempt = now;
+  }
 
-    final NavigationService nav = NavigationService();
-    _currentRouteName = ModalRoute.of(context)?.settings.name;
+  void _handleSessionStateChange(AccountProvider provider) {
+    // Wait for the context to be ready
+    Future.microtask(() {
+      if (!mounted) return;
 
-    switch (state) {
-      case SessionState.expired:
-        // Handle expired session - always redirect to login
-        if (_currentRouteName != AppRoutes.login) {
-          Future.microtask(() {
-            if (mounted && context.mounted) {
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: "Your session has expired. Please log in again.",
-              );
-              nav.replaceAllWith(AppRoutes.login);
-            }
-          });
+      final state =
+          provider.isAuthenticated ? 'authenticated' : 'unauthenticated';
+      print('🔒 Session state changed: $state');
+
+      // Only try to show UI notifications if we think it's safe
+      if (WidgetsBinding.instance.isRootWidgetAttached &&
+          context.findRenderObject() != null) {
+        try {
+          if (provider.error != null) {
+            _safelyShowNotification(context, provider.error!, isError: true);
+          } else if (!provider.isAuthenticated && provider.error == null) {
+            _safelyShowNotification(
+                context, 'Session expired, please login again');
+          }
+        } catch (e) {
+          print('⚠️ SessionMonitor: Error handling session state change: $e');
         }
-        break;
-
-      case SessionState.unauthenticated:
-        // Only navigate if we're on a protected route
-        if (_currentRouteName != null &&
-            RouteGuard.isProtectedRoute(_currentRouteName!) &&
-            _currentRouteName != AppRoutes.login) {
-          Future.microtask(() {
-            if (mounted && context.mounted) {
-              ResponsiveSnackBar.showWarning(
-                context: context,
-                message: "Please login to continue.",
-              );
-              nav.replaceAllWith(AppRoutes.login);
-            }
-          });
-        }
-        break;
-
-      case SessionState.authenticated:
-        // If we're on an auth route, navigate to home
-        if (_currentRouteName != null &&
-            RouteGuard.isAuthRoute(_currentRouteName!) &&
-            _currentRouteName != AppRoutes.home) {
-          Future.microtask(() {
-            if (mounted && context.mounted) {
-              nav.replaceTo(AppRoutes.home);
-            }
-          });
-        }
-        break;
-
-      default:
-        // No automatic navigation for other states
-        break;
-    }
+      }
+    });
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // App came to foreground - verify session
-      SessionManager().recordActivity();
-
-      // Refresh token if needed when app resumes - using try/catch to handle potential errors
-      try {
-        // Using a safer approach with error handling
-        SessionManager().verifyAndRefreshTokenIfNeeded().catchError((error) {
-          print('Error refreshing token: $error');
-          return false;
-        });
-      } catch (e) {
-        print('Token refresh error: $e');
-      }
-
-      // Re-check current route when app resumes
-      Future.microtask(() {
-        _checkCurrentRoute();
-      });
-    }
+  void dispose() {
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    accountProvider.removeListener(_checkSessionStatus);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return widget.child;
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
   }
 }

@@ -4,13 +4,14 @@ from .views import (
     CustomTokenObtainPairView, RegisterView, LoginView, GoogleLoginView, ProfileView, ProfileImageView,
     VerifyEmailView, ResendVerificationCodeView,
     ForgotPasswordView, VerifyResetCodeView, ResetPasswordView,
-    LogoutView
+    LogoutView, ValidateTokenView  # Add ValidateTokenView
 )
 
 urlpatterns = [
     # JWT authentication endpoints
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/validate/', ValidateTokenView.as_view(), name='token_validate'),
     
     # User management endpoints
     path('register/', RegisterView.as_view(), name='register'),

@@ -3,80 +3,127 @@ import 'dart:convert';
 class JwtToken {
   final String accessToken;
   final String refreshToken;
-  final DateTime accessTokenExpiry;
-  final DateTime refreshTokenExpiry;
+  DateTime? lastValidationTime;
 
   JwtToken({
     required this.accessToken,
     required this.refreshToken,
-    required this.accessTokenExpiry,
-    required this.refreshTokenExpiry,
   });
 
-  /// Create a JWT token from a JSON object
   factory JwtToken.fromJson(Map<String, dynamic> json) {
     return JwtToken(
-      accessToken: json['access'] ?? '',
-      refreshToken: json['refresh'] ?? '',
-      accessTokenExpiry: getExpiryFromToken(json['access']),
-      refreshTokenExpiry: getExpiryFromToken(json['refresh'], defaultDays: 7),
+      accessToken: json['access'],
+      refreshToken: json['refresh'],
     );
   }
 
-  /// Convert the token to a JSON object
   Map<String, dynamic> toJson() {
     return {
       'access': accessToken,
       'refresh': refreshToken,
-      'access_expiry': accessTokenExpiry.toIso8601String(),
-      'refresh_expiry': refreshTokenExpiry.toIso8601String(),
+      'last_validation_time': lastValidationTime?.toIso8601String(),
     };
   }
 
-  /// Check if the access token is expired
-  bool get isAccessTokenExpired {
-    return DateTime.now().isAfter(accessTokenExpiry);
-  }
-
-  /// Check if the refresh token is expired
-  bool get isRefreshTokenExpired {
-    return DateTime.now().isAfter(refreshTokenExpiry);
-  }
-
-  /// Get a string representation of the token
-  @override
-  String toString() {
-    return jsonEncode(toJson());
-  }
-
-  /// Extract the expiry date from a JWT token
-  static DateTime getExpiryFromToken(String? token, {int defaultDays = 1}) {
-    if (token == null || token.isEmpty) {
-      return DateTime.now().add(Duration(days: defaultDays));
-    }
-
+  // Custom JWT decoding method that doesn't rely on external package
+  static Map<String, dynamic> _decodeJWT(String token) {
     try {
-      // Split the token into its parts
       final parts = token.split('.');
       if (parts.length != 3) {
-        return DateTime.now().add(Duration(days: defaultDays));
+        throw Exception('Invalid JWT token format');
       }
 
-      // Decode the payload (middle part)
       final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
+      String normalized = base64Url.normalize(payload);
       final decoded = utf8.decode(base64Url.decode(normalized));
-      final json = jsonDecode(decoded);
-
-      // Get the expiry timestamp
-      if (json['exp'] != null) {
-        return DateTime.fromMillisecondsSinceEpoch(json['exp'] * 1000);
-      }
+      return json.decode(decoded);
     } catch (e) {
-      print('Error parsing JWT token: $e');
+      print('Error decoding JWT: $e');
+      return {};
+    }
+  }
+
+  // Check if JWT is expired
+  static bool _isExpired(String token) {
+    try {
+      final decodedToken = _decodeJWT(token);
+      final expiryTimestamp = decodedToken['exp'];
+      if (expiryTimestamp == null) return true;
+
+      final expiryDate =
+          DateTime.fromMillisecondsSinceEpoch(expiryTimestamp * 1000);
+      return DateTime.now().isAfter(expiryDate);
+    } catch (e) {
+      print('Error checking token expiry: $e');
+      return true;
+    }
+  }
+
+  bool get isAccessTokenExpired {
+    try {
+      return _isExpired(accessToken);
+    } catch (e) {
+      print('Error checking access token expiry: $e');
+      return true;
+    }
+  }
+
+  bool get isRefreshTokenExpired {
+    try {
+      return _isExpired(refreshToken);
+    } catch (e) {
+      print('Error checking refresh token expiry: $e');
+      return true;
+    }
+  }
+
+  // Get access token expiry date
+  DateTime get accessTokenExpiryDate {
+    try {
+      final decodedToken = _decodeJWT(accessToken);
+      final timestamp = decodedToken['exp'];
+      if (timestamp == null) return DateTime.now();
+      return DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    } catch (e) {
+      print('Error getting access token expiry date: $e');
+      return DateTime.now();
+    }
+  }
+
+  // Get refresh token expiry date
+  DateTime get refreshTokenExpiryDate {
+    try {
+      final decodedToken = _decodeJWT(refreshToken);
+      final timestamp = decodedToken['exp'];
+      if (timestamp == null) return DateTime.now();
+      return DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    } catch (e) {
+      print('Error getting refresh token expiry date: $e');
+      return DateTime.now();
+    }
+  }
+
+  // Add this method to determine if token needs server validation
+  bool get needsServerValidation {
+    // If token is already expired locally, no need to check with server
+    if (isRefreshTokenExpired) {
+      return false;
     }
 
-    // Default expiry if parsing fails
-    return DateTime.now().add(Duration(days: defaultDays));
+    // Check if it's been more than 30 minutes since our last validation
+    final lastValidated =
+        lastValidationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final timeSinceValidation = DateTime.now().difference(lastValidated);
+    return timeSinceValidation.inMinutes > 30;
+  }
+
+  // Update validation timestamp
+  void markAsValidated() {
+    lastValidationTime = DateTime.now();
+  }
+
+  @override
+  String toString() {
+    return json.encode(toJson());
   }
 }

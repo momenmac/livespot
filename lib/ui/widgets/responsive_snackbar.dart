@@ -1,84 +1,110 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/widgets/top_toast.dart';
 
-/// A responsive SnackBar helper that uses TopToast to avoid positioning issues
 class ResponsiveSnackBar {
-  /// Show a responsive notification message
-  /// This implementation uses TopToast instead of SnackBar to avoid positioning issues
   static void show({
     required BuildContext context,
     required String message,
-    Color? backgroundColor,
-    Duration duration = const Duration(seconds: 2),
-    IconData? icon,
+    Color backgroundColor = Colors.black87,
+    Duration duration = const Duration(seconds: 3),
+    SnackBarAction? action,
+    bool isError = false,
   }) {
-    // Use our custom TopToast instead of the problematic SnackBar
-    TopToast.show(
-      context: context,
-      message: message,
-      backgroundColor: backgroundColor,
-      duration: duration,
-      icon: icon,
-    );
+    // First check if the context is valid and has an overlay
+    try {
+      // Use safer method to check for overlay availability
+      final overlay = Overlay.maybeOf(context);
+      if (overlay != null && context.mounted) {
+        TopToast.show(
+          context: context,
+          message: message,
+          backgroundColor: backgroundColor,
+          duration: duration,
+          icon: isError ? Icons.error_outline : null,
+        );
+      } else {
+        // Fallback to regular SnackBar if Overlay is not available
+        try {
+          if (context.mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(
+                content: Text(message),
+                duration: duration,
+                backgroundColor: backgroundColor,
+                action: action,
+              ),
+            );
+          }
+        } catch (e) {
+          // If even SnackBar fails, just print to console
+          print('📢 Notification fallback: $message');
+        }
+      }
+    } catch (e) {
+      print('⚠️ ResponsiveSnackBar: Error showing notification: $e');
+      print('📢 Message: $message');
+    }
   }
 
-  /// Shows an error message
   static void showError({
     required BuildContext context,
     required String message,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(seconds: 4),
+    SnackBarAction? action,
   }) {
     show(
       context: context,
       message: message,
-      backgroundColor: Colors.red.shade700,
+      backgroundColor: ThemeConstants.red,
       duration: duration,
-      icon: Icons.error_outline,
+      action: action,
+      isError: true,
     );
   }
 
-  /// Shows a success message
-  static void showSuccess({
-    required BuildContext context,
-    required String message,
-    Duration duration = const Duration(seconds: 2),
-  }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: Colors.green.shade700,
-      duration: duration,
-      icon: Icons.check_circle_outline,
-    );
-  }
-
-  /// Shows an info message
-  static void showInfo({
-    required BuildContext context,
-    required String message,
-    Duration duration = const Duration(seconds: 2),
-  }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: Colors.blue.shade700,
-      duration: duration,
-      icon: Icons.info_outline,
-    );
-  }
-
-  /// Show a warning SnackBar
   static void showWarning({
     required BuildContext context,
     required String message,
-    Duration? duration,
+    Duration duration = const Duration(seconds: 4),
+    SnackBarAction? action,
   }) {
     show(
       context: context,
       message: message,
-      backgroundColor: Colors.orange,
-      icon: Icons.warning_amber_rounded,
-      duration: duration ?? const Duration(seconds: 3),
+      backgroundColor: ThemeConstants.orange,
+      duration: duration,
+      action: action,
+    );
+  }
+
+  static void showSuccess({
+    required BuildContext context,
+    required String message,
+    Duration duration = const Duration(seconds: 3),
+    SnackBarAction? action,
+  }) {
+    show(
+      context: context,
+      message: message,
+      backgroundColor: ThemeConstants.green,
+      duration: duration,
+      action: action,
+    );
+  }
+
+  static void showInfo({
+    required BuildContext context,
+    required String message,
+    Duration duration = const Duration(seconds: 3),
+    SnackBarAction? action,
+  }) {
+    show(
+      context: context,
+      message: message,
+      backgroundColor: ThemeConstants.primaryColor,
+      duration: duration,
+      action: action,
     );
   }
 }

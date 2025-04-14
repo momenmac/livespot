@@ -41,12 +41,21 @@ class RouteGuard {
 
   static Future<bool> isAuthenticated() async {
     final sessionManager = SessionManager();
+
+    // If session manager is already initialized, use its state
     if (sessionManager.isInitialized) {
       return sessionManager.isAuthenticated;
     }
 
-    final JwtToken? token = await SharedPrefs.getJwtToken();
-    return token != null && !token.isRefreshTokenExpired;
+    // Wait for session manager to initialize (with a timeout)
+    int attempts = 0;
+    while (!sessionManager.isInitialized && attempts < 10) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      attempts++;
+    }
+
+    // After waiting, check authentication status
+    return sessionManager.isAuthenticated;
   }
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -82,15 +91,24 @@ class RouteGuard {
         print(
             '🔒 Unauthorized access attempt to $routeName, redirecting to login');
 
+        // Only show warning if the context is still valid and mounted
         if (context.mounted) {
-          ResponsiveSnackBar.showWarning(
-            context: context,
-            message: "Please login to access this feature",
-          );
+          try {
+            // Check if Scaffold is available
+            if (ScaffoldMessenger.maybeOf(context) != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Please login to access this feature"),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            print('⚠️ Could not show login required message: $e');
+          }
         }
         nav.replaceAllWith(AppRoutes.login);
-      }
-      else if (isAuthRoute(routeName) && isAuthenticated) {
+      } else if (isAuthRoute(routeName) && isAuthenticated) {
         print(
             '🔒 Authenticated user trying to access $routeName, redirecting to home');
         nav.replaceTo(AppRoutes.home);

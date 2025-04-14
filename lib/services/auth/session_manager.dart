@@ -1,272 +1,299 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/models/account.dart';
 import 'package:flutter_application_2/models/jwt_token.dart';
+import 'package:flutter_application_2/services/api/account/api_client.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-// Session states
 enum SessionState {
   initializing,
   authenticated,
   unauthenticated,
-  expired,
   refreshing,
-  error
+  error,
 }
 
 class SessionManager {
-  // Singleton pattern
+  // Singleton instance
   static final SessionManager _instance = SessionManager._internal();
-  factory SessionManager() => _instance;
 
-  // Private constructor that initializes the session
+  // Stream controller for session state changes
+  final StreamController<SessionState> _stateController =
+      StreamController<SessionState>.broadcast();
+  Stream<SessionState> get onStateChanged => _stateController.stream;
+
+  // Session data
+  JwtToken? _token;
+  Account? _user;
+  SessionState _state = SessionState.initializing;
+  String? _error;
+  bool _isInitialized = false;
+
+  // Getters
+  JwtToken? get token => _token;
+  Account? get user => _user;
+  SessionState get state => _state;
+  String? get error => _error;
+  bool get isInitialized => _isInitialized;
+  bool get isAuthenticated =>
+      _state == SessionState.authenticated &&
+      _token != null &&
+      !_token!.isRefreshTokenExpired;
+  bool get isUserVerified => _user?.isVerified ?? false;
+  bool get shouldRefreshToken =>
+      _token != null &&
+      _token!.isAccessTokenExpired &&
+      !_token!.isRefreshTokenExpired;
+
+  // Factory constructor to return the singleton instance
+  factory SessionManager() {
+    return _instance;
+  }
+
+  // Private constructor
   SessionManager._internal() {
     _initializeSession();
   }
 
-  // State variables
-  SessionState _state = SessionState.initializing;
-  JwtToken? _token;
-  Account? _user;
-  String? _error;
-  Timer? _refreshTimer;
-  bool _isInitializing = false;
-
-  // Event controller for session state changes
-  final _stateController = StreamController<SessionState>.broadcast();
-  Stream<SessionState> get onStateChanged => _stateController.stream;
-
-  // Getters
-  SessionState get state => _state;
-  JwtToken? get token => _token;
-  Account? get user => _user;
-  String? get error => _error;
-  bool get isAuthenticated => _token != null && !_token!.isRefreshTokenExpired;
-  bool get isInitialized =>
-      _state != SessionState.initializing && !_isInitializing;
-  bool get isUserVerified => _user?.isVerified ?? false;
-
-  bool get shouldRefreshToken {
-    if (_token == null) return false;
-    final fiveMinutesFromNow = DateTime.now().add(Duration(minutes: 5));
-    return _token!.accessTokenExpiry.isBefore(fiveMinutesFromNow) &&
-        !_token!.isRefreshTokenExpired;
-  }
-
-  // Initialize session safely (avoiding async in constructor)
-  void _initializeSession() {
-    if (_isInitializing) return;
-    _isInitializing = true;
-
-    Future.microtask(() async {
-      try {
-        await _initSession();
-      } finally {
-        _isInitializing = false;
-      }
-    });
-  }
-
-  // Initialize session from shared preferences
-  Future<void> _initSession() async {
-    _setState(SessionState.initializing);
-
+  // Initialize the session
+  Future<void> _initializeSession() async {
     try {
-      // Remove legacy tokens if they exist
-      await SharedPrefs.removeLegacyToken();
+      _setState(SessionState.initializing);
+      final token = await SharedPrefs.getJwtToken();
 
-      // Get token from SharedPreferences
-      _token = await SharedPrefs.getJwtToken();
-
-      if (_token != null) {
-        print('🔑 Found existing JWT token, checking validity...');
-
-        // Check if tokens are still valid
-        if (_token!.isRefreshTokenExpired) {
-          print('🔑 Refresh token is expired');
-          await _clearSession();
-          _setState(SessionState.expired);
-          return;
-        } else if (_token!.isAccessTokenExpired) {
-          print('🔑 Access token is expired, attempting to refresh...');
-
-          // Check if Remember Me was enabled
-          final rememberMe = await SharedPrefs.getRememberMe();
-
-          if (rememberMe) {
-            // Try to refresh the token if Remember Me was enabled
-            final refreshed = await _refreshToken();
-            if (!refreshed) {
-              print('🔑 Token refresh failed');
-              await _clearSession();
-              _setState(SessionState.expired);
-              return;
-            }
-          } else {
-            // Don't auto-refresh if Remember Me wasn't enabled
-            print('🔑 Access token expired and Remember Me not enabled');
-            await _clearSession();
-            _setState(SessionState.expired);
-            return;
-          }
-        }
-
-        // Check for session timeout
-        if (await SharedPrefs.isSessionTimedOut()) {
-          print('🔑 Session timeout - User didn\'t select "Remember Me"');
-          await _clearSession();
-          _setState(SessionState.expired);
-          return;
-        }
-
-        // Update last activity time
-        await SharedPrefs.setLastActivity();
-
-        _setState(SessionState.authenticated);
-      } else {
+      if (token == null) {
         _setState(SessionState.unauthenticated);
+        _isInitialized = true;
+        return;
       }
+
+      // Here's the key change: validate the token with the server if needed
+      if (token.needsServerValidation) {
+        print('🔑 Found existing JWT token, validating with server...');
+        final isValid = await _validateTokenWithServer(token);
+
+        if (!isValid) {
+          print('🔑 Token validation failed, clearing session');
+          await clearSession();
+          _isInitialized = true;
+          return;
+        }
+
+        // Mark token as validated after successful server validation
+        token.markAsValidated();
+        await SharedPrefs.saveJwtToken(token);
+        print('🔑 Token validated successfully with server');
+      } else if (token.isRefreshTokenExpired) {
+        print('🔑 Refresh token is expired');
+        await clearSession();
+        _isInitialized = true;
+        return;
+      } else if (token.isAccessTokenExpired) {
+        // Try to refresh the token
+        print('🔑 Access token is expired, refreshing...');
+        final refreshed = await refreshToken(token);
+        if (!refreshed) {
+          print('🔑 Token refresh failed, clearing session');
+          await clearSession();
+          _isInitialized = true;
+          return;
+        }
+      }
+
+      // Try to fetch user profile with the token
+      final userProfile = await _fetchUserProfile(token.accessToken);
+      if (userProfile == null) {
+        print('🔑 Failed to fetch user profile, clearing session');
+        await clearSession();
+        _isInitialized = true;
+        return;
+      }
+
+      // Set session state
+      _token = token;
+      _user = userProfile;
+      _setState(SessionState.authenticated);
+      _isInitialized = true;
+
+      print('🔑 Session initialized with authenticated user: ${_user?.email}');
     } catch (e) {
-      print('🔑 Error during session initialization: ${e.toString()}');
-      _error = 'Failed to initialize session: ${e.toString()}';
-      _setState(SessionState.error);
+      print('🔑 Error initializing session: $e');
+      _setState(SessionState.error, errorMessage: e.toString());
+      _isInitialized = true;
+      await clearSession();
     }
   }
 
-  // Set state and notify listeners
-  void _setState(SessionState newState) {
-    if (_state != newState) {
-      _state = newState;
-      _stateController.add(newState);
-    }
+  // Set the session state and notify listeners
+  void _setState(SessionState newState, {String? errorMessage}) {
+    _state = newState;
+    _error = errorMessage;
+    _stateController.add(newState);
   }
 
-  // Clean up the session
-  Future<void> _clearSession() async {
-    await SharedPrefs.clearSession();
+  // Set session with token and user
+  void setSession({required JwtToken token, required Account user}) {
+    _token = token;
+    _user = user;
+    _setState(SessionState.authenticated);
+  }
+
+  // Set user data
+  void setUser(Account user) {
+    _user = user;
+    if (_state != SessionState.authenticated && _token != null) {
+      _setState(SessionState.authenticated);
+    }
+    _stateController.add(_state); // Notify of user data change
+  }
+
+  // Clear the session
+  Future<void> clearSession() async {
     _token = null;
     _user = null;
-    _refreshTimer?.cancel();
-  }
-
-  // Refresh token
-  Future<bool> _refreshToken() async {
-    if (_token == null || _token!.isRefreshTokenExpired) {
-      return false;
-    }
-
-    _setState(SessionState.refreshing);
-
-    try {
-      final response = await http.post(
-        Uri.parse(ApiUrls.tokenRefresh),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': _token!.refreshToken}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Update only the access token, keeping the same refresh token
-        _token = JwtToken(
-          accessToken: data['access'],
-          refreshToken: _token!.refreshToken,
-          accessTokenExpiry: JwtToken.getExpiryFromToken(data['access']),
-          refreshTokenExpiry: _token!.refreshTokenExpiry,
-        );
-
-        // Save updated token to SharedPreferences
-        await SharedPrefs.saveJwtToken(_token!);
-
-        _setState(SessionState.authenticated);
-        return true;
-      } else {
-        print('🔄 Token refresh failed: ${response.body}');
-        _setState(SessionState.error);
-        return false;
-      }
-    } catch (e) {
-      print('🔄 Token refresh error: $e');
-      _setState(SessionState.error);
-      return false;
-    }
-  }
-
-  // Verify and refresh token if needed (public)
-  Future<bool> verifyAndRefreshTokenIfNeeded() async {
-    if (_token == null) return false;
-
-    try {
-      if (_token!.isRefreshTokenExpired) {
-        print('🔑 Refresh token expired, logging out');
-        _setState(SessionState.expired);
-        return false;
-      }
-
-      if (_token!.isAccessTokenExpired || shouldRefreshToken) {
-        print('🔑 Access token expired or will expire soon, refreshing');
-        return await _refreshToken();
-      }
-
-      return true;
-    } catch (e) {
-      print('❌ Token verification error: ${e.toString()}');
-      try {
-        return await _refreshToken();
-      } catch (_) {
-        _setState(SessionState.expired);
-        return false;
-      }
-    }
+    await SharedPrefs.clearJwtToken();
+    _setState(SessionState.unauthenticated);
   }
 
   // Record user activity
   Future<void> recordActivity() async {
-    if (!isAuthenticated) return;
+    if (_token != null) {
+      await SharedPrefs.setLastActivity();
+    }
+  }
 
-    await SharedPrefs.setLastActivity();
+  // Verify and refresh token if needed
+  Future<bool> verifyAndRefreshTokenIfNeeded() async {
+    if (_token == null) {
+      return false;
+    }
 
-    // Refresh token if needed
-    if (_token?.isAccessTokenExpired == true || shouldRefreshToken) {
-      final rememberMe = await SharedPrefs.getRememberMe();
-      if (rememberMe) {
-        await _refreshToken();
+    // First check if token has expired
+    if (_token!.isRefreshTokenExpired) {
+      print('Refresh token expired, logging out');
+      await clearSession();
+      return false;
+    }
+
+    // Check if access token needs refreshing
+    if (_token!.isAccessTokenExpired) {
+      return await refreshToken(_token!);
+    }
+
+    // If token needs server validation
+    if (_token!.needsServerValidation) {
+      final isValid = await _validateTokenWithServer(_token!);
+      if (!isValid) {
+        await clearSession();
+        return false;
       }
+      _token!.markAsValidated();
+      await SharedPrefs.saveJwtToken(_token!);
+    }
+
+    return true;
+  }
+
+  // Refresh token
+  Future<bool> refreshToken(JwtToken token) async {
+    if (token.isRefreshTokenExpired) {
+      return false;
+    }
+
+    _setState(SessionState.refreshing);
+    try {
+      final url = Uri.parse(ApiUrls.tokenRefresh);
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token.refreshToken}',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        // Create new token with proper constructor parameters
+        final newToken = JwtToken(
+          accessToken: responseData['access'],
+          refreshToken: token.refreshToken, // Keep the same refresh token
+        );
+
+        // Save the new token
+        _token = newToken;
+        await SharedPrefs.saveJwtToken(newToken);
+
+        _setState(SessionState.authenticated);
+        return true;
+      } else {
+        _setState(SessionState.error, errorMessage: 'Failed to refresh token');
+        return false;
+      }
+    } catch (e) {
+      print('Token refresh error: $e');
+      _setState(SessionState.error, errorMessage: e.toString());
+      return false;
     }
   }
 
-  // Set the user and token (used by AccountProvider)
-  void setSession({JwtToken? token, Account? user}) {
-    _token = token;
-    _user = user;
+  // Validate token with server
+  Future<bool> _validateTokenWithServer(JwtToken token) async {
+    try {
+      final url = Uri.parse('${ApiUrls.baseUrl}/accounts/token/validate/');
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
 
-    if (token != null && user != null) {
-      _setState(SessionState.authenticated);
-    } else if (token == null && user == null) {
-      _setState(SessionState.unauthenticated);
+      if (response.statusCode == 200) {
+        return true;
+      } else if (response.statusCode == 401) {
+        // Try to refresh the token if access token is expired
+        if (token.isAccessTokenExpired && !token.isRefreshTokenExpired) {
+          return await refreshToken(token);
+        }
+        return false;
+      } else {
+        print('🔑 Token validation failed with status: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('🔑 Error validating token with server: $e');
+      // If we can't reach the server, we'll assume the token is valid for now
+      // This allows offline usage but will re-validate once connectivity is restored
+      return true;
     }
   }
 
-  // Add a method to update just the user object
-  void setUser(Account user) {
-    _user = user;
-    // If we're setting a user object, we must already be authenticated
-    if (_state != SessionState.authenticated && _token != null) {
-      _setState(SessionState.authenticated);
+  // Fetch user profile
+  Future<Account?> _fetchUserProfile(String accessToken) async {
+    try {
+      final url = Uri.parse('${ApiUrls.baseUrl}/accounts/profile/');
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final userData = jsonDecode(response.body);
+        return Account.fromJson(userData);
+      } else {
+        print('Failed to fetch user profile: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('Error fetching user profile: $e');
+      return null;
     }
-  }
-
-  // Clear the session (used for logout)
-  Future<void> clearSession() async {
-    await _clearSession();
-    _setState(SessionState.unauthenticated);
-  }
-
-  // Dispose
-  void dispose() {
-    _refreshTimer?.cancel();
-    _stateController.close();
   }
 }

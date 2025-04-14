@@ -14,7 +14,8 @@ import random
 import string
 from django.core.mail import send_mail
 from django.conf import settings
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone  # Import Django's timezone utility
 from rest_framework import status, permissions
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -253,7 +254,7 @@ class VerifyEmailView(APIView):
             code_obj = VerificationCode.objects.filter(
                 user=user, 
                 code=verification_code, 
-                expires_at__gt=datetime.now(),
+                expires_at__gt=timezone.now(),  # Use timezone.now() instead of datetime.now()
                 is_used=False
             ).first()
             
@@ -299,7 +300,7 @@ class ResendVerificationCodeView(APIView):
             # Check for rate limiting (prevent too many requests)
             recent_codes = VerificationCode.objects.filter(
                 user=user,
-                created_at__gt=datetime.now() - timedelta(minutes=2)
+                created_at__gt=timezone.now() - timedelta(minutes=2)  # Use timezone.now()
             ).count()
             
             if recent_codes > 0:
@@ -310,7 +311,7 @@ class ResendVerificationCodeView(APIView):
                 
             # Generate new verification code
             verification_code = generate_verification_code()
-            expires_at = datetime.now() + timedelta(minutes=10)
+            expires_at = timezone.now() + timedelta(minutes=10)  # Use timezone.now()
             
             # Save new verification code
             VerificationCode.objects.create(
@@ -343,7 +344,9 @@ class LoginView(APIView):
 
             user = authenticate(email=email, password=password)
             if user:
-                # Remove login(request, user) - we don't need session login
+                # Update last_login time with timezone aware datetime
+                user.last_login = timezone.now()
+                user.save(update_fields=['last_login'])
                 
                 # Use only JWT tokens
                 tokens = user.get_tokens()
@@ -394,6 +397,9 @@ class GoogleLoginView(APIView):
             try:
                 user = Account.objects.get(email=email)
                 
+                # Don't update last_login yet - we'll do this after all modifications
+                needs_save = False
+                
                 # If user exists but doesn't have google_id, this is an existing account
                 # We should link the Google account to the existing account
                 account_linked = False
@@ -403,6 +409,7 @@ class GoogleLoginView(APIView):
                     print(f"Linking Google account to existing account: {email}")
                     user.google_id = google_id
                     account_linked = True
+                    needs_save = True
                     
                     # Update user profile with Google info if provided
                     if first_name and not user.first_name:
@@ -414,9 +421,13 @@ class GoogleLoginView(APIView):
                     if profile_picture and (not user.profile_picture or not user.profile_picture.name):
                         # Save profile picture using our helper function
                         save_profile_picture_from_url(user, profile_picture)
-                    else:
-                        # Always save the user object since we updated google_id
+                    elif needs_save:
+                        # Only save if we made changes but didn't save via profile picture
                         user.save()
+                
+                # Update last_login time - do this after all other modifications
+                user.last_login = timezone.now()
+                user.save(update_fields=['last_login'])
                 
                 # User already exists, just log them in
                 logger.info(f"Existing user logging in via Google: {email}")
@@ -445,8 +456,16 @@ class GoogleLoginView(APIView):
                 logger.info(f"Creating new account via Google: {email}")
                 print(f"Creating new account via Google: {email}")
                 
+                # Generate a secure random password - user won't use this
+                # since they'll authenticate with Google
+                import secrets
+                random_password = secrets.token_urlsafe(32)
+                
+                # Create new user with random password
+                # Note: last_login will be set automatically by Django when the user is created
                 user = Account.objects.create_user(
                     email=email,
+                    password=random_password,
                     first_name=first_name,
                     last_name=last_name,
                     google_id=google_id,
@@ -554,7 +573,7 @@ class ForgotPasswordView(APIView):
                 
                 # Generate a verification code
                 verification_code = generate_verification_code()
-                expires_at = datetime.now() + timedelta(minutes=15)
+                expires_at = timezone.now() + timedelta(minutes=15)  # Use timezone.now()
                 
                 # Save code for password reset
                 VerificationCode.objects.filter(user=user).update(is_used=True)  # Mark any existing codes as used
@@ -721,7 +740,7 @@ class VerifyResetCodeView(APIView):
             code_obj = VerificationCode.objects.filter(
                 user=user,
                 code=code,
-                expires_at__gt=datetime.now(),
+                expires_at__gt=timezone.now(),  # Use timezone.now()
                 is_used=False
             ).first()
             
@@ -804,3 +823,14 @@ class LogoutView(APIView):
             return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ValidateTokenView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        # If we get here, the token was valid (as permission_classes=[IsAuthenticated])
+        return Response({
+            'valid': True,
+            'user_id': request.user.id,
+        }, status=status.HTTP_200_OK)
