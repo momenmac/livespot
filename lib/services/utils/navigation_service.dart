@@ -30,6 +30,17 @@ class NavigationService {
     return false;
   }
 
+  // Getter for the current route name
+  String? get currentRoute {
+    String? currentRouteName;
+    // Use the navigatorKey to access the current route settings
+    navigatorKey.currentState?.popUntil((route) {
+      currentRouteName = route.settings.name;
+      return true; // Return true to stop popping
+    });
+    return currentRouteName;
+  }
+
   // Navigate to a new route
   Future<T?> navigateTo<T>(String routeName, {Object? arguments}) {
     if (_shouldThrottleNavigation()) return Future.value(null);

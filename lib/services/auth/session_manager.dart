@@ -7,6 +7,7 @@ import 'package:flutter_application_2/services/api/account/api_client.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:developer' as developer; // Import developer for logging
 
 enum SessionState {
   initializing,
@@ -152,10 +153,18 @@ class SessionManager {
 
   // Clear the session
   Future<void> clearSession() async {
+    developer.log('--- Clear Session Start (SessionManager) ---',
+        name: 'LogoutTrace');
     _token = null;
     _user = null;
-    await SharedPrefs.clearJwtToken();
+    developer.log('Internal _token and _user set to null.',
+        name: 'LogoutTrace');
+    // Note: SharedPrefs.clearJwtToken() is called by AccountProvider._clearSession -> SharedPrefs.clearSession
+    // We don't need to call it again here, but we ensure the state is updated.
     _setState(SessionState.unauthenticated);
+    developer.log('State set to unauthenticated.', name: 'LogoutTrace');
+    developer.log('--- Clear Session End (SessionManager) ---',
+        name: 'LogoutTrace');
   }
 
   // Record user activity

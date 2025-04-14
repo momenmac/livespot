@@ -8,6 +8,7 @@ import 'auth_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'dart:developer' as developer; // Import developer for logging
 
 class AccountProvider extends ChangeNotifier {
   final SessionManager _sessionManager = SessionManager();
@@ -90,23 +91,93 @@ class AccountProvider extends ChangeNotifier {
 
   // Logout method
   Future<void> logout() async {
+    developer.log('--- Logout Start (AccountProvider) ---',
+        name: 'LogoutTrace');
     _isLoading = true;
-    notifyListeners();
+    notifyListeners(); // Notify UI that loading has started
 
-    try {
-      // Complete logout from both Google and backend
-      if (token != null) {
-        await _authService.completeSignOut(token!.accessToken);
+    final currentToken = await SharedPrefs.getJwtToken();
+    String? refreshToken = currentToken?.refreshToken;
+    String? accessToken = currentToken?.accessToken;
+    developer.log(
+        'Retrieved tokens: Access=${accessToken != null}, Refresh=${refreshToken != null}',
+        name: 'LogoutTrace');
+
+    if (refreshToken != null && accessToken != null) {
+      final logoutUrl = ApiUrls.logout;
+      developer.log('Attempting server logout to URL: $logoutUrl',
+          name: 'LogoutTrace');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      };
+      final body = jsonEncode({'refresh': refreshToken});
+      developer.log('Headers: $headers', name: 'LogoutTrace');
+      developer.log('Body: $body', name: 'LogoutTrace');
+
+      try {
+        final response = await http
+            .post(
+              Uri.parse(logoutUrl),
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15)); // Increased timeout slightly
+
+        developer.log('Server response status: ${response.statusCode}',
+            name: 'LogoutTrace');
+        developer.log('Server response body: ${response.body}',
+            name: 'LogoutTrace');
+
+        if (response.statusCode == 200) {
+          developer.log('Server logout successful.', name: 'LogoutTrace');
+        } else if (response.statusCode == 401) {
+          developer.log(
+              'Server logout failed: 401 Unauthorized. Proceeding with local logout.',
+              name: 'LogoutTrace');
+        } else {
+          developer.log(
+              'Server logout failed with status ${response.statusCode}. Proceeding with local logout.',
+              name: 'LogoutTrace');
+        }
+      } catch (e, stackTrace) {
+        developer.log('Error during server logout HTTP request: $e',
+            name: 'LogoutTrace', error: e, stackTrace: stackTrace);
+        // Continue with local logout even if server communication fails
       }
-
-      // Clear session
-      await _sessionManager.clearSession();
-    } catch (e) {
-      print('Logout error: ${e.toString()}');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    } else {
+      developer.log('Missing refresh or access token. Skipping server logout.',
+          name: 'LogoutTrace');
     }
+
+    // Always clear local session regardless of server response
+    developer.log('Calling _clearSession()...', name: 'LogoutTrace');
+    await _clearSession();
+    developer.log('_clearSession() finished.', name: 'LogoutTrace');
+
+    _isLoading = false;
+    developer.log('Local session cleared. Setting isLoading=false.',
+        name: 'LogoutTrace');
+    notifyListeners(); // Notify UI about state change (isLoading=false, isAuthenticated=false)
+    developer.log('--- Logout End (AccountProvider) ---', name: 'LogoutTrace');
+  }
+
+  // Clear session data
+  Future<void> _clearSession() async {
+    developer.log('--- Clear Session Start (AccountProvider) ---',
+        name: 'LogoutTrace');
+    developer.log('Calling _sessionManager.clearSession()...',
+        name: 'LogoutTrace');
+    await _sessionManager.clearSession(); // Clear session manager state
+    developer.log('_sessionManager.clearSession() finished.',
+        name: 'LogoutTrace');
+
+    developer.log('Calling SharedPrefs.clearSession()...', name: 'LogoutTrace');
+    await SharedPrefs.clearSession(); // Clear relevant shared preferences
+    developer.log('SharedPrefs.clearSession() finished.', name: 'LogoutTrace');
+    developer.log('--- Clear Session End (AccountProvider) ---',
+        name: 'LogoutTrace');
+    // No need to notify here, logout method will notify
   }
 
   // Record activity

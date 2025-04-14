@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_2/models/jwt_token.dart';
+import 'dart:developer' as developer; // Import developer for logging
 
 class SharedPrefs {
   // Keys for SharedPreferences
@@ -157,19 +158,34 @@ class SharedPrefs {
   }
 
   static Future<void> clearSession() async {
+    developer.log('--- Clear Session Start (SharedPrefs) ---',
+        name: 'LogoutTrace');
     final prefs = await SharedPreferences.getInstance();
 
-    // Remove JWT token
+    // Remove JWT token - MOST IMPORTANT for logout
+    developer.log('Removing $jwtTokenKey...', name: 'LogoutTrace');
     await prefs.remove(jwtTokenKey);
+    developer.log('$jwtTokenKey removed.', name: 'LogoutTrace');
+
+    // Remove login status flag
+    developer.log('Removing $loggedInKey...', name: 'LogoutTrace');
+    await prefs.remove(loggedInKey);
+    developer.log('$loggedInKey removed.', name: 'LogoutTrace');
 
     // Keep remember me setting for UX, but remove session data
+    developer.log('Removing $lastActivityKey...', name: 'LogoutTrace');
     await prefs.remove(lastActivityKey);
+    developer.log('Removing $lastTokenRefreshKey...', name: 'LogoutTrace');
     await prefs.remove(lastTokenRefreshKey);
+    developer.log('Removing $lastLoginTimeKey...', name: 'LogoutTrace');
     await prefs.remove(lastLoginTimeKey);
 
     // Optional: clear any sensitive account data when logging out
-    // For a higher security level, uncomment this line
+    // developer.log('Removing $lastUsedEmailKey...', name: 'LogoutTrace');
     // await prefs.remove(lastUsedEmailKey);
+
+    developer.log('--- Clear Session End (SharedPrefs) ---',
+        name: 'LogoutTrace');
   }
 
   // Remove legacy token if it exists

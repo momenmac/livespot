@@ -11,6 +11,7 @@ import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'dart:async';
+import 'dart:developer' as developer;
 
 // Use conditional import for Platform
 import 'dart:io'
@@ -22,8 +23,6 @@ import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package pa
 
 // Global flag to track Firebase status
 bool _isFirebaseInitialized = false;
-// Create a key to access the provider from anywhere
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // NEW: Create a class to notify listeners of Firebase status changes
 class FirebaseStatusNotifier extends ChangeNotifier {
@@ -42,7 +41,6 @@ Future<bool> initFirebaseSafely() async {
     print(
         '🔍 Starting Firebase initialization with options: ${DefaultFirebaseOptions.currentPlatform.projectId}');
 
-    // First, check if Firebase is already initialized
     if (Firebase.apps.isNotEmpty) {
       print('✅ Firebase is already initialized, reusing existing instance');
       _isFirebaseInitialized = true;
@@ -52,7 +50,6 @@ Future<bool> initFirebaseSafely() async {
     if (!kIsWeb && Platform.isIOS) {
       print('📱 iOS Bundle ID: ${DefaultFirebaseOptions.ios.iosBundleId}');
 
-      // Check if we're on iOS simulator (which has problems with Firebase)
       String iosInfo =
           await SystemChannels.platform.invokeMethod('SystemInfo.iosInfo') ??
               '';
@@ -61,18 +58,14 @@ Future<bool> initFirebaseSafely() async {
       if (isSimulator) {
         print(
             '⚠️ iOS Simulator detected: Be cautious with Firebase initialization');
-        // We'll continue, but be prepared for potential crashes
       }
     }
 
-    // Add a short delay to ensure the app is fully loaded before initializing Firebase
     await Future.delayed(const Duration(milliseconds: 800));
 
     print('🚀 About to initialize Firebase...');
 
-    // Initialize with timeout to prevent hanging
     if (kIsWeb) {
-      // Use web-specific initialization
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.web,
       ).timeout(const Duration(seconds: 5), onTimeout: () {
@@ -89,7 +82,6 @@ Future<bool> initFirebaseSafely() async {
     _isFirebaseInitialized = true;
     print('✅ Firebase initialized successfully');
   } catch (e) {
-    // If the error is about duplicate app, consider it a success
     if (e.toString().contains('duplicate-app') ||
         e.toString().contains('already exists')) {
       print(
@@ -105,7 +97,6 @@ Future<bool> initFirebaseSafely() async {
       print(
           '💡 Try running on a physical device or using the platform-specific workarounds.');
     }
-    // Continue without Firebase
     _isFirebaseInitialized = false;
   }
 
@@ -126,22 +117,17 @@ Future<void> main() async {
     print('❌ Failed to initialize Firebase: $e');
   }
 
-  // Ensure binding is initialized at app startup
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Create the Firebase status notifier
   final firebaseStatusNotifier = FirebaseStatusNotifier();
 
-  // Reset hero tag registry on app start
   HeroTagRegistry.reset();
 
-  // Try to check if we're in debug mode on iOS simulator
   bool shouldSkipFirebase = false;
   if (!kIsWeb && Platform.isIOS) {
     try {
@@ -161,7 +147,6 @@ Future<void> main() async {
     }
   }
 
-  // Try to get existing Firebase instance or initialize a new one BEFORE starting the app
   bool firebaseInitializedBeforeApp = false;
   if (!shouldSkipFirebase) {
     try {
@@ -175,32 +160,29 @@ Future<void> main() async {
     }
   }
 
-  // Start the app
+  final accountProvider = AccountProvider()..initialize();
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AccountProvider()..initialize()),
+        ChangeNotifierProvider.value(value: accountProvider),
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
       ],
-      child: const MyApp(),
+      child: MyApp(accountProvider: accountProvider),
     ),
   );
 
-  // Initialize Firebase after app start ONLY if not already initialized
   Timer(const Duration(milliseconds: 1500), () async {
-    bool success = firebaseInitializedBeforeApp; // Start with existing status
+    bool success = firebaseInitializedBeforeApp;
 
     if (shouldSkipFirebase) {
       success = false;
     } else if (!firebaseInitializedBeforeApp) {
-      // Only attempt initialization if not already done
       success = await initFirebaseSafely();
     }
 
-    // Update the notifier with the Firebase status
     firebaseStatusNotifier.setInitialized(success);
 
-    // Print status message
     const divider = "======================================";
     if (success) {
       print('✅ Firebase is now available to the app');
@@ -216,18 +198,143 @@ Future<void> main() async {
   });
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  final AccountProvider accountProvider;
+
+  const MyApp({required this.accountProvider, super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _initialAuthCheckComplete = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to state changes AFTER the first frame to avoid issues during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Ensure listener is added before potentially calling it
+      if (mounted) {
+        widget.accountProvider.addListener(_onAuthStateChanged);
+        // Trigger initial check manually AFTER listener is added
+        _onAuthStateChanged();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.accountProvider.removeListener(_onAuthStateChanged);
+    super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    // Ensure the widget is still mounted before proceeding
+    if (!mounted) {
+      developer.log('Auth state changed but widget not mounted. Aborting.',
+          name: 'AuthListener');
+      return;
+    }
+
+    final isAuthenticated = widget.accountProvider.isAuthenticated;
+    // Use the AccountProvider's isLoading getter which internally checks SessionManager state
+    final isLoading = widget.accountProvider.isLoading;
+
+    developer.log(
+        '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, initialCheckComplete=$_initialAuthCheckComplete',
+        name: 'AuthListener');
+
+    // --- Only handle state changes *after* loading is complete ---
+    if (!isLoading) {
+      // --- Handle the *completion* of the initial authentication check ---
+      if (!_initialAuthCheckComplete) {
+        _initialAuthCheckComplete = true; // Mark initial check as done *once*
+        developer.log(
+            '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated',
+            name: 'AuthListener');
+
+        if (isAuthenticated) {
+          developer.log('👤 Navigating to home after initial check.',
+              name: 'AuthListener');
+          _navigateTo(AppRoutes.home);
+        } else {
+          developer.log('👤 Navigating to initial after initial check.',
+              name: 'AuthListener');
+          _navigateTo(AppRoutes.initial);
+        }
+      }
+      // --- Handle state changes *after* the initial check (e.g., logout/login) ---
+      else {
+        developer.log('👤 Auth state changed after initialization.',
+            name: 'AuthListener');
+        // Check if the current route matches the expected state to prevent redundant navigation
+        final currentRoute =
+            NavigationService().currentRoute; // Use the new getter
+        developer.log(
+            '   Current Route: $currentRoute, Expected State: ${isAuthenticated ? 'Authenticated' : 'Unauthenticated'}',
+            name: 'AuthListener');
+
+        // Check if currentRoute is null or empty before comparing
+        final isAtHome = currentRoute == AppRoutes.home;
+        final isAtInitial = currentRoute == AppRoutes.initial ||
+            currentRoute == null ||
+            currentRoute == '/'; // Treat null/root as initial for this logic
+
+        if (isAuthenticated && !isAtHome) {
+          // This could happen if login occurs after initial load
+          developer.log('   User became authenticated, navigating to home.',
+              name: 'AuthListener');
+          _navigateTo(AppRoutes.home);
+        } else if (!isAuthenticated && !isAtInitial) {
+          // This handles logout or session expiry when not on initial/splash
+          developer.log(
+              '   User became unauthenticated, navigating to initial.',
+              name: 'AuthListener');
+          _navigateTo(AppRoutes.initial);
+        } else {
+          developer.log(
+              '   Current route matches auth state. No navigation needed from listener.',
+              name: 'AuthListener');
+        }
+      }
+    } else {
+      developer.log(
+          '⏳ Auth state changed while loading. Waiting for loading to finish.',
+          name: 'AuthListener');
+    }
+  }
+
+  // Helper function for navigation to avoid repetition and ensure it runs post-frame
+  void _navigateTo(String routeName) {
+    // Schedule navigation for after the current frame build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Double-check mounted status right before navigation
+      if (mounted && NavigationService().navigatorKey.currentState != null) {
+        developer.log(
+            '🚀 Executing navigation via replaceAllWith to: $routeName',
+            name: 'AuthListener');
+        NavigationService().replaceAllWith(routeName);
+      } else if (mounted) {
+        developer.log(
+            '⚠️ Navigator not ready during scheduled navigation to $routeName.',
+            name: 'AuthListener');
+        // Optional: Retry logic could be added here if needed, but often resolves itself.
+      } else {
+        developer.log(
+            '⚠️ Widget unmounted before scheduled navigation to $routeName could execute.',
+            name: 'AuthListener');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Reset hero registry when building the root app widget
     HeroTagRegistry.reset();
 
-    // Get the Firebase status
     final firebaseStatus = Provider.of<FirebaseStatusNotifier>(context);
 
-    // Wrap MaterialApp with SessionMonitor
     return SessionMonitor(
       child: MaterialApp(
         title: 'My App',
@@ -237,29 +344,19 @@ class MyApp extends StatelessWidget {
         darkTheme: TAppTheme.darkTheme,
         navigatorKey: NavigationService().navigatorKey,
         initialRoute: AppRoutes.initial,
-
-        // Replace onGenerateRoute with our enhanced RouteGuard
         onGenerateRoute: RouteGuard.generateRoute,
-
         builder: (context, child) {
-          // Show a banner if Firebase is not available and we're not on web or iOS
-          // (since we deliberately skip Firebase on iOS)
           if (!firebaseStatus.isInitialized &&
               !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
             print(
                 '⚠️ App running with limited functionality (Firebase unavailable)');
-            // You could show a banner or notification here if needed
           }
 
-          // This ensures overlay entries work correctly
           return MediaQuery(
-            // Prevent text scaling to avoid layout issues
             data: MediaQuery.of(context)
                 .copyWith(textScaler: TextScaler.linear(1.0)),
-            // Wrap with GestureDetector to dismiss keyboard on tap outside input fields
             child: GestureDetector(
               onTap: () {
-                // Hide keyboard when tapping outside text fields
                 FocusScopeNode currentFocus = FocusScope.of(context);
                 if (!currentFocus.hasPrimaryFocus &&
                     currentFocus.focusedChild != null) {
@@ -273,17 +370,11 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
-
-  // Remove these methods as they're now handled by RouteGuard
-  // void _checkRouteAuth(BuildContext context, String? routeName) {...}
-  // Widget _getPageForRoute(String? routeName, dynamic args) {...}
 }
 
-// Create a more robust helper class to access Firebase safely
 class FirebaseHelper {
   static bool get isAvailable => _isFirebaseInitialized;
 
-  // Safely execute Firebase operations with fallbacks
   static Future<T?> safelyRun<T>(Future<T> Function() firebaseOperation,
       {T? fallback}) async {
     if (!isAvailable) {
@@ -299,10 +390,8 @@ class FirebaseHelper {
     }
   }
 
-  // Check if we're deliberately skipping Firebase (on iOS or web)
   static bool get isSkippedPlatform => kIsWeb || (!kIsWeb && Platform.isIOS);
 
-  // Get a user-friendly message about Firebase status
   static String getStatusMessage() {
     if (isSkippedPlatform) {
       return "Firebase is not available on this platform";
@@ -313,7 +402,6 @@ class FirebaseHelper {
     }
   }
 
-  // A method to safely initialize other Firebase services
   static Future<bool> initializeService(
       Future<void> Function() initFunction, String serviceName) async {
     if (!isAvailable) return false;
@@ -328,7 +416,6 @@ class FirebaseHelper {
     }
   }
 
-  // Add a method to print the current Firebase status
   static void printStatus() {
     if (isAvailable) {
       print('======================================');

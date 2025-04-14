@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/pages/settings/account_settings_page.dart';
+import 'package:provider/provider.dart'; // Import Provider
+import 'dart:developer' as developer; // Import developer for logging
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -508,13 +511,16 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _openSettings() {
+    // Capture the context that is valid before showing the modal/dialog
+    final BuildContext pageContext = context;
+
     showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      context: pageContext, // Use the captured context for the modal
+      backgroundColor: Theme.of(pageContext).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
+      builder: (modalContext) {
         return Container(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -525,10 +531,9 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Account Settings'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // Navigate to account settings
-                  Navigator.pop(context);
+                  Navigator.pop(modalContext);
                   Navigator.push(
-                    context,
+                    pageContext,
                     MaterialPageRoute(
                       builder: (context) => const AccountSettingsPage(),
                     ),
@@ -540,8 +545,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Notification Preferences'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // Navigate to notification settings
-                  Navigator.pop(context);
+                  Navigator.pop(modalContext);
                 },
               ),
               ListTile(
@@ -549,8 +553,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Privacy Settings'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // Navigate to privacy settings
-                  Navigator.pop(context);
+                  Navigator.pop(modalContext);
                 },
               ),
               ListTile(
@@ -558,8 +561,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Report History'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // Navigate to report history
-                  Navigator.pop(context);
+                  Navigator.pop(modalContext);
                 },
               ),
               ListTile(
@@ -567,8 +569,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Blocked Users'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  // Navigate to blocked users
-                  Navigator.pop(context);
+                  Navigator.pop(modalContext);
                 },
               ),
               const Divider(),
@@ -576,9 +577,86 @@ class _ProfilePageState extends State<ProfilePage>
                 leading: const Icon(Icons.logout, color: ThemeConstants.red),
                 title: const Text('Log Out',
                     style: TextStyle(color: ThemeConstants.red)),
-                onTap: () {
-                  // Handle logout
-                  Navigator.pop(context);
+                onTap: () async {
+                  developer.log('--- Logout Process Start (ProfilePage) ---',
+                      name: 'LogoutTrace');
+                  // Close the bottom sheet first using its own context
+                  Navigator.pop(modalContext);
+                  developer.log('Bottom sheet closed.', name: 'LogoutTrace');
+
+                  // Show confirmation dialog using the page's context
+                  developer.log('Showing confirmation dialog...',
+                      name: 'LogoutTrace');
+                  final confirmed = await showDialog<bool>(
+                    context: pageContext, // Use the captured page context
+                    builder: (BuildContext dialogContext) {
+                      return AlertDialog(
+                        title: const Text('Confirm Logout'),
+                        content:
+                            const Text('Are you sure you want to log out?'),
+                        actions: <Widget>[
+                          TextButton(
+                            child: const Text('Cancel'),
+                            onPressed: () {
+                              developer.log('Logout cancelled by user.',
+                                  name: 'LogoutTrace');
+                              Navigator.of(dialogContext)
+                                  .pop(false); // Return false
+                            },
+                          ),
+                          TextButton(
+                            child: const Text('Log Out',
+                                style: TextStyle(color: ThemeConstants.red)),
+                            onPressed: () {
+                              developer.log('Logout confirmed by user.',
+                                  name: 'LogoutTrace');
+                              Navigator.of(dialogContext)
+                                  .pop(true); // Return true
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                  developer.log('Confirmation dialog result: $confirmed',
+                      name: 'LogoutTrace');
+
+                  // IMPORTANT: Check if the widget is still mounted after await
+                  if (!pageContext.mounted) {
+                    developer.log(
+                        'Logout aborted: Widget is no longer mounted after dialog.',
+                        name: 'LogoutTrace');
+                    return;
+                  }
+
+                  // If confirmed, proceed with logout
+                  if (confirmed == true) {
+                    developer.log('Proceeding with logout call...',
+                        name: 'LogoutTrace');
+                    try {
+                      // Access AccountProvider using the captured page context
+                      final accountProvider = Provider.of<AccountProvider>(
+                          pageContext,
+                          listen: false);
+                      developer.log('Calling accountProvider.logout()...',
+                          name: 'LogoutTrace');
+                      await accountProvider.logout();
+                      developer.log('accountProvider.logout() finished.',
+                          name: 'LogoutTrace');
+                      // Navigation to initial route will be handled by the listener in main.dart
+                    } catch (e, stackTrace) {
+                      developer.log(
+                          'Error calling accountProvider.logout(): $e',
+                          name: 'LogoutTrace',
+                          error: e,
+                          stackTrace: stackTrace);
+                    }
+                  } else {
+                    developer.log('Logout aborted (not confirmed).',
+                        name: 'LogoutTrace');
+                  }
+                  developer.log('--- Logout Process End (ProfilePage) ---',
+                      name: 'LogoutTrace');
                 },
               ),
             ],
