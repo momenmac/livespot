@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/services/user_service.dart'; // Add this import
+import 'package:flutter_application_2/services/user_service.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
-// Add this import
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+// Add this import for RecommendedRoomsSection
+import 'package:flutter_application_2/ui/pages/home/components/sections/recommended_rooms_section.dart';
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
@@ -112,13 +113,33 @@ class _MessagesPageState extends State<MessagesPage> {
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          // Display just the conversation list
-          return ConversationList(
-            controller: _controller,
-            onConversationSelected: (conversation) {
-              _controller.selectConversation(conversation);
-              setState(() {});
-            },
+          // Replace with a scrollable layout that includes both sections
+          return ListView(
+            children: [
+              // Add RecommendedRoomsSection that will scroll with the list
+              const RecommendedRoomsSection(),
+
+              // Add a divider between sections
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: Divider(height: 1),
+              ),
+
+              // Wrap ConversationList in a Container with fixed height
+              // This allows it to be part of the ListView
+              Container(
+                // Set a reasonable height or use MediaQuery to calculate it
+                // Subtracting space for the RecommendedRoomsSection and padding
+                height: MediaQuery.of(context).size.height - 300,
+                child: ConversationList(
+                  controller: _controller,
+                  onConversationSelected: (conversation) {
+                    _controller.selectConversation(conversation);
+                    setState(() {});
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

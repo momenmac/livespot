@@ -6,18 +6,22 @@ import 'sections/map_preview_section.dart';
 import 'sections/categories_section.dart';
 import 'sections/news_feed_section.dart';
 import 'sections/live_streams_section.dart';
-import 'sections/recommended_rooms_section.dart';
 import 'sections/external_news_section.dart';
-import 'sections/story_section.dart'; // Add this import
+import 'sections/story_section.dart';
 import 'widgets/search_bar_widget.dart';
 import 'widgets/date_picker_widget.dart';
+// Add authentication related imports
+import 'package:provider/provider.dart'; // Make sure to add provider dependency if not already added
+import 'package:flutter_application_2/services/auth/auth_service.dart'; // Create or update this import path as needed
 
 class HomeContent extends StatefulWidget {
   final VoidCallback? onMapToggle;
+  final VoidCallback? onAuthError; // Add callback for auth errors
 
   const HomeContent({
     super.key,
     this.onMapToggle,
+    this.onAuthError,
   });
 
   @override
@@ -27,6 +31,41 @@ class HomeContent extends StatefulWidget {
 class _HomeContentState extends State<HomeContent> {
   DateTime _selectedDate = DateTime.now();
   bool _isDateFilterActive = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthStatus();
+  }
+
+  // Add method to check authentication status
+  Future<void> _checkAuthStatus() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Assuming you have an AuthService or similar to validate tokens
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final isValid = await authService.validateToken();
+      
+      if (!isValid && widget.onAuthError != null) {
+        widget.onAuthError!();
+      }
+    } catch (e) {
+      debugPrint('Authentication error: $e');
+      if (widget.onAuthError != null) {
+        widget.onAuthError!();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _onDateSelected(DateTime date) {
     setState(() {
@@ -44,6 +83,15 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading indicator if checking auth status
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(TextStrings.appName),
@@ -76,6 +124,12 @@ class _HomeContentState extends State<HomeContent> {
                 backgroundColor: Colors.transparent,
               );
             },
+          ),
+          // Add refresh token button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _checkAuthStatus,
+            tooltip: 'Refresh authentication',
           ),
         ],
       ),
@@ -119,9 +173,6 @@ class _HomeContentState extends State<HomeContent> {
               selectedDate: _selectedDate,
               onMapToggle: widget.onMapToggle,
             ),
-
-            // Recommended Rooms Section
-            const RecommendedRoomsSection(),
 
             // Live Streams Section
             const LiveStreamsSection(),
