@@ -30,8 +30,8 @@ class AppRoutes {
 
   // Route map with builders that accept arguments
   static Map<String, RouteBuilder> get routes => {
-        initial: (_) => const GetStartedScreen(),
-        home: (_) => const Home(),
+        // initial: (_) => const GetStartedScreen(),
+        initial: (_) => const Home(),
         login: (_) => const LoginScreen(),
         createAccount: (_) => const CreateAccountScreen(),
         forgotPassword: (_) => const ForgotPasswordScreen(),

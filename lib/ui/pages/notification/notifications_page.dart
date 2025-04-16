@@ -569,15 +569,24 @@ class _NotificationsPageState extends State<NotificationsPage>
                           onPressed: _hideBanner,
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.white,
+                            backgroundColor:
+                                ThemeConstants.primaryColor.withOpacity(0.1),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
                               side: const BorderSide(
-                                  color: Colors.white, width: 1),
+                                  color: Colors.transparent,
+                                  width: 0), // Remove the white border
                             ),
                           ),
-                          child: Text(TextStrings.notNow),
+                          child: Text(
+                            TextStrings.notNow,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ],
                     ),
