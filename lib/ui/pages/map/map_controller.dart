@@ -15,6 +15,9 @@ class MapPageController extends ChangeNotifier {
   final MapController mapController = MapController();
   final TextEditingController locationController = TextEditingController();
 
+  // Add a Completer to track map readiness
+  final Completer<void> _mapReadyCompleter = Completer<void>();
+
   BuildContext? _context;
 
   LatLng? currentLocation;
@@ -33,6 +36,19 @@ class MapPageController extends ChangeNotifier {
     LatLng(-85.0, -180.0),
     LatLng(85.0, 180.0),
   );
+
+  // Call this from your FlutterMap's onMapReady callback
+  void setMapReady() {
+    if (!_mapReadyCompleter.isCompleted) {
+      _mapReadyCompleter.complete();
+    }
+  }
+
+  // Helper to move the map only when the controller is ready
+  Future<void> _moveMapWhenReady(LatLng target, double zoom) async {
+    await _mapReadyCompleter.future;
+    mapController.move(target, zoom);
+  }
 
   // Set context for error messages
   void setContext(BuildContext context) {
@@ -59,7 +75,8 @@ class MapPageController extends ChangeNotifier {
       if (kIsWeb) {
         final position = await Geolocator.getCurrentPosition();
         currentLocation = LatLng(position.latitude, position.longitude);
-        mapController.move(currentLocation!, 10);
+        // Use helper to move map when ready
+        _moveMapWhenReady(currentLocation!, 10);
         hasInitializedLocation = true;
         notifyListeners();
       }
@@ -77,7 +94,7 @@ class MapPageController extends ChangeNotifier {
           notifyListeners();
 
           if (!hasInitializedLocation) {
-            mapController.move(newLocation, 10);
+            _moveMapWhenReady(newLocation, 10);
             hasInitializedLocation = true;
           }
         },
@@ -125,13 +142,13 @@ class MapPageController extends ChangeNotifier {
   Future<void> centerOnUserLocation() async {
     try {
       if (currentLocation != null) {
-        mapController.move(currentLocation!, 12.0);
+        await _moveMapWhenReady(currentLocation!, 12.0);
       } else {
         // Try to get current position if location is null
         final position = await Geolocator.getCurrentPosition();
         final newLocation = LatLng(position.latitude, position.longitude);
         currentLocation = newLocation;
-        mapController.move(newLocation, 15.0);
+        await _moveMapWhenReady(newLocation, 15.0);
         notifyListeners();
       }
     } catch (e) {
@@ -162,7 +179,7 @@ class MapPageController extends ChangeNotifier {
           notifyListeners();
 
           // Move to the location immediately
-          mapController.move(newLocation, 13.0);
+          await _moveMapWhenReady(newLocation, 13.0);
 
           // Only fetch route if route mode is enabled
           if (showRoute) {
@@ -198,6 +215,7 @@ class MapPageController extends ChangeNotifier {
         // After route is decoded, fit bounds to show entire route
         if (route.isNotEmpty) {
           final bounds = LatLngBounds.fromPoints(route);
+          await _mapReadyCompleter.future;
           mapController.fitCamera(
             CameraFit.bounds(
               bounds: bounds,
@@ -261,16 +279,16 @@ class MapPageController extends ChangeNotifier {
     }
   }
 
-  void zoomIn() {
+  Future<void> zoomIn() async {
     final currentCenter = mapController.camera.center;
     final currentZoom = mapController.camera.zoom;
-    mapController.move(currentCenter, currentZoom + 1);
+    await _moveMapWhenReady(currentCenter, currentZoom + 1);
   }
 
-  void zoomOut() {
+  Future<void> zoomOut() async {
     final currentCenter = mapController.camera.center;
     final currentZoom = mapController.camera.zoom;
-    mapController.move(currentCenter, currentZoom - 1);
+    await _moveMapWhenReady(currentCenter, currentZoom - 1);
   }
 
   void toggleMarkersAndRoute() {

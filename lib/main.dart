@@ -11,6 +11,7 @@ import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
+import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -169,6 +170,7 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: accountProvider),
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
@@ -233,72 +235,47 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _onAuthStateChanged() {
-    // Ensure the widget is still mounted before proceeding
-    if (!mounted) {
-      developer.log('Auth state changed but widget not mounted. Aborting.',
-          name: 'AuthListener');
-      return;
-    }
-
     final isAuthenticated = widget.accountProvider.isAuthenticated;
-    // Use the AccountProvider's isLoading getter which internally checks SessionManager state
     final isLoading = widget.accountProvider.isLoading;
+    final currentRoute = NavigationService().currentRoute;
+    final isAtHome = currentRoute == AppRoutes.home;
+    final isAtInitial = currentRoute == AppRoutes.initial ||
+        currentRoute == null ||
+        currentRoute == '/';
 
     developer.log(
         '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, initialCheckComplete=$_initialAuthCheckComplete',
         name: 'AuthListener');
 
-    // --- Only handle state changes *after* loading is complete ---
     if (!isLoading) {
-      // --- Handle the *completion* of the initial authentication check ---
       if (!_initialAuthCheckComplete) {
-        _initialAuthCheckComplete = true; // Mark initial check as done *once*
+        _initialAuthCheckComplete = true;
         developer.log(
             '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated',
             name: 'AuthListener');
 
-        if (isAuthenticated) {
+        if (isAuthenticated && !isAtHome) {
           developer.log('👤 Navigating to home after initial check.',
               name: 'AuthListener');
           _navigateTo(AppRoutes.home);
-        } else {
+        } else if (!isAuthenticated && !isAtInitial) {
           developer.log('👤 Navigating to initial after initial check.',
               name: 'AuthListener');
           _navigateTo(AppRoutes.initial);
         }
-      }
-      // --- Handle state changes *after* the initial check (e.g., logout/login) ---
-      else {
+      } else {
         developer.log('👤 Auth state changed after initialization.',
             name: 'AuthListener');
-        // Check if the current route matches the expected state to prevent redundant navigation
-        final currentRoute =
-            NavigationService().currentRoute; // Use the new getter
-        developer.log(
-            '   Current Route: $currentRoute, Expected State: ${isAuthenticated ? 'Authenticated' : 'Unauthenticated'}',
-            name: 'AuthListener');
-
-        // Check if currentRoute is null or empty before comparing
-        final isAtHome = currentRoute == AppRoutes.home;
-        final isAtInitial = currentRoute == AppRoutes.initial ||
-            currentRoute == null ||
-            currentRoute == '/'; // Treat null/root as initial for this logic
 
         if (isAuthenticated && !isAtHome) {
-          // This could happen if login occurs after initial load
           developer.log('   User became authenticated, navigating to home.',
               name: 'AuthListener');
           _navigateTo(AppRoutes.home);
         } else if (!isAuthenticated && !isAtInitial) {
-          // This handles logout or session expiry when not on initial/splash
           developer.log(
               '   User became unauthenticated, navigating to initial.',
               name: 'AuthListener');
           _navigateTo(AppRoutes.initial);
-        } else {
-          developer.log(
-              '   Current route matches auth state. No navigation needed from listener.',
-              name: 'AuthListener');
         }
       }
     } else {

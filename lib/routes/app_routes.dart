@@ -18,7 +18,7 @@ typedef RouteBuilder = Widget Function(Map<String, dynamic> arguments);
 
 class AppRoutes {
   // Route names
-  static const String initial = '/';
+  static const String initial = '/'; // This should be your login/initial page
   static const String home = '/home';
   static const String login = '/login';
   static const String createAccount = '/create-account';
@@ -31,28 +31,29 @@ class AppRoutes {
   static const String networkTest = '/network-test';
 
   // Route map with builders that accept arguments
-  static Map<String, RouteBuilder> get routes => {
-        // initial: (_) => const GetStartedScreen(),
-        initial: (_) => const Home(),
-        login: (_) => const LoginScreen(),
-        createAccount: (_) => const CreateAccountScreen(),
-        forgotPassword: (_) => const ForgotPasswordScreen(),
-        verifyEmail: (args) {
-          return VerifyEmailScreen(
-            email: args['email'],
-            profileImage: args['profileImage'],
-            censorEmail: args['censorEmail'] ?? true,
-          );
-        },
-        resetPassword: (args) {
-          return ResetPasswordScreen(
-            email: args['email'] ?? '',
-            resetToken: args['resetToken'],
-          );
-        },
-        camera: (_) => const CameraPage(),
-        map: (_) => const MapPage(),
-        messages: (_) => const MessagesPage(),
-        networkTest: (_) => const NetworkTestPage(),
-      };
+  static final routes = <String, Widget Function(dynamic args)>{
+    initial: (args) =>
+        const GetStartedScreen(), // <-- Make sure this is your login/initial page
+    home: (args) => const Home(),
+    login: (args) => const LoginScreen(),
+    createAccount: (args) => const CreateAccountScreen(),
+    forgotPassword: (args) => const ForgotPasswordScreen(),
+    verifyEmail: (args) {
+      return VerifyEmailScreen(
+        email: args['email'],
+        profileImage: args['profileImage'],
+        censorEmail: args['censorEmail'] ?? true,
+      );
+    },
+    resetPassword: (args) {
+      return ResetPasswordScreen(
+        email: args['email'] ?? '',
+        resetToken: args['resetToken'],
+      );
+    },
+    camera: (args) => const CameraPage(),
+    map: (args) => const MapPage(),
+    messages: (args) => const MessagesPage(),
+    networkTest: (args) => const NetworkTestPage(),
+  };
 }

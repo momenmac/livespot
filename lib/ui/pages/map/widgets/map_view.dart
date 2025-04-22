@@ -20,6 +20,11 @@ class MapView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Call setMapReady after the first frame (only once)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.setMapReady();
+    });
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {

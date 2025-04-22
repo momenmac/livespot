@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // Import SchedulerBinding
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
@@ -33,7 +34,12 @@ class _MapPageState extends State<MapPage> {
     // Delay initialization to ensure context is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.setContext(context);
-      _controller.initializeLocation();
+    });
+    // Defer map initialization until after the first frame is rendered
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _controller.initializeLocation();
+      }
     });
   }
 
