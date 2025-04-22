@@ -44,12 +44,12 @@ class _HomeContentState extends State<HomeContent> {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Assuming you have an AuthService or similar to validate tokens
       final authService = Provider.of<AuthService>(context, listen: false);
       final isValid = await authService.validateToken();
-      
+
       if (!isValid && widget.onAuthError != null) {
         widget.onAuthError!();
       }

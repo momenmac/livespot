@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
-import 'package:flutter_application_2/models/jwt_token.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();
-
 /// Route Guard to protect routes based on authentication status
 class RouteGuard {
   static final List<String> _protectedRoutes = [

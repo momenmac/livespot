@@ -118,7 +118,7 @@ class ApiClient {
   static Future<Map<String, dynamic>> getUserProfile(String token) async {
     final result = await get('/accounts/profile/', token: token);
 
-    if (result['success'] && result is Map) {
+    if (result['success']) {
       try {
         final account = Account.fromJson(result);
         return {'success': true, 'user': account};

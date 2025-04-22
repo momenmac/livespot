@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/models/account.dart';
 import 'package:flutter_application_2/models/jwt_token.dart';
-import 'package:flutter_application_2/services/api/account/api_client.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';

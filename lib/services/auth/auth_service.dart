@@ -17,7 +17,8 @@ class AuthService extends ChangeNotifier {
   Map<String, dynamic>? get user => _user;
 
   // Base URL for API calls
-  final String _baseUrl = 'https://your-api-url.com'; // Update with your actual API URL
+  final String _baseUrl =
+      'https://your-api-url.com'; // Update with your actual API URL
 
   // Initialize and validate existing token
   Future<void> initialize() async {
@@ -32,7 +33,7 @@ class AuthService extends ChangeNotifier {
         debugPrint('🔑 Found existing JWT token, validating with server...');
         final isValid = await validateToken();
         _isAuthenticated = isValid;
-        
+
         if (!isValid) {
           await clearSession();
         }
@@ -50,7 +51,7 @@ class AuthService extends ChangeNotifier {
   // Validate token with server
   Future<bool> validateToken() async {
     if (_token == null) return false;
-    
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/accounts/token/validate/'),
@@ -76,7 +77,7 @@ class AuthService extends ChangeNotifier {
   // Refresh token
   Future<bool> refreshToken() async {
     if (_token == null) return false;
-    
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/accounts/token/refresh/'),
@@ -89,11 +90,11 @@ class AuthService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         _token = data['token'];
-        
+
         // Save new token
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _token!);
-        
+
         _isAuthenticated = true;
         notifyListeners();
         return true;
@@ -114,10 +115,10 @@ class AuthService extends ChangeNotifier {
     _token = null;
     _user = null;
     _isAuthenticated = false;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
-    
+
     debugPrint('[LogoutTrace] --- Clear Session End (AuthService) ---');
     notifyListeners();
   }
@@ -128,12 +129,12 @@ class AuthService extends ChangeNotifier {
       debugPrint('Attempting to sign in with Google');
       // Implement actual Google sign-in logic
       // This is a placeholder for your actual implementation
-      
+
       // Example of a successful response handling:
       // _token = responseData['token'];
       // _user = responseData['user'];
       // _isAuthenticated = true;
-      
+
       notifyListeners();
       return _isAuthenticated;
     } catch (e) {

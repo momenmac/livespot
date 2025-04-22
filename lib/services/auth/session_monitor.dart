@@ -7,9 +7,9 @@ class SessionMonitor extends StatefulWidget {
   final Widget child;
 
   const SessionMonitor({
-    Key? key,
+    super.key,
     required this.child,
-  }) : super(key: key);
+  });
 
   @override
   SessionMonitorState createState() => SessionMonitorState();
@@ -59,17 +59,12 @@ class SessionMonitorState extends State<SessionMonitor> {
     // Check if we have a valid overlay
     try {
       final overlay = Overlay.of(context, debugRequiredFor: widget);
-      if (overlay != null) {
-        if (isError) {
-          ResponsiveSnackBar.showError(context: context, message: message);
-        } else {
-          ResponsiveSnackBar.showInfo(context: context, message: message);
-        }
+      if (isError) {
+        ResponsiveSnackBar.showError(context: context, message: message);
       } else {
-        print(
-            '⚠️ SessionMonitor: Overlay not available yet, skipping notification: $message');
+        ResponsiveSnackBar.showInfo(context: context, message: message);
       }
-    } catch (e) {
+        } catch (e) {
       print('⚠️ SessionMonitor: Error showing notification: $e');
       // Just print the notification message to console since we can't show UI
       print('📢 Notification (${isError ? 'ERROR' : 'INFO'}): $message');

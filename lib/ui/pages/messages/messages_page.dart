@@ -127,7 +127,7 @@ class _MessagesPageState extends State<MessagesPage> {
 
               // Wrap ConversationList in a Container with fixed height
               // This allows it to be part of the ListView
-              Container(
+              SizedBox(
                 // Set a reasonable height or use MediaQuery to calculate it
                 // Subtracting space for the RecommendedRoomsSection and padding
                 height: MediaQuery.of(context).size.height - 300,

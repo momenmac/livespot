@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/story_viewer_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/all_updates_page.dart';
