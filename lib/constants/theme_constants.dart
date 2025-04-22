@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class ThemeConstants {
   ThemeConstants._();

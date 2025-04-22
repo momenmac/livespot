@@ -1,3 +1,7 @@
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
+
 class RegExpConstants {
   RegExpConstants._();
 

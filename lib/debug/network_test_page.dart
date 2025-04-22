@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../services/network_checker.dart';
 import '../services/api/account/api_urls.dart';
 import 'api_tester.dart';
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class NetworkTestPage extends StatefulWidget {
   const NetworkTestPage({super.key});

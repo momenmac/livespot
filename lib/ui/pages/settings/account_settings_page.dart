@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_application_2/providers/theme_provider.dart';
 
 class AccountSettingsPage extends StatefulWidget {
-  const AccountSettingsPage({super.key});
+  const AccountSettingsPage(
+      {super.key, required Null Function(ThemeMode value) onThemeChanged});
 
   @override
   State<AccountSettingsPage> createState() => _AccountSettingsPageState();
@@ -19,6 +22,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   // Privacy settings
   bool _profileVisible = true;
   bool _locationVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentThemeMode =
+        Provider.of<ThemeProvider>(context, listen: false).themeMode;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -264,16 +274,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   void _updateTheme(ThemeMode mode) {
-    // In a real app, you would use a state management solution to update the app theme
-    // For this example, we'll just show a snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Theme changed to ${mode.toString().split('.').last}'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    // Note: To properly implement theme changing, you'd need to use a state management solution
-    // like Provider, Riverpod, or Bloc to control the app's theme at a higher level
+    Provider.of<ThemeProvider>(context, listen: false).setThemeMode(mode);
+    setState(() {
+      _currentThemeMode = mode;
+    });
   }
 }

@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_2/models/jwt_token.dart';
 import 'dart:developer' as developer; // Import developer for logging
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class SharedPrefs {
   // Keys for SharedPreferences

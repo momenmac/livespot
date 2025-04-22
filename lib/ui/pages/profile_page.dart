@@ -535,7 +535,9 @@ class _ProfilePageState extends State<ProfilePage>
                   Navigator.push(
                     pageContext,
                     MaterialPageRoute(
-                      builder: (context) => const AccountSettingsPage(),
+                      builder: (context) => AccountSettingsPage(
+                        onThemeChanged: (ThemeMode value) {},
+                      ),
                     ),
                   );
                 },

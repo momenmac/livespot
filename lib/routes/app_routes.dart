@@ -10,7 +10,9 @@ import 'package:flutter_application_2/ui/pages/camera_page.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
+import 'package:flutter_application_2/app_entry.dart' as app;
 
+void main() => app.main();
 // Route builder type with dynamic arguments
 typedef RouteBuilder = Widget Function(Map<String, dynamic> arguments);
 

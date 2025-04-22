@@ -10,6 +10,7 @@ import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/providers/theme_provider.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -167,6 +168,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider.value(value: accountProvider),
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
@@ -336,35 +338,39 @@ class _MyAppState extends State<MyApp> {
     final firebaseStatus = Provider.of<FirebaseStatusNotifier>(context);
 
     return SessionMonitor(
-      child: MaterialApp(
-        title: 'My App',
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.system,
-        theme: TAppTheme.lightTheme,
-        darkTheme: TAppTheme.darkTheme,
-        navigatorKey: NavigationService().navigatorKey,
-        initialRoute: AppRoutes.initial,
-        onGenerateRoute: RouteGuard.generateRoute,
-        builder: (context, child) {
-          if (!firebaseStatus.isInitialized &&
-              !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
-            print(
-                '⚠️ App running with limited functionality (Firebase unavailable)');
-          }
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'My App',
+            debugShowCheckedModeBanner: false,
+            themeMode: themeProvider.themeMode,
+            theme: TAppTheme.lightTheme,
+            darkTheme: TAppTheme.darkTheme,
+            navigatorKey: NavigationService().navigatorKey,
+            initialRoute: AppRoutes.initial,
+            onGenerateRoute: RouteGuard.generateRoute,
+            builder: (context, child) {
+              if (!firebaseStatus.isInitialized &&
+                  !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
+                print(
+                    '⚠️ App running with limited functionality (Firebase unavailable)');
+              }
 
-          return MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(1.0)),
-            child: GestureDetector(
-              onTap: () {
-                FocusScopeNode currentFocus = FocusScope.of(context);
-                if (!currentFocus.hasPrimaryFocus &&
-                    currentFocus.focusedChild != null) {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                }
-              },
-              child: child!,
-            ),
+              return MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(1.0)),
+                child: GestureDetector(
+                  onTap: () {
+                    FocusScopeNode currentFocus = FocusScope.of(context);
+                    if (!currentFocus.hasPrimaryFocus &&
+                        currentFocus.focusedChild != null) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                    }
+                  },
+                  child: child!,
+                ),
+              );
+            },
           );
         },
       ),

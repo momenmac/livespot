@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class JwtToken {
   final String accessToken;

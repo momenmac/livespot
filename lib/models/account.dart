@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class Account {
   final int id;

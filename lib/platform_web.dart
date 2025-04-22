@@ -1,4 +1,8 @@
 // This is a stub implementation of Platform class for web platform
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
+
 class Platform {
   static bool get isIOS => false;
   static bool get isAndroid => false;

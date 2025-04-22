@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_application_2/app_entry.dart' as app;
+
+void main() => app.main();
 
 class ApiTester {
   static Future<void> testRegisterEndpoint() async {
