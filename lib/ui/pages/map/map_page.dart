@@ -81,6 +81,14 @@ class _MapPageState extends State<MapPage> {
                 title: Text(TextStrings.map,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 actions: [
+                  if (_controller.destination != null)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(
+                            context, _controller.locationController.text);
+                      },
+                      child: const Text('Select Location'),
+                    ),
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: MapDatePicker(

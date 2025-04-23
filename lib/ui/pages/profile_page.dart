@@ -3,8 +3,10 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/pages/settings/account_settings_page.dart';
+import 'package:flutter_application_2/ui/pages/map/map_page.dart'; // Import MapPage
 import 'package:provider/provider.dart'; // Import Provider
 import 'dart:developer' as developer; // Import developer for logging
+import 'package:flutter/services.dart'; // Add this import for clipboard functionality
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -106,13 +108,6 @@ class _ProfilePageState extends State<ProfilePage>
           tooltip: 'Filter by date',
           onPressed: () {
             _pickDate();
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.edit_outlined),
-          tooltip: 'Edit Profile',
-          onPressed: () {
-            _showEditProfileModal();
           },
         ),
         IconButton(
@@ -265,19 +260,21 @@ class _ProfilePageState extends State<ProfilePage>
 
           const SizedBox(height: 16),
 
-          // Stats and Follow Button Row
+          // Replace the old stats and follow button row with new layout
           Row(
             children: [
-              // Followers
+              // Followers count
               InkWell(
                 onTap: () => _showFollowersList(),
                 child: Column(
                   children: [
                     Text(
                       _userData['followers'].toString(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: ThemeConstants
+                            .primaryColor, // Blue theme for followers
                       ),
                     ),
                     Text(
@@ -293,7 +290,7 @@ class _ProfilePageState extends State<ProfilePage>
 
               const SizedBox(width: 24),
 
-              // Following
+              // Following count
               InkWell(
                 onTap: () => _showFollowingList(),
                 child: Column(
@@ -303,6 +300,7 @@ class _ProfilePageState extends State<ProfilePage>
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        // Keep default color for following
                       ),
                     ),
                     Text(
@@ -315,38 +313,111 @@ class _ProfilePageState extends State<ProfilePage>
                   ],
                 ),
               ),
-
-              const Spacer(),
-
-              // Follow Button
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _isFollowing = !_isFollowing;
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  foregroundColor:
-                      _isFollowing ? ThemeConstants.grey : Colors.white,
-                  backgroundColor: _isFollowing
-                      ? ThemeConstants.greyLight
-                      : ThemeConstants.primaryColor,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: Text(_isFollowing ? 'Following' : 'Follow'),
-              ),
             ],
           ),
 
           const SizedBox(height: 16),
 
+          // New buttons row
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _showEditProfileModal(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThemeConstants.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    minimumSize: const Size(0, 48), // Set fixed height
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Edit Profile'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _showShareProfileDialog(),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    minimumSize: const Size(0, 48), // Match height
+                    side: BorderSide(color: ThemeConstants.primaryColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Share Profile'),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
           const Divider(),
         ],
       ),
+    );
+  }
+
+  // Add new method for share dialog
+  void _showShareProfileDialog() {
+    final String profileLink =
+        'https://yourapp.com/profile/${_userData['username']}';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Share Profile'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Share your profile link with others:'),
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        profileLink,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy),
+                      onPressed: () async {
+                        await Clipboard.setData(
+                            ClipboardData(text: profileLink));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Link copied to clipboard!')),
+                          );
+                        }
+                      },
+                      tooltip: 'Copy link',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -451,7 +522,38 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Action handlers
+  Future<void> _pickLocationFromMap() async {
+    final BuildContext currentContext = context;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapPage(
+          showBackButton: true,
+          onBackPress: () {
+            if (currentContext.mounted) {
+              Navigator.pop(currentContext);
+            }
+          },
+        ),
+      ),
+    );
+
+    if (result != null && result is String && mounted) {
+      setState(() {
+        _userData['location'] = result;
+      });
+    }
+  }
+
   void _showEditProfileModal() {
+    // Create controllers for form fields
+    final nameController = TextEditingController(text: _userData['name']);
+    final usernameController =
+        TextEditingController(text: _userData['username']);
+    final bioController = TextEditingController(text: _userData['bio']);
+    final locationController =
+        TextEditingController(text: _userData['location']);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -462,9 +564,10 @@ class _ProfilePageState extends State<ProfilePage>
         maxChildSize: 0.95,
         builder: (context, scrollController) {
           return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -486,12 +589,120 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ],
                 ),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    children: [
+                      const SizedBox(height: 16),
+                      // Profile Picture
+                      Center(
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundImage:
+                                  NetworkImage(_userData['profileImage']),
+                              onBackgroundImageError: (_, __) {},
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: CircleAvatar(
+                                radius: 18,
+                                backgroundColor: ThemeConstants.primaryColor,
+                                child: IconButton(
+                                  icon: const Icon(Icons.camera_alt,
+                                      size: 18, color: Colors.white),
+                                  onPressed: () {
+                                    // TODO: Implement image picker
+                                    // 1. Show image source dialog (camera/gallery)
+                                    // 2. Upload image to storage
+                                    // 3. Update user profile with new image URL
+                                    // 4. Update UI
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Name Field
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Username Field
+                      TextField(
+                        controller: usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          border: OutlineInputBorder(),
+                          prefixText: '@',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Bio Field
+                      TextField(
+                        controller: bioController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Bio',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Location Field
+                      TextField(
+                        controller: locationController,
+                        decoration: InputDecoration(
+                          labelText: 'Location',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.location_on),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.map),
+                            onPressed: () async {
+                              await _pickLocationFromMap();
+                              if (mounted) {
+                                locationController.text = _userData['location'];
+                              }
+                            },
+                            tooltip: 'Pick location from map',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
-                // Edit profile form would go here
-                const Text('Edit profile form would go here'),
-                const Spacer(),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    // TODO: Implement profile update
+                    // 1. Validate form fields
+                    // 2. Show loading indicator
+                    // 3. Update user profile in database
+                    // 4. Update local state
+                    // 5. Show success message
+                    // 6. Close modal
+
+                    // Mock update for now
+                    setState(() {
+                      _userData['name'] = nameController.text;
+                      _userData['username'] = usernameController.text;
+                      _userData['bio'] = bioController.text;
+                      _userData['location'] = locationController.text;
+                    });
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Profile updated successfully!')),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ThemeConstants.primaryColor,
                     foregroundColor: Colors.white,
@@ -723,7 +934,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
-class _FollowersPage extends StatelessWidget {
+class _FollowersPage extends StatefulWidget {
   final String title;
   final bool isFollowers;
   final Map<String, dynamic> userData;
@@ -735,70 +946,138 @@ class _FollowersPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Generate mock users based on followers/following count
-    final count = isFollowers ? userData['followers'] : userData['following'];
-    final List<Map<String, dynamic>> users = List.generate(
-      count > 20 ? 20 : count, // Limit to 20 for performance
+  State<_FollowersPage> createState() => _FollowersPageState();
+}
+
+class _FollowersPageState extends State<_FollowersPage> {
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _filteredUsers = [];
+  List<Map<String, dynamic>> _allUsers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeUsers();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _initializeUsers() {
+    final count = widget.isFollowers
+        ? widget.userData['followers']
+        : widget.userData['following'];
+    _allUsers = List.generate(
+      count > 20 ? 20 : count,
       (index) => {
         'id': index,
         'name': 'User ${index + 1}',
         'username': 'user${index + 1}',
         'imageUrl': 'https://picsum.photos/seed/user$index/100',
-        'isVerified': index % 5 == 0, // Some users are verified
+        'isVerified': index % 5 == 0,
       },
     );
+    _filteredUsers = List.from(_allUsers);
+  }
 
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredUsers = _allUsers.where((user) {
+        final name = user['name'].toString().toLowerCase();
+        final username = user['username'].toString().toLowerCase();
+        return name.contains(query) || username.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(widget.title),
       ),
-      body: ListView.builder(
-        itemCount: users.length,
-        itemBuilder: (context, index) {
-          final user = users[index];
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: NetworkImage(user['imageUrl']),
-              onBackgroundImageError: (_, __) {},
-              child: const Icon(Icons.person),
-            ),
-            title: Row(
-              children: [
-                Text(user['name']),
-                if (user['isVerified'])
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: Icon(
-                      Icons.verified,
-                      size: 16,
-                      color: ThemeConstants.primaryColor,
-                    ),
-                  ),
-              ],
-            ),
-            subtitle: Text('@${user['username']}'),
-            trailing: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isFollowers
-                    ? ThemeConstants.greyLight
-                    : ThemeConstants.primaryColor,
-                foregroundColor:
-                    isFollowers ? ThemeConstants.grey : Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+      body: Column(
+        children: [
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search users...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              child: Text(isFollowers ? 'Remove' : 'Unfollow'),
             ),
-            onTap: () {
-              // Navigate to user profile
-            },
-          );
-        },
+          ),
+          // User list
+          Expanded(
+            child: _filteredUsers.isEmpty
+                ? const Center(
+                    child: Text('No users found'),
+                  )
+                : ListView.builder(
+                    itemCount: _filteredUsers.length,
+                    itemBuilder: (context, index) {
+                      final user = _filteredUsers[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: NetworkImage(user['imageUrl']),
+                          onBackgroundImageError: (_, __) {},
+                          child: const Icon(Icons.person),
+                        ),
+                        title: Row(
+                          children: [
+                            Text(user['name']),
+                            if (user['isVerified'])
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: ThemeConstants.primaryColor,
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Text('@${user['username']}'),
+                        trailing: ElevatedButton(
+                          onPressed: () {},
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.isFollowers
+                                ? ThemeConstants.greyLight
+                                : ThemeConstants.primaryColor,
+                            foregroundColor: widget.isFollowers
+                                ? ThemeConstants.grey
+                                : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          child:
+                              Text(widget.isFollowers ? 'Remove' : 'Unfollow'),
+                        ),
+                        onTap: () {
+                          // TODO: Navigate to user profile
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
