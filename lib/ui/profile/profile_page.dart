@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
+import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/ui/pages/settings/account_settings_page.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart'; // Import MapPage
+import 'package:flutter_application_2/ui/profile/profile_search_page.dart'; // Import ProfileSearchPage
+import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
 import 'package:provider/provider.dart'; // Import Provider
 import 'dart:developer' as developer; // Import developer for logging
 import 'package:flutter/services.dart'; // Add this import for clipboard functionality
@@ -20,6 +23,7 @@ class _ProfilePageState extends State<ProfilePage>
   late TabController _tabController;
   bool _isFollowing = false;
   DateTime? _selectedDate;
+  bool _showDiscoverPeople = true;
 
   // Mock user data - in a real app, this would come from a backend
   final Map<String, dynamic> _userData = {
@@ -38,6 +42,87 @@ class _ProfilePageState extends State<ProfilePage>
     'saved': 45,
     'upvoted': 124,
   };
+
+  // Add mock profiles data
+  final List<Map<String, dynamic>> _mockProfiles = [
+    {
+      'name': 'Momen',
+      'username': 'momen_dev',
+      'profileImage': 'https://picsum.photos/seed/momen/200',
+      'bio': 'Flutter Developer | Tech Enthusiast',
+      'location': 'Dubai, UAE',
+      'honesty': 92,
+      'followers': 520,
+      'following': 230,
+      'joinDate': 'January 2023',
+      'posts': 45,
+      'comments': 156,
+      'saved': 28,
+      'upvoted': 89,
+    },
+    {
+      'name': 'Nopo',
+      'username': 'nopo_tech',
+      'profileImage': 'https://picsum.photos/seed/nopo/200',
+      'bio': 'Software Engineer | Open Source Contributor',
+      'location': 'Tokyo, Japan',
+      'honesty': 88,
+      'followers': 342,
+      'following': 145,
+      'joinDate': 'March 2023',
+      'posts': 32,
+      'comments': 98,
+      'saved': 15,
+      'upvoted': 67,
+    },
+    {
+      'name': 'Sarah Chen',
+      'username': 'sarah_code',
+      'profileImage': 'https://picsum.photos/seed/sarah/200',
+      'bio': 'Full Stack Developer | AI Enthusiast',
+      'location': 'San Francisco, USA',
+      'honesty': 95,
+      'followers': 623,
+      'following': 289,
+      'joinDate': 'December 2022',
+      'posts': 56,
+      'comments': 234,
+      'saved': 42,
+      'upvoted': 178,
+    },
+    {
+      'name': 'Carlos Rodriguez',
+      'username': 'carlos_tech',
+      'profileImage': 'https://picsum.photos/seed/carlos/200',
+      'bio': 'Mobile Developer | UI/UX Designer',
+      'location': 'Barcelona, Spain',
+      'honesty': 90,
+      'followers': 415,
+      'following': 201,
+      'joinDate': 'February 2023',
+      'posts': 38,
+      'comments': 145,
+      'saved': 31,
+      'upvoted': 92,
+    },
+    {
+      'name': 'Emma Watson',
+      'username': 'emma_dev',
+      'profileImage': 'https://picsum.photos/seed/emma/200',
+      'bio': 'Frontend Developer | React & Flutter',
+      'location': 'London, UK',
+      'honesty': 93,
+      'followers': 489,
+      'following': 267,
+      'joinDate': 'April 2023',
+      'posts': 41,
+      'comments': 167,
+      'saved': 35,
+      'upvoted': 104,
+    },
+  ];
+
+  List<Map<String, dynamic>> _searchResults = [];
 
   @override
   void initState() {
@@ -63,6 +148,14 @@ class _ProfilePageState extends State<ProfilePage>
             _buildAppBar(),
             SliverToBoxAdapter(
               child: _buildUserInfoSection(),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_showDiscoverPeople) const SuggestedPeopleSection(),
+                ],
+              ),
             ),
             SliverPersistentHeader(
               delegate: _SliverAppBarDelegate(
@@ -104,6 +197,11 @@ class _ProfilePageState extends State<ProfilePage>
       title: const Text('Profile'),
       actions: [
         IconButton(
+          icon: const Icon(Icons.search),
+          tooltip: 'Search profiles',
+          onPressed: _showSearchDialog,
+        ),
+        IconButton(
           icon: const Icon(Icons.calendar_today),
           tooltip: 'Filter by date',
           onPressed: () {
@@ -118,6 +216,28 @@ class _ProfilePageState extends State<ProfilePage>
           },
         ),
       ],
+    );
+  }
+
+  void _showSearchDialog() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileSearchPage(
+          mockProfiles: _mockProfiles,
+        ),
+      ),
+    );
+  }
+
+  void _showUserProfile(Map<String, dynamic> profile) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OtherUserProfilePage(
+          userData: profile,
+        ),
+      ),
     );
   }
 
@@ -159,8 +279,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildUserInfoSection() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -213,9 +334,35 @@ class _ProfilePageState extends State<ProfilePage>
                         color: ThemeConstants.grey,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    // Honesty Rating
-                    _buildHonestyRating(_userData['honesty']),
+                    const SizedBox(height: 4),
+                    // Verification Badge instead of honesty rating
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: ThemeConstants.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.verified,
+                            size: 14,
+                            color: ThemeConstants.primaryColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'VERIFIED',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: ThemeConstants.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -273,8 +420,7 @@ class _ProfilePageState extends State<ProfilePage>
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: ThemeConstants
-                            .primaryColor, // Blue theme for followers
+                        color: ThemeConstants.primaryColor,
                       ),
                     ),
                     Text(
@@ -300,7 +446,6 @@ class _ProfilePageState extends State<ProfilePage>
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        // Keep default color for following
                       ),
                     ),
                     Text(
@@ -312,6 +457,28 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ],
                 ),
+              ),
+
+              const Spacer(),
+
+              // Honesty Rating moved here
+              _buildHonestyRating(_userData['honesty']),
+
+              const SizedBox(width: 16),
+
+              IconButton(
+                icon: Icon(
+                  Icons.person_outline,
+                  color: _showDiscoverPeople
+                      ? ThemeConstants.primaryColor
+                      : Theme.of(context).iconTheme.color,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showDiscoverPeople = !_showDiscoverPeople;
+                  });
+                },
+                tooltip: 'Toggle Discover People',
               ),
             ],
           ),
@@ -327,8 +494,8 @@ class _ProfilePageState extends State<ProfilePage>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ThemeConstants.primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    minimumSize: const Size(0, 48), // Set fixed height
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    minimumSize: const Size(0, 40),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -341,8 +508,8 @@ class _ProfilePageState extends State<ProfilePage>
                 child: OutlinedButton(
                   onPressed: () => _showShareProfileDialog(),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    minimumSize: const Size(0, 48), // Match height
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: const Size(0, 40),
                     side: BorderSide(color: ThemeConstants.primaryColor),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -353,9 +520,6 @@ class _ProfilePageState extends State<ProfilePage>
               ),
             ],
           ),
-
-          const SizedBox(height: 16),
-          const Divider(),
         ],
       ),
     );
@@ -460,7 +624,6 @@ class _ProfilePageState extends State<ProfilePage>
 
   // Tab content methods
   Widget _buildPostsTab() {
-    // For now, returning a placeholder that would be filled with actual posts
     return _buildEmptyStateWithCount(
       icon: Icons.article_outlined,
       message: 'Your Posts',
@@ -490,33 +653,40 @@ class _ProfilePageState extends State<ProfilePage>
     required String message,
     required int count,
   }) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: ThemeConstants.grey.withOpacity(0.5),
+    return SingleChildScrollView(
+      // Added ScrollView to handle overflow
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Changed to min
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 64,
+                color: ThemeConstants.grey.withOpacity(0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ThemeConstants.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You have $count ${message.toLowerCase()}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: ThemeConstants.grey,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: ThemeConstants.grey,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'You have $count ${message.toLowerCase()}',
-            style: TextStyle(
-              fontSize: 14,
-              color: ThemeConstants.grey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -4,7 +4,7 @@ import '../widgets/navigation_bar.dart';
 import 'map/map_page.dart';
 import 'camera_page.dart';
 import 'notification/notifications_page.dart';
-import 'profile_page.dart';
+import '../profile/profile_page.dart';
 import 'home/components/home_content.dart';
 
 class Home extends StatefulWidget {

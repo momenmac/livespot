@@ -33,7 +33,7 @@ class AppRoutes {
   // Route map with builders that accept arguments
   static final routes = <String, Widget Function(dynamic args)>{
     initial: (args) =>
-        const GetStartedScreen(), // <-- Make sure this is your login/initial page
+        const Home(), // <-- Make sure this is your login/initial page
     home: (args) => const Home(),
     login: (args) => const LoginScreen(),
     createAccount: (args) => const CreateAccountScreen(),
