@@ -10,13 +10,13 @@ class RoomDetailPage extends StatefulWidget {
   final bool isActive;
 
   const RoomDetailPage({
-    Key? key,
+    super.key,
     required this.title,
     required this.description,
     required this.type,
     required this.participantCount,
     required this.isActive,
-  }) : super(key: key);
+  });
 
   @override
   State<RoomDetailPage> createState() => _RoomDetailPageState();

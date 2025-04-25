@@ -3,7 +3,7 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/profile/settings/story_controls_page.dart';
 
 class PrivacySettingsPage extends StatefulWidget {
-  const PrivacySettingsPage({Key? key}) : super(key: key);
+  const PrivacySettingsPage({super.key});
 
   @override
   State<PrivacySettingsPage> createState() => _PrivacySettingsPageState();

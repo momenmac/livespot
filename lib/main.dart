@@ -214,7 +214,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _initialAuthCheckComplete = false;
-  bool _hasSetLoadingTimeout = false;
+  final bool _hasSetLoadingTimeout = false;
 
   @override
   void initState() {

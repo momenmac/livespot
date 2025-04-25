@@ -40,7 +40,6 @@ class NavigationService {
     // Attempt to get route from ModalRoute at the time of access
     final currentState = navigatorKey.currentState;
     if (currentState != null &&
-        currentState.context != null &&
         currentState.context.mounted) {
       try {
         modalRouteName = ModalRoute.of(currentState.context)?.settings.name;

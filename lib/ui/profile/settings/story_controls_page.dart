@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 
 class StoryControlsPage extends StatefulWidget {
-  const StoryControlsPage({Key? key}) : super(key: key);
+  const StoryControlsPage({super.key});
 
   @override
   State<StoryControlsPage> createState() => _StoryControlsPageState();

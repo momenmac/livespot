@@ -6,9 +6,9 @@ class OtherUserProfilePage extends StatefulWidget {
   final Map<String, dynamic> userData;
 
   const OtherUserProfilePage({
-    Key? key,
+    super.key,
     required this.userData,
-  }) : super(key: key);
+  });
 
   @override
   State<OtherUserProfilePage> createState() => _OtherUserProfilePageState();
@@ -326,9 +326,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
 
   Widget _buildHonestyRating(int? rating) {
     // Add null safety check at the beginning of the method
-    if (rating == null) {
-      rating = 0; // Provide a default value if rating is null
-    }
+    rating ??= 0;
 
     Color color;
     if (rating >= 80) {

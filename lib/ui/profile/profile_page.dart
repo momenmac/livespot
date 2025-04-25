@@ -22,7 +22,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isFollowing = false;
+  final bool _isFollowing = false;
   DateTime? _selectedDate;
   bool _showDiscoverPeople = true;
 
@@ -124,7 +124,7 @@ class _ProfilePageState extends State<ProfilePage>
     },
   ];
 
-  List<Map<String, dynamic>> _searchResults = [];
+  final List<Map<String, dynamic>> _searchResults = [];
 
   @override
   void initState() {

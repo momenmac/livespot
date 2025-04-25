@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();

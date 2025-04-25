@@ -5,10 +5,10 @@ class SuggestedPeopleSection extends StatelessWidget {
   final Function(int) onRemoveUser;
 
   const SuggestedPeopleSection({
-    Key? key,
+    super.key,
     required this.suggestedUsers,
     required this.onRemoveUser,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
