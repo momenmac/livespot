@@ -88,6 +88,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   }
 
   Widget _buildUserInfoSection() {
+    // Extract or add default for activityStatus
+    final activityStatus = widget.userData['activityStatus'] ?? 'Online';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
       child: Column(
@@ -97,30 +100,51 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Image
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: ThemeConstants.primaryColorLight,
-                    width: 3,
+              // Profile Image with Activity Status
+              Stack(
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: ThemeConstants.primaryColorLight,
+                        width: 3,
+                      ),
+                    ),
+                    child: ClipOval(
+                      child: Image.network(
+                        widget.userData['profileImage'],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: ThemeConstants.greyLight,
+                            child: const Icon(Icons.person,
+                                size: 50, color: ThemeConstants.grey),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
-                child: ClipOval(
-                  child: Image.network(
-                    widget.userData['profileImage'],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: ThemeConstants.greyLight,
-                        child: const Icon(Icons.person,
-                            size: 50, color: ThemeConstants.grey),
-                      );
-                    },
+                  // Activity Status Indicator
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(activityStatus),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 3,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(width: 16),
               // User details
@@ -300,7 +324,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     );
   }
 
-  Widget _buildHonestyRating(int rating) {
+  Widget _buildHonestyRating(int? rating) {
+    // Add null safety check at the beginning of the method
+    if (rating == null) {
+      rating = 0; // Provide a default value if rating is null
+    }
+
     Color color;
     if (rating >= 80) {
       color = ThemeConstants.green;
@@ -373,8 +402,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   Widget _buildEmptyStateWithCount({
     required IconData icon,
     required String message,
-    required int count,
+    required int? count,
   }) {
+    // Safe handling of null counts
+    final safeCount = count ?? 0;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -395,7 +427,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           ),
           const SizedBox(height: 8),
           Text(
-            '$count ${message.toLowerCase()}',
+            '$safeCount ${message.toLowerCase()}',
             style: TextStyle(
               fontSize: 14,
               color: ThemeConstants.grey,
@@ -404,6 +436,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         ],
       ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Online':
+        return ThemeConstants.green;
+      case 'Do Not Disturb':
+        return ThemeConstants.red;
+      case 'Away':
+        return ThemeConstants.orange;
+      case 'Offline':
+      default:
+        return ThemeConstants.grey;
+    }
   }
 }
 

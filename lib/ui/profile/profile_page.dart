@@ -3,10 +3,11 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
-import 'package:flutter_application_2/ui/pages/settings/account_settings_page.dart';
+import 'package:flutter_application_2/ui/profile/settings/account_settings_page.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart'; // Import MapPage
 import 'package:flutter_application_2/ui/profile/profile_search_page.dart'; // Import ProfileSearchPage
 import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
+import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart'; // Add this import
 import 'package:provider/provider.dart'; // Import Provider
 import 'dart:developer' as developer; // Import developer for logging
 import 'package:flutter/services.dart'; // Add this import for clipboard functionality
@@ -41,6 +42,7 @@ class _ProfilePageState extends State<ProfilePage>
     'comments': 213,
     'saved': 45,
     'upvoted': 124,
+    'activityStatus': 'Online', // Added activity status
   };
 
   // Add mock profiles data
@@ -278,6 +280,9 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildUserInfoSection() {
+    // Add a safe check for activity status
+    final activityStatus = _userData['activityStatus'] ?? 'Online';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
       child: Column(
@@ -287,30 +292,52 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Image
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: ThemeConstants.primaryColorLight,
-                    width: 3,
+              // Profile Image with Activity Status
+              Stack(
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: ThemeConstants.primaryColorLight,
+                        width: 3,
+                      ),
+                    ),
+                    child: ClipOval(
+                      child: Image.network(
+                        _userData['profileImage'],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: ThemeConstants.greyLight,
+                            child: const Icon(Icons.person,
+                                size: 50, color: ThemeConstants.grey),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
-                child: ClipOval(
-                  child: Image.network(
-                    _userData['profileImage'],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: ThemeConstants.greyLight,
-                        child: const Icon(Icons.person,
-                            size: 50, color: ThemeConstants.grey),
-                      );
-                    },
+                  // Activity Status Indicator
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color:
+                            _getStatusColor(activityStatus), // Use safe value
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 3,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(width: 16),
               // User details
@@ -620,6 +647,21 @@ class _ProfilePageState extends State<ProfilePage>
         ],
       ),
     );
+  }
+
+  // Helper method to determine status color
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Online':
+        return ThemeConstants.green;
+      case 'Do Not Disturb':
+        return ThemeConstants.red;
+      case 'Away':
+        return ThemeConstants.orange;
+      case 'Offline':
+      default:
+        return ThemeConstants.grey;
+    }
   }
 
   // Tab content methods
@@ -937,6 +979,12 @@ class _ProfilePageState extends State<ProfilePage>
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
                   Navigator.pop(modalContext);
+                  Navigator.push(
+                    pageContext,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacySettingsPage(),
+                    ),
+                  );
                 },
               ),
               ListTile(
