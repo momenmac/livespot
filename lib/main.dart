@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
 import 'package:flutter_application_2/services/auth/auth_service.dart';
+import 'package:flutter_application_2/services/utils/route_observer.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -213,71 +214,98 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _initialAuthCheckComplete = false;
+  bool _hasSetLoadingTimeout = false;
 
   @override
   void initState() {
     super.initState();
-    // Listen to state changes AFTER the first frame to avoid issues during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Ensure listener is added before potentially calling it
       if (mounted) {
+        developer.log('MyApp initState: Adding AccountProvider listener.',
+            name: 'AuthListenerSetup');
         widget.accountProvider.addListener(_onAuthStateChanged);
-        // Trigger initial check manually AFTER listener is added
-        _onAuthStateChanged();
+        _onAuthStateChanged(); // Initial check
       }
     });
   }
 
   @override
   void dispose() {
+    developer.log('MyApp dispose: Removing AccountProvider listener.',
+        name: 'AuthListenerSetup');
     widget.accountProvider.removeListener(_onAuthStateChanged);
     super.dispose();
   }
 
   void _onAuthStateChanged() {
+    developer.log('>>> _onAuthStateChanged TRIGGERED <<<',
+        name: 'AuthListenerTrigger');
+
     final isAuthenticated = widget.accountProvider.isAuthenticated;
     final isLoading = widget.accountProvider.isLoading;
+    // Get route reliably from NavigationService (which now uses the observer)
     final currentRoute = NavigationService().currentRoute;
+
+    // Flags based on the reliable currentRoute
     final isAtHome = currentRoute == AppRoutes.home;
     final isAtInitial = currentRoute == AppRoutes.initial ||
         currentRoute == null ||
-        currentRoute == '/';
+        currentRoute == '/'; // Keep '/' check for initial load
 
+    // --- DETAILED DEBUGGING START ---
+    developer.log(
+      '--- Auth State Change Detected ---',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '  State Variables:',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    isAuthenticated: $isAuthenticated',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    isLoading: $isLoading',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    _initialAuthCheckComplete: $_initialAuthCheckComplete',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '  Route Information (from Observer via Service):',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    Current Route: "$currentRoute"',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    Is At Home Route Flag (isAtHome): $isAtHome (compares "$currentRoute" == "${AppRoutes.home}")',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    Is At Initial Route Flag (isAtInitial): $isAtInitial (compares "$currentRoute" == "${AppRoutes.initial}" or null or "/")',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '    Navigator Ready: ${NavigationService().navigatorKey.currentState != null}',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
+      '--- End Auth State Change ---',
+      name: 'AuthListenerDebug',
+    );
+    // --- DETAILED DEBUGGING END ---
+
+    // Add more detailed logging about loading state
     developer.log(
         '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, initialCheckComplete=$_initialAuthCheckComplete',
         name: 'AuthListener');
 
     if (!isLoading) {
-      if (!_initialAuthCheckComplete) {
-        _initialAuthCheckComplete = true;
-        developer.log(
-            '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated',
-            name: 'AuthListener');
-
-        if (isAuthenticated && !isAtHome) {
-          developer.log('👤 Navigating to home after initial check.',
-              name: 'AuthListener');
-          _navigateTo(AppRoutes.home);
-        } else if (!isAuthenticated && !isAtInitial) {
-          developer.log('👤 Navigating to initial after initial check.',
-              name: 'AuthListener');
-          _navigateTo(AppRoutes.initial);
-        }
-      } else {
-        developer.log('👤 Auth state changed after initialization.',
-            name: 'AuthListener');
-
-        if (isAuthenticated && !isAtHome) {
-          developer.log('   User became authenticated, navigating to home.',
-              name: 'AuthListener');
-          _navigateTo(AppRoutes.home);
-        } else if (!isAuthenticated && !isAtInitial) {
-          developer.log(
-              '   User became unauthenticated, navigating to initial.',
-              name: 'AuthListener');
-          _navigateTo(AppRoutes.initial);
-        }
-      }
+      _processAuthState(isAuthenticated, isAtHome, isAtInitial);
     } else {
       developer.log(
           '⏳ Auth state changed while loading. Waiting for loading to finish.',
@@ -285,11 +313,60 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  // Helper function for navigation to avoid repetition and ensure it runs post-frame
+  void _processAuthState(
+      bool isAuthenticated, bool isAtHome, bool isAtInitial) {
+    if (!_initialAuthCheckComplete) {
+      _initialAuthCheckComplete = true;
+      developer.log(
+          '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated',
+          name: 'AuthListener');
+
+      if (isAuthenticated && !isAtHome) {
+        developer.log(
+          '    Condition MET: isAuthenticated ($isAuthenticated) && !isAtHome ($isAtHome). Navigating to Home.',
+          name: 'AuthProcessDebug',
+        );
+        developer.log('👤 Navigating to home after initial check.',
+            name: 'AuthListener');
+        developer.log(
+            '>>> TRIGGERING NAVIGATION TO HOME (${AppRoutes.home}) NOW <<<',
+            name: 'AuthNavigateDebug');
+        _navigateTo(AppRoutes.home);
+      } else if (!isAuthenticated && isAtHome) {
+        developer.log(
+            '👤 Navigating to initial after initial check (was at home).',
+            name: 'AuthListener');
+        _navigateTo(AppRoutes.initial);
+      }
+    } else {
+      developer.log('👤 Auth state changed after initialization.',
+          name: 'AuthListener');
+
+      if (isAuthenticated && !isAtHome) {
+        developer.log(
+          '    Condition MET: isAuthenticated ($isAuthenticated) && !isAtHome ($isAtHome). Navigating to Home.',
+          name: 'AuthProcessDebug',
+        );
+        developer.log('   User became authenticated, navigating to home.',
+            name: 'AuthListener');
+        developer.log(
+            '>>> TRIGGERING NAVIGATION TO HOME (${AppRoutes.home}) NOW <<<',
+            name: 'AuthNavigateDebug');
+        _navigateTo(AppRoutes.home);
+      } else if (!isAuthenticated && isAtHome) {
+        developer.log(
+            '   User became unauthenticated while at home, navigating to initial.',
+            name: 'AuthListener');
+        _navigateTo(AppRoutes.initial);
+      }
+    }
+  }
+
   void _navigateTo(String routeName) {
-    // Schedule navigation for after the current frame build is complete
+    developer.log(
+        'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}',
+        name: 'AuthNavigateDebug');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Double-check mounted status right before navigation
       if (mounted && NavigationService().navigatorKey.currentState != null) {
         developer.log(
             '🚀 Executing navigation via replaceAllWith to: $routeName',
@@ -299,7 +376,6 @@ class _MyAppState extends State<MyApp> {
         developer.log(
             '⚠️ Navigator not ready during scheduled navigation to $routeName.',
             name: 'AuthListener');
-        // Optional: Retry logic could be added here if needed, but often resolves itself.
       } else {
         developer.log(
             '⚠️ Widget unmounted before scheduled navigation to $routeName could execute.',
@@ -326,6 +402,7 @@ class _MyAppState extends State<MyApp> {
             navigatorKey: NavigationService().navigatorKey,
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
+            navigatorObservers: [AppRouteObserver()],
             builder: (context, child) {
               if (!firebaseStatus.isInitialized &&
                   !(kIsWeb || (!kIsWeb && Platform.isIOS))) {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'route_observer.dart'; // Import the new observer
+import 'dart:developer' as developer; // Import developer for logging
 
 class NavigationService {
   // Singleton implementation
@@ -30,15 +32,31 @@ class NavigationService {
     return false;
   }
 
-  // Getter for the current route name
+  // Getter for the current route name with added debugging
   String? get currentRoute {
-    String? currentRouteName;
-    // Use the navigatorKey to access the current route settings
-    navigatorKey.currentState?.popUntil((route) {
-      currentRouteName = route.settings.name;
-      return true; // Return true to stop popping
-    });
-    return currentRouteName;
+    final observerRoute = AppRouteObserver.currentRouteName;
+    String? modalRouteName;
+
+    // Attempt to get route from ModalRoute at the time of access
+    final currentState = navigatorKey.currentState;
+    if (currentState != null &&
+        currentState.context != null &&
+        currentState.context.mounted) {
+      try {
+        modalRouteName = ModalRoute.of(currentState.context)?.settings.name;
+      } catch (e) {
+        // ModalRoute.of can fail if context is not right, ignore error for logging purpose
+      }
+    }
+
+    // Log both values for comparison
+    developer.log(
+      'NAV SERVICE: currentRoute getter called. Observer reports: "$observerRoute", ModalRoute reports: "$modalRouteName"',
+      name: 'NavigationService',
+    );
+
+    // Primarily trust the observer, but logs will show differences
+    return observerRoute;
   }
 
   // Navigate to a new route

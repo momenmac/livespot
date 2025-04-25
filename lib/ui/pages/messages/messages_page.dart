@@ -6,7 +6,7 @@ import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 // Add this import for RecommendedRoomsSection
-import 'package:flutter_application_2/ui/pages/home/components/sections/recommended_rooms_section.dart';
+import 'package:flutter_application_2/ui/pages/messages/recommended_rooms_section.dart';
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
@@ -118,12 +118,6 @@ class _MessagesPageState extends State<MessagesPage> {
             children: [
               // Add RecommendedRoomsSection that will scroll with the list
               const RecommendedRoomsSection(),
-
-              // Add a divider between sections
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: Divider(height: 1),
-              ),
 
               // Wrap ConversationList in a Container with fixed height
               // This allows it to be part of the ListView

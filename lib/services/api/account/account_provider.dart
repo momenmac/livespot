@@ -158,7 +158,12 @@ class AccountProvider extends ChangeNotifier {
     _isLoading = false;
     developer.log('Local session cleared. Setting isLoading=false.',
         name: 'LogoutTrace');
+    developer.log(
+        'AccountProvider: State updated (isAuthenticated=false). Calling notifyListeners()...',
+        name: 'AccountProvider');
     notifyListeners(); // Notify UI about state change (isLoading=false, isAuthenticated=false)
+    developer.log('AccountProvider: notifyListeners() called.',
+        name: 'AccountProvider');
     developer.log('--- Logout End (AccountProvider) ---', name: 'LogoutTrace');
   }
 
