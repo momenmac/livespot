@@ -11,6 +11,7 @@ import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.
 import 'package:provider/provider.dart'; // Import Provider
 import 'dart:developer' as developer; // Import developer for logging
 import 'package:flutter/services.dart'; // Add this import for clipboard functionality
+import 'package:google_sign_in/google_sign_in.dart'; // Import GoogleSignIn
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -1009,85 +1010,10 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Log Out',
                     style: TextStyle(color: ThemeConstants.red)),
                 onTap: () async {
-                  developer.log('--- Logout Process Start (ProfilePage) ---',
-                      name: 'LogoutTrace');
-                  // Close the bottom sheet first using its own context
+                  // Close settings modal first
                   Navigator.pop(modalContext);
-                  developer.log('Bottom sheet closed.', name: 'LogoutTrace');
-
-                  // Show confirmation dialog using the page's context
-                  developer.log('Showing confirmation dialog...',
-                      name: 'LogoutTrace');
-                  final confirmed = await showDialog<bool>(
-                    context: pageContext, // Use the captured page context
-                    builder: (BuildContext dialogContext) {
-                      return AlertDialog(
-                        title: const Text('Confirm Logout'),
-                        content:
-                            const Text('Are you sure you want to log out?'),
-                        actions: <Widget>[
-                          TextButton(
-                            child: const Text('Cancel'),
-                            onPressed: () {
-                              developer.log('Logout cancelled by user.',
-                                  name: 'LogoutTrace');
-                              Navigator.of(dialogContext)
-                                  .pop(false); // Return false
-                            },
-                          ),
-                          TextButton(
-                            child: const Text('Log Out',
-                                style: TextStyle(color: ThemeConstants.red)),
-                            onPressed: () {
-                              developer.log('Logout confirmed by user.',
-                                  name: 'LogoutTrace');
-                              Navigator.of(dialogContext)
-                                  .pop(true); // Return true
-                            },
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                  developer.log('Confirmation dialog result: $confirmed',
-                      name: 'LogoutTrace');
-
-                  // IMPORTANT: Check if the widget is still mounted after await
-                  if (!pageContext.mounted) {
-                    developer.log(
-                        'Logout aborted: Widget is no longer mounted after dialog.',
-                        name: 'LogoutTrace');
-                    return;
-                  }
-
-                  // If confirmed, proceed with logout
-                  if (confirmed == true) {
-                    developer.log('Proceeding with logout call...',
-                        name: 'LogoutTrace');
-                    try {
-                      // Access AccountProvider using the captured page context
-                      final accountProvider = Provider.of<AccountProvider>(
-                          pageContext,
-                          listen: false);
-                      developer.log('Calling accountProvider.logout()...',
-                          name: 'LogoutTrace');
-                      await accountProvider.logout();
-                      developer.log('accountProvider.logout() finished.',
-                          name: 'LogoutTrace');
-                      // Navigation to initial route will be handled by the listener in main.dart
-                    } catch (e, stackTrace) {
-                      developer.log(
-                          'Error calling accountProvider.logout(): $e',
-                          name: 'LogoutTrace',
-                          error: e,
-                          stackTrace: stackTrace);
-                    }
-                  } else {
-                    developer.log('Logout aborted (not confirmed).',
-                        name: 'LogoutTrace');
-                  }
-                  developer.log('--- Logout Process End (ProfilePage) ---',
-                      name: 'LogoutTrace');
+                  // Then handle logout - this prevents UI issues
+                  _handleLogout(pageContext);
                 },
               ),
             ],
@@ -1095,6 +1021,121 @@ class _ProfilePageState extends State<ProfilePage>
         );
       },
     );
+  }
+
+  Future<void> _handleLogout(BuildContext pageContext) async {
+    developer.log('--- Logout Process Start (ProfilePage) ---',
+        name: 'LogoutTrace');
+    developer.log('Showing confirmation dialog...', name: 'LogoutTrace');
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: pageContext,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirm Logout'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                developer.log('Logout cancelled by user.', name: 'LogoutTrace');
+                Navigator.of(dialogContext).pop(false);
+              },
+            ),
+            TextButton(
+              child: const Text('Log Out',
+                  style: TextStyle(color: ThemeConstants.red)),
+              onPressed: () {
+                developer.log('Logout confirmed by user.', name: 'LogoutTrace');
+                Navigator.of(dialogContext).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    developer.log('Confirmation dialog result: $confirmed',
+        name: 'LogoutTrace');
+
+    if (!pageContext.mounted) {
+      developer.log('Logout aborted: Widget is no longer mounted after dialog.',
+          name: 'LogoutTrace');
+      return;
+    }
+
+    if (confirmed == true) {
+      developer.log('Proceeding with logout call...', name: 'LogoutTrace');
+
+      try {
+        // 1. First, handle GoogleSignIn - do this before the AccountProvider logout
+        try {
+          final googleSignIn = GoogleSignIn();
+          final isSignedIn = await googleSignIn.isSignedIn();
+          developer.log('Google Sign-In status before logout: $isSignedIn',
+              name: 'LogoutTrace');
+
+          if (isSignedIn) {
+            await googleSignIn.signOut();
+            developer.log('Successfully signed out from GoogleSignIn',
+                name: 'LogoutTrace');
+
+            // Try disconnect, but don't fail if it doesn't work
+            try {
+              await googleSignIn.disconnect();
+              developer.log('Successfully disconnected from GoogleSignIn',
+                  name: 'LogoutTrace');
+            } catch (e) {
+              developer.log('GoogleSignIn disconnect failed (non-critical): $e',
+                  name: 'LogoutTrace');
+            }
+          } else {
+            developer.log('User was not signed in with Google',
+                name: 'LogoutTrace');
+          }
+        } catch (e) {
+          developer.log('Error handling GoogleSignIn during logout: $e',
+              name: 'LogoutTrace');
+          // Continue with logout even if GoogleSignIn fails
+        }
+
+        // 2. Now handle the main logout through AccountProvider
+        final accountProvider =
+            Provider.of<AccountProvider>(pageContext, listen: false);
+
+        // Show a loading indicator
+        ScaffoldMessenger.of(pageContext)
+            .showSnackBar(const SnackBar(content: Text('Logging out...')));
+
+        developer.log('Calling accountProvider.logout()...',
+            name: 'LogoutTrace');
+
+        // Execute the logout
+        await accountProvider.logout();
+
+        developer.log('accountProvider.logout() finished.',
+            name: 'LogoutTrace');
+
+        // Navigation will be handled by the Auth listener in main.dart
+      } catch (e, stackTrace) {
+        // Show error if logout fails
+        ScaffoldMessenger.of(pageContext).showSnackBar(
+          SnackBar(
+            content: Text('Logout failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        developer.log('Error calling accountProvider.logout(): $e',
+            name: 'LogoutTrace', error: e, stackTrace: stackTrace);
+      }
+    } else {
+      developer.log('Logout aborted (not confirmed).', name: 'LogoutTrace');
+    }
+
+    developer.log('--- Logout Process End (ProfilePage) ---',
+        name: 'LogoutTrace');
   }
 
   void _showFollowersList() {

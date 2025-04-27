@@ -153,14 +153,26 @@ class SessionManager {
   Future<void> clearSession() async {
     developer.log('--- Clear Session Start (SessionManager) ---',
         name: 'LogoutTrace');
+
+    // Notify listeners before changing state to prevent race conditions
+    _setState(SessionState.unauthenticated);
+    developer.log('State set to unauthenticated.', name: 'LogoutTrace');
+
+    // Clear everything cleanly
     _token = null;
     _user = null;
     developer.log('Internal _token and _user set to null.',
         name: 'LogoutTrace');
-    // Note: SharedPrefs.clearJwtToken() is called by AccountProvider._clearSession -> SharedPrefs.clearSession
-    // We don't need to call it again here, but we ensure the state is updated.
-    _setState(SessionState.unauthenticated);
-    developer.log('State set to unauthenticated.', name: 'LogoutTrace');
+
+    // Ensure we clean up any cached data
+    try {
+      await SharedPrefs.clearJwtToken();
+      developer.log('JWT tokens cleared from SharedPrefs.',
+          name: 'LogoutTrace');
+    } catch (e) {
+      developer.log('Error clearing JWT tokens: $e', name: 'LogoutTrace');
+    }
+
     developer.log('--- Clear Session End (SessionManager) ---',
         name: 'LogoutTrace');
   }
@@ -247,10 +259,13 @@ class SessionManager {
     }
   }
 
-  // Validate token with server
+  // Improved token validation with better error handling
   Future<bool> _validateTokenWithServer(JwtToken token) async {
     try {
       final url = Uri.parse('${ApiUrls.baseUrl}/accounts/token/validate/');
+      developer.log('Validating token with server: ${url}',
+          name: 'TokenValidation');
+
       final response = await http.post(
         url,
         headers: {
@@ -259,11 +274,16 @@ class SessionManager {
         },
       ).timeout(const Duration(seconds: 10));
 
+      developer.log('Token validation response: ${response.statusCode}',
+          name: 'TokenValidation');
+
       if (response.statusCode == 200) {
         return true;
       } else if (response.statusCode == 401) {
         // Try to refresh the token if access token is expired
         if (token.isAccessTokenExpired && !token.isRefreshTokenExpired) {
+          developer.log('Attempting to refresh expired token',
+              name: 'TokenValidation');
           return await refreshToken(token);
         }
         return false;
@@ -273,9 +293,15 @@ class SessionManager {
       }
     } catch (e) {
       print('🔑 Error validating token with server: $e');
-      // If we can't reach the server, we'll assume the token is valid for now
-      // This allows offline usage but will re-validate once connectivity is restored
-      return true;
+      // Don't assume token is valid if we can't reach the server
+      // This is safer than allowing access with potentially invalid tokens
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('TimeoutException')) {
+        print('🔑 Network error during validation. Treating as offline.');
+        // If offline, allow the token for now, but mark it for revalidation
+        return true;
+      }
+      return false;
     }
   }
 

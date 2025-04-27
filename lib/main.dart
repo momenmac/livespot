@@ -13,6 +13,7 @@ import 'package:flutter_application_2/services/api/account/account_provider.dart
 import 'package:flutter_application_2/providers/theme_provider.dart';
 import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -108,6 +109,37 @@ Future<bool> initFirebaseSafely() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure GoogleSignIn optimally
+  final GoogleSignIn googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+      'profile',
+    ],
+    // Force account selection each time to avoid silent signin issues
+    forceCodeForRefreshToken: true,
+  );
+
+  // Pre-initialize GoogleSignIn by checking state
+  try {
+    final isSignedIn = await googleSignIn.isSignedIn();
+    print(
+        '🔍 GoogleSignIn initial state: ${isSignedIn ? "signed in" : "signed out"}');
+
+    // If already signed in, try to force refresh the token
+    if (isSignedIn) {
+      try {
+        final account = await googleSignIn.signInSilently();
+        print(
+            '🔍 GoogleSignIn refreshed silently: ${account != null ? "success" : "failed"}');
+      } catch (e) {
+        print('🔍 GoogleSignIn silent refresh error: $e');
+      }
+    }
+  } catch (e) {
+    print('🔍 GoogleSignIn initialization error: $e');
+  }
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -172,6 +204,7 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
+        Provider<GoogleSignIn>.value(value: googleSignIn), // Add this line
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
@@ -225,6 +258,19 @@ class _MyAppState extends State<MyApp> {
             name: 'AuthListenerSetup');
         widget.accountProvider.addListener(_onAuthStateChanged);
         _onAuthStateChanged(); // Initial check
+
+        // --- NEW: Print initial authentication and server connection state ---
+        final isAuthenticated = widget.accountProvider.isAuthenticated;
+        final isLoading = widget.accountProvider.isLoading;
+        print(
+            '🔎 [Startup] isAuthenticated=$isAuthenticated, isLoading=$isLoading');
+        if (!FirebaseHelper.isAvailable) {
+          print(
+              '❌ [Startup] Firebase is NOT connected. Server connection problem likely.');
+        } else {
+          print('✅ [Startup] Firebase is connected.');
+        }
+        // ---------------------------------------------------------------
       }
     });
   }
@@ -237,7 +283,7 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  void _onAuthStateChanged() {
+  Future<void> _onAuthStateChanged() async {
     developer.log('>>> _onAuthStateChanged TRIGGERED <<<',
         name: 'AuthListenerTrigger');
 
@@ -304,6 +350,22 @@ class _MyAppState extends State<MyApp> {
         '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, initialCheckComplete=$_initialAuthCheckComplete',
         name: 'AuthListener');
 
+    // --- NEW: Warn if backend is unreachable but Google sign-in is cached ---
+    if (!isAuthenticated && !isLoading) {
+      print(
+          '⚠️ [AuthState] Not authenticated. If you see "Already signed in with Google" after clicking login, it means GoogleSignIn is still cached locally, but backend session is not valid or server is unreachable.');
+      try {
+        final googleSignIn = GoogleSignIn();
+        await googleSignIn.signOut();
+        await googleSignIn.disconnect(); // <-- Add this line
+        print(
+            '🔑 Signed out and disconnected from GoogleSignIn due to backend validation failure.');
+      } catch (e) {
+        print('⚠️ Failed to sign out/disconnect from GoogleSignIn: $e');
+      }
+    }
+    // -----------------------------------------------------------------------
+
     if (!isLoading) {
       _processAuthState(isAuthenticated, isAtHome, isAtInitial);
     } else {
@@ -315,6 +377,7 @@ class _MyAppState extends State<MyApp> {
 
   void _processAuthState(
       bool isAuthenticated, bool isAtHome, bool isAtInitial) {
+    final currentRoute = NavigationService().currentRoute;
     if (!_initialAuthCheckComplete) {
       _initialAuthCheckComplete = true;
       developer.log(
@@ -322,19 +385,11 @@ class _MyAppState extends State<MyApp> {
           name: 'AuthListener');
 
       if (isAuthenticated && !isAtHome) {
-        developer.log(
-          '    Condition MET: isAuthenticated ($isAuthenticated) && !isAtHome ($isAtHome). Navigating to Home.',
-          name: 'AuthProcessDebug',
-        );
-        developer.log('👤 Navigating to home after initial check.',
-            name: 'AuthListener');
-        developer.log(
-            '>>> TRIGGERING NAVIGATION TO HOME (${AppRoutes.home}) NOW <<<',
-            name: 'AuthNavigateDebug');
         _navigateTo(AppRoutes.home);
-      } else if (!isAuthenticated && isAtHome) {
+      } else if (!isAuthenticated &&
+          (!isAtInitial || currentRoute != AppRoutes.initial)) {
         developer.log(
-            '👤 Navigating to initial after initial check (was at home).',
+            'User is unauthenticated and not at initial route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
         _navigateTo(AppRoutes.initial);
       }
@@ -343,19 +398,11 @@ class _MyAppState extends State<MyApp> {
           name: 'AuthListener');
 
       if (isAuthenticated && !isAtHome) {
-        developer.log(
-          '    Condition MET: isAuthenticated ($isAuthenticated) && !isAtHome ($isAtHome). Navigating to Home.',
-          name: 'AuthProcessDebug',
-        );
-        developer.log('   User became authenticated, navigating to home.',
-            name: 'AuthListener');
-        developer.log(
-            '>>> TRIGGERING NAVIGATION TO HOME (${AppRoutes.home}) NOW <<<',
-            name: 'AuthNavigateDebug');
         _navigateTo(AppRoutes.home);
-      } else if (!isAuthenticated && isAtHome) {
+      } else if (!isAuthenticated &&
+          (!isAtInitial || currentRoute != AppRoutes.initial)) {
         developer.log(
-            '   User became unauthenticated while at home, navigating to initial.',
+            'User is unauthenticated and not at initial route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
         _navigateTo(AppRoutes.initial);
       }
@@ -363,15 +410,40 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _navigateTo(String routeName) {
+    final currentRoute = NavigationService().currentRoute;
     developer.log(
-        'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}',
+        'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}, currentRoute=$currentRoute',
         name: 'AuthNavigateDebug');
+
+    // For logout (navigating to initial route), use a more forceful approach
+    if (routeName == AppRoutes.initial && !mounted) {
+      developer.log('Critical navigation to initial route after logout',
+          name: 'AuthNavigateDebug');
+      // Force a rebuild of the entire app through navigator key
+      NavigationService()
+          .navigatorKey
+          .currentState
+          ?.pushNamedAndRemoveUntil(AppRoutes.initial, (route) => false);
+      return;
+    }
+
+    // Prevent duplicate navigation if already at target route, but always navigate if currentRoute is null
+    if (currentRoute == routeName && currentRoute != null) {
+      developer.log('Navigation skipped: already at $routeName',
+          name: 'AuthNavigateDebug');
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && NavigationService().navigatorKey.currentState != null) {
         developer.log(
-            '🚀 Executing navigation via replaceAllWith to: $routeName',
+            '🚀 Executing navigation via pushAndRemoveUntil to: $routeName',
             name: 'AuthListener');
-        NavigationService().replaceAllWith(routeName);
+        // Use pushNamedAndRemoveUntil for more reliable navigation post-logout
+        NavigationService()
+            .navigatorKey
+            .currentState!
+            .pushNamedAndRemoveUntil(routeName, (route) => false);
       } else if (mounted) {
         developer.log(
             '⚠️ Navigator not ready during scheduled navigation to $routeName.',
