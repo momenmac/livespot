@@ -87,6 +87,14 @@ class _MessagesPageState extends State<MessagesPage> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+          // Add AI Assistant chat button
+          IconButton(
+            icon: const Icon(Icons.smart_toy_outlined),
+            onPressed: () {
+              _startAIConversation(context);
+            },
+            tooltip: 'Chat with AI',
+          ),
           IconButton(
             icon: Icon(_controller.isSearchMode ? Icons.close : Icons.search),
             onPressed: () {
@@ -149,6 +157,23 @@ class _MessagesPageState extends State<MessagesPage> {
               },
             ),
     );
+  }
+
+  // Method to start a conversation with AI assistant
+  void _startAIConversation(BuildContext context) {
+    ResponsiveSnackBar.showInfo(
+      context: context,
+      message: "Starting conversation with AI Assistant...",
+    );
+
+    // TODO: Navigate to AI chat interface
+    // For example:
+    // Navigator.push(
+    //   context,
+    //   MaterialPageRoute(
+    //     builder: (context) => AIChatPage(),
+    //   ),
+    // );
   }
 
   void _showFilterOptions(BuildContext context) {
@@ -260,7 +285,6 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
 
   Future<void> _loadUsers() async {
     // TODO: Replace with Firebase auth and Firestore in the future
-
     try {
       final userService = UserService();
 
@@ -271,7 +295,6 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
         setState(() {
           // Make sure we're working with the proper types
           users = loadedUsers.whereType<UserWithEmail>().toList();
-
           // If there are no users after filtering, try manual casting
           if (users.isEmpty && loadedUsers.isNotEmpty) {
             users = loadedUsers.map((user) {
@@ -487,11 +510,6 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                                     : null,
                                 onTap: () {
                                   // TODO: Create new conversation in Firebase
-                                  // - Create or get conversation document in Firestore
-                                  // - Use transaction to ensure consistency
-                                  // - Add conversation reference to both users
-                                  // - Navigate to chat detail page with new conversation
-
                                   ResponsiveSnackBar.showInfo(
                                     context: context,
                                     message:

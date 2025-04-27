@@ -641,7 +641,8 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               // Message input
               Container(
                 padding: EdgeInsets.fromLTRB(
-                    16, 8, 16, 8 + MediaQuery.of(context).viewInsets.bottom),
+                    16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: isDarkMode ? theme.cardColor : Colors.white,
                   border: Border(
@@ -651,6 +652,13 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                           : Colors.grey.shade200,
                     ),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -772,7 +780,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               ],
             ),
           ),
-          if (isMe) const SizedBox(width: 40), // Balance the layout
+          if (isMe) const SizedBox(width: 8), // Changed from 40 to 8
         ],
       ),
     );
