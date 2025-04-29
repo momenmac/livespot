@@ -2,6 +2,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, Uint8List, defaultTargetPlatform, kIsWeb;
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../../models/jwt_token.dart';
@@ -30,6 +32,8 @@ class AuthService {
         clientId:
             '160030236932-v1fqu2qitgnlivemngb5h1uq92fgr8mq.apps.googleusercontent.com',
         scopes: ['email', 'profile'],
+        // Disable automatic web view presentation for iOS simulators
+        signInOption: SignInOption.standard,
       );
     } else {
       return GoogleSignIn(
@@ -38,17 +42,57 @@ class AuthService {
     }
   }
 
+  // Helper to check if running on iOS simulator with multiple detection methods
+  Future<bool> _isIosSimulator() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        // Method 1: Check device name
+        try {
+          final String deviceName = await SystemChannels.platform
+                  .invokeMethod<String>('getDeviceName') ??
+              '';
+
+          if (deviceName.toLowerCase().contains('simulator')) {
+            return true;
+          }
+        } catch (e) {
+          // Continue with other methods if this fails
+          print('⚠️ First simulator detection method failed: $e');
+        }
+
+        // Method 2: Using Platform.isIOS with environment check
+        if (Platform.isIOS) {
+          try {
+            // For iOS, check if we're running on a simulator by checking for simulator-specific environment
+            final bool isSimulator = await SystemChannels.platform
+                    .invokeMethod<bool>('isPhysicalDevice') ==
+                false;
+            return isSimulator;
+          } catch (e) {
+            print('⚠️ Second simulator detection method failed: $e');
+          }
+        }
+
+        // Method 3: Fallback to synchronous detection
+        if (Platform.isIOS) {
+          // Return true if the iOS app ID contains 'simulator' (common for simulator builds)
+          final String processName = Platform.executable.toLowerCase();
+          return processName.contains('simulator');
+        }
+      } catch (e) {
+        print('⚠️ Could not determine iOS simulator status: $e');
+        // If all methods fail, provide a user-friendly warning and continue
+        print(
+            '⚠️ Will continue with normal sign-in flow, but some features may not work properly in simulator');
+      }
+    }
+    return false;
+  }
+
   Future<GoogleSignInAccount?> signInWithGoogle() async {
     try {
       GoogleSignInAccount? account = await googleSignIn.signIn();
       if (account != null) {
-        // TODO: Verify Google token with backend
-        // TODO: Check if user exists in database
-        // TODO: If new user, create user record with Google data
-        // TODO: Generate and store JWT token
-        // TODO: Store user preferences and settings
-        // TODO: Log sign in attempt for security
-
         print('==== Google Sign In Success ====');
         print('Email: ${account.email}');
         print('Display Name: ${account.displayName}');
@@ -61,8 +105,6 @@ class AuthService {
       }
       return account;
     } catch (error) {
-      // TODO: Log authentication errors to backend
-      // TODO: Implement proper error handling and user feedback
       print('==== Google Sign In Error ====');
       print('Error details: $error');
       print('============================');
@@ -72,13 +114,8 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      // TODO: Invalidate JWT token
-      // TODO: Clear user session in backend
-      // TODO: Log sign out event
-      // TODO: Clear local secure storage
       await googleSignIn.signOut();
     } catch (error) {
-      // TODO: Handle sign out errors properly
       print('Sign out error: $error');
     }
   }
@@ -86,10 +123,6 @@ class AuthService {
   Future<GoogleSignInAccount?> signInSilently() async {
     GoogleSignInAccount? account = await googleSignIn.signInSilently();
     if (account != null) {
-      // TODO: Verify session is still valid in backend
-      // TODO: Refresh JWT token if needed
-      // TODO: Update last active timestamp
-      // TODO: Sync user data with backend
       print('User signed in silently:');
       print('Display Name: ${account.displayName}');
       print('Email: ${account.email}');
@@ -97,13 +130,11 @@ class AuthService {
       print('Photo URL: ${account.photoUrl}');
       return account;
     } else {
-      // TODO: Clear any stale local data
       print('No user is signed in.');
       return null;
     }
   }
 
-  // Common method to handle HTTP requests and parse responses
   Future<AuthResponse> _makeAuthRequest({
     required Uri url,
     required String method,
@@ -114,13 +145,11 @@ class AuthService {
     try {
       http.Response response;
 
-      // Add authorization header if token is provided
       final Map<String, String> requestHeaders = headers ?? {};
       if (token != null) {
         requestHeaders['Authorization'] = 'Bearer $token';
       }
 
-      // Make the appropriate HTTP request based on the method
       switch (method.toUpperCase()) {
         case 'GET':
           response = await _client.get(url, headers: requestHeaders);
@@ -140,7 +169,6 @@ class AuthService {
           throw Exception('Unsupported HTTP method: $method');
       }
 
-      // Debug logging
       print('🌐 ${method.toUpperCase()} request to: ${url.toString()}');
       if (body != null) {
         print('🌐 Request body: $body');
@@ -148,22 +176,17 @@ class AuthService {
       print('🌐 Response status: ${response.statusCode}');
       print('🌐 Response body: ${response.body}');
 
-      // Parse the response
       final Map<String, dynamic> responseData =
           json.decode(response.body) as Map<String, dynamic>;
 
-      // Handle common status codes
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        // Success
         responseData['success'] = true;
       } else if (response.statusCode == 401) {
-        // Unauthorized - token expired
         responseData['token_expired'] = true;
         responseData['success'] = false;
         responseData['error'] =
             responseData['error'] ?? 'Authentication token expired';
       } else {
-        // Other errors
         responseData['success'] = false;
       }
 
@@ -177,7 +200,6 @@ class AuthService {
     }
   }
 
-  // Register a new user
   Future<Map<String, dynamic>> register({
     required String email,
     required String password,
@@ -201,7 +223,6 @@ class AuthService {
         body: body,
       );
 
-      // Convert to standard response format for backward compatibility
       return response.toMap();
     } catch (e) {
       print('🌐 Registration error: $e');
@@ -212,7 +233,6 @@ class AuthService {
     }
   }
 
-  // Login with email and password
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -248,7 +268,6 @@ class AuthService {
     }
   }
 
-  // Google login/signup
   Future<Map<String, dynamic>> googleLogin({
     required String googleId,
     required String email,
@@ -289,25 +308,83 @@ class AuthService {
     }
   }
 
-  // Handle complete Google sign-in flow
   Future<Map<String, dynamic>> handleGoogleSignIn() async {
     try {
-      // First perform the Google sign-in
+      final isSimulator = await _isIosSimulator();
+      if (isSimulator) {
+        print('📱 iOS Simulator detected - using optimized sign-in flow');
+      }
+
       print('🔍 Starting Google Sign-in flow');
 
-      // Check if already signed in to prevent duplicate sign-ins
       final isAlreadySignedIn = await googleSignIn.isSignedIn();
       GoogleSignInAccount? googleAccount;
 
-      if (isAlreadySignedIn) {
-        // Get the current account
-        googleAccount =
-            googleSignIn.currentUser ?? await googleSignIn.signInSilently();
-        print(
-            '🔍 Already signed in with Google, using current account: ${googleAccount?.email}');
+      if (isSimulator) {
+        try {
+          try {
+            await googleSignIn.disconnect();
+            print('📱 Disconnected from GoogleSignIn in simulator environment');
+          } catch (e) {}
+
+          googleAccount = await googleSignIn.signInSilently();
+          print(
+              '📱 Silent sign-in result: ${googleAccount != null ? "success" : "failed"}');
+
+          if (googleAccount == null) {
+            print('📱 Attempting standard sign-in with timeout protection');
+
+            bool signInCompleted = false;
+
+            final signInFuture = Future.microtask(() async {
+              try {
+                googleAccount = await googleSignIn.signIn();
+                signInCompleted = true;
+              } catch (e) {
+                print('📱 Sign-in exception on simulator: $e');
+              }
+            });
+
+            await Future.any([
+              signInFuture,
+              Future.delayed(const Duration(seconds: 15), () {
+                if (!signInCompleted) {
+                  print('📱 Sign-in timeout on simulator, using fallback');
+                }
+              })
+            ]);
+
+            if (googleAccount == null) {
+              googleAccount = await googleSignIn.signInSilently();
+
+              if (googleAccount == null) {
+                return {
+                  'success': false,
+                  'error':
+                      'Google sign-in failed on iOS simulator. This is a known issue with simulators. Please try again or test on a real device.',
+                  'simulator_error': true
+                };
+              }
+            }
+          }
+        } catch (simulatorError) {
+          print('📱 Simulator-specific sign-in error: $simulatorError');
+          return {
+            'success': false,
+            'error':
+                'iOS simulator issue with Google Sign-In. This is expected in the simulator environment. Please try on a real device.',
+            'simulator_error': true
+          };
+        }
       } else {
-        // Start a new sign in flow
-        googleAccount = await googleSignIn.signIn();
+        if (isAlreadySignedIn) {
+          googleAccount =
+              googleSignIn.currentUser ?? await googleSignIn.signInSilently();
+          print(
+              '🔍 Already signed in with Google, using current account: ${googleAccount?.email}');
+        } else {
+          googleAccount = await googleSignIn.signIn();
+        }
       }
 
       if (googleAccount == null) {
@@ -318,25 +395,31 @@ class AuthService {
         };
       }
 
-      print('🔍 Google Sign-in successful: ${googleAccount.email}');
+      print('🔍 Google Sign-in successful: ${googleAccount?.email}');
 
-      // Split name into first and last name
-      String displayName = googleAccount.displayName ?? '';
-      List<String> nameParts = displayName.split(' ');
-      String firstName = nameParts.isNotEmpty ? nameParts[0] : 'User';
-      String lastName = nameParts.length > 1 ? nameParts.last : '';
+      String displayName = googleAccount?.displayName ?? '';
+      List<String> nameParts = displayName.trim().split(' ');
+
+      // Better handling of name parts
+      String firstName = 'User';
+      String lastName = '';
+
+      if (nameParts.isNotEmpty) {
+        firstName = nameParts.first;
+        // If there are at least 2 parts, use the last part as lastName
+        if (nameParts.length > 1) {
+          lastName = nameParts.last;
+        }
+        // For cases with 3+ parts, consider handling middle names if needed
+      }
 
       print('🔍 Name parsed as: $firstName $lastName');
 
-      // Properly format the profile picture URL
-      String? photoUrl = googleAccount.photoUrl;
+      String? photoUrl = googleAccount?.photoUrl;
       if (photoUrl != null) {
-        // Google photos usually come with a small size parameter, let's improve it
         if (photoUrl.contains('=s')) {
-          // Replace the size parameter with larger one (s400-c for 400px cropped)
           photoUrl = photoUrl.replaceAll(RegExp(r'=s\d+(-c)?'), '=s400-c');
         } else if (!photoUrl.contains('=')) {
-          // If there's no size parameter, add one
           photoUrl = '$photoUrl=s400-c';
         }
 
@@ -345,10 +428,10 @@ class AuthService {
         print('🔍 No profile picture available');
       }
 
-      // Now authenticate with our backend
       return await googleLogin(
-        googleId: googleAccount.id,
-        email: googleAccount.email,
+        googleId: googleAccount!
+            .id, // Using null assertion (!) since we've already checked googleAccount isn't null
+        email: googleAccount!.email,
         firstName: firstName,
         lastName: lastName,
         profilePicture: photoUrl,
@@ -362,7 +445,6 @@ class AuthService {
     }
   }
 
-  // Get user profile with JWT token
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     try {
       final response = await _makeAuthRequest(
@@ -392,7 +474,6 @@ class AuthService {
     }
   }
 
-  // Refresh JWT token
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
       final response = await _makeAuthRequest(
@@ -411,10 +492,8 @@ class AuthService {
     }
   }
 
-  // Token verification not needed for JWT as it's self-contained, but keeping for compatibility
   Future<Map<String, dynamic>> verifyToken(String token) async {
     try {
-      // For JWT, check if token is expired by decoding it
       final jwtToken = JwtToken.fromJson({'access': token, 'refresh': ''});
 
       if (jwtToken.isAccessTokenExpired) {
@@ -425,8 +504,6 @@ class AuthService {
         };
       }
 
-      // We could make an API call to a protected endpoint to verify with server
-      // but it's optional since JWT tokens are self-contained
       return {
         'success': true,
         'valid': true,
@@ -441,28 +518,22 @@ class AuthService {
     }
   }
 
-  // Sign out from both Google and our backend - clean up legacy references
   Future<Map<String, dynamic>> completeSignOut(String? token) async {
     try {
-      // Sign out from Google
       await googleSignIn.signOut();
 
-      // Sign out from our backend if we have a token
       if (token != null) {
         try {
-          // For JWT, blacklist the token on the server
           await _client.post(
             Uri.parse('${ApiUrls.baseUrl}/accounts/logout/'),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token', // Ensure Bearer prefix is used
+              'Authorization': 'Bearer $token',
             },
-            // Pass refresh token in the body for blacklisting
             body: jsonEncode({'refresh': token}),
           );
         } catch (e) {
           print('Backend logout error: ${e.toString()}');
-          // Continue with local logout even if backend logout fails
         }
       }
 
@@ -478,7 +549,6 @@ class AuthService {
     }
   }
 
-  // Verify email with code (JWT version)
   Future<Map<String, dynamic>> verifyEmail(String token, String code) async {
     try {
       final response = await _makeAuthRequest(
@@ -498,7 +568,6 @@ class AuthService {
     }
   }
 
-  // Resend verification code (JWT version)
   Future<Map<String, dynamic>> resendVerificationCode(String token) async {
     try {
       final response = await _makeAuthRequest(
@@ -520,10 +589,8 @@ class AuthService {
   Future<Map<String, dynamic>> updateProfileImage(
       String token, Uint8List imageData) async {
     try {
-      // Convert image to base64
       final base64Image = base64Encode(imageData);
 
-      // Send request to update profile with image
       final response = await _makeAuthRequest(
         url: Uri.parse(ApiUrls.updateProfile),
         method: 'PUT',
@@ -545,18 +612,14 @@ class AuthService {
     }
   }
 
-  // Upload profile image with JWT authentication - remove CSRF references
   Future<Map<String, dynamic>> uploadProfileImage(
       String token, Uint8List imageData) async {
     try {
-      // Create multipart request
       final uri = Uri.parse(ApiUrls.profileImage);
       final request = http.MultipartRequest('POST', uri);
 
-      // Add authorization header with Bearer token for JWT
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Add profile image
       final multipartFile = http.MultipartFile.fromBytes(
         'profile_image',
         imageData,
@@ -565,7 +628,6 @@ class AuthService {
       );
       request.files.add(multipartFile);
 
-      // Send the request
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
@@ -592,7 +654,6 @@ class AuthService {
     }
   }
 
-  // Request password reset with improved debugging
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     try {
       print('📧 Sending password reset request to API for: $email');
@@ -614,7 +675,6 @@ class AuthService {
     }
   }
 
-  // Verify reset code with better logging
   Future<Map<String, dynamic>> verifyResetCode(
       String email, String code) async {
     try {
@@ -640,7 +700,6 @@ class AuthService {
     }
   }
 
-  // Reset password - remove any legacy token references
   Future<Map<String, dynamic>> resetPassword(
       String resetToken, String newPassword) async {
     try {

@@ -28,7 +28,10 @@ import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package pa
 // Global flag to track Firebase status
 bool _isFirebaseInitialized = false;
 
-// NEW: Create a class to notify listeners of Firebase status changes
+// Flag to track if we're running on iOS simulator
+bool _isIosSimulator = false;
+
+// Create a class to notify listeners of Firebase status changes
 class FirebaseStatusNotifier extends ChangeNotifier {
   bool _isInitialized = false;
 
@@ -40,33 +43,69 @@ class FirebaseStatusNotifier extends ChangeNotifier {
   }
 }
 
+// Enhanced iOS simulator detection
+Future<bool> checkIfIosSimulator() async {
+  if (!kIsWeb && Platform.isIOS) {
+    try {
+      String iosInfo =
+          await SystemChannels.platform.invokeMethod('SystemInfo.iosInfo') ??
+              '';
+      return iosInfo.toLowerCase().contains('simulator');
+    } catch (e) {
+      print('⚠️ Could not determine iOS simulator status: $e');
+      // If we can't determine, assume it's not a simulator for safety
+      return false;
+    }
+  }
+  return false;
+}
+
 Future<bool> initFirebaseSafely() async {
   try {
     print(
         '🔍 Starting Firebase initialization with options: ${DefaultFirebaseOptions.currentPlatform.projectId}');
 
+    // Check if already initialized
     if (Firebase.apps.isNotEmpty) {
       print('✅ Firebase is already initialized, reusing existing instance');
       _isFirebaseInitialized = true;
       return true;
     }
 
+    // Special handling for iOS
     if (!kIsWeb && Platform.isIOS) {
       print('📱 iOS Bundle ID: ${DefaultFirebaseOptions.ios.iosBundleId}');
 
-      String iosInfo =
-          await SystemChannels.platform.invokeMethod('SystemInfo.iosInfo') ??
-              '';
-      bool isSimulator = iosInfo.toLowerCase().contains('simulator');
+      // Check if running on simulator
+      _isIosSimulator = await checkIfIosSimulator();
 
-      if (isSimulator) {
+      if (_isIosSimulator) {
         print(
-            '⚠️ iOS Simulator detected: Be cautious with Firebase initialization');
+            '⚠️ iOS Simulator detected: Using enhanced initialization approach');
+
+        // Try a special initialization approach for simulator
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          ).timeout(const Duration(seconds: 10));
+
+          _isFirebaseInitialized = true;
+          print('✅ Firebase initialization successful on iOS simulator');
+          return true;
+        } catch (simulatorError) {
+          print(
+              '⚠️ Firebase initialization on iOS simulator failed: $simulatorError');
+          print(
+              '⚠️ App will run with limited Firebase functionality on simulator');
+          // We'll continue in offline mode for simulator
+          _isFirebaseInitialized = false;
+          return false;
+        }
       }
     }
 
+    // Standard initialization for non-simulator environments
     await Future.delayed(const Duration(milliseconds: 800));
-
     print('🚀 About to initialize Firebase...');
 
     if (kIsWeb) {
@@ -98,8 +137,7 @@ Future<bool> initFirebaseSafely() async {
     if (!kIsWeb && Platform.isIOS) {
       print(
           '💡 Since you are on iOS, this failure may be due to a simulator issue.');
-      print(
-          '💡 Try running on a physical device or using the platform-specific workarounds.');
+      print('💡 App will continue to run with limited Firebase functionality.');
     }
     _isFirebaseInitialized = false;
   }
@@ -154,60 +192,40 @@ Future<void> main() async {
     print('🔍 GoogleSignIn initialization error: $e');
   }
 
+  // Check if running on iOS simulator
+  _isIosSimulator = await checkIfIosSimulator();
+
+  // Initial Firebase initialization attempt
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print('✅ Firebase initialized successfully');
-    print('======================================');
-    print('✅ FIREBASE SETUP COMPLETE & WORKING! ✅');
-    print('======================================');
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print('✅ Firebase initialized successfully');
+      _isFirebaseInitialized = true;
+    } else {
+      print('✅ Firebase already initialized');
+      _isFirebaseInitialized = true;
+    }
   } catch (e) {
-    print('❌ Failed to initialize Firebase: $e');
+    if (_isIosSimulator) {
+      print('⚠️ Firebase initialization failed on iOS simulator: $e');
+      print('⚠️ App will continue in limited functionality mode');
+      _isFirebaseInitialized = false;
+    } else {
+      print('❌ Failed to initialize Firebase: $e');
+      _isFirebaseInitialized = false;
+    }
   }
 
-  WidgetsFlutterBinding.ensureInitialized();
-
+  // Set up orientation and system chrome
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
   final firebaseStatusNotifier = FirebaseStatusNotifier();
-
   HeroTagRegistry.reset();
-
-  bool shouldSkipFirebase = false;
-  if (!kIsWeb && Platform.isIOS) {
-    try {
-      String iosInfo =
-          await SystemChannels.platform.invokeMethod('SystemInfo.iosInfo') ??
-              '';
-      bool isSimulator = iosInfo.toLowerCase().contains('simulator');
-      bool isDebug = const bool.fromEnvironment('dart.vm.product') == false;
-      shouldSkipFirebase = isSimulator && isDebug;
-
-      if (shouldSkipFirebase) {
-        print(
-            '⚠️ Debug mode on iOS simulator detected: Will skip Firebase initialization');
-      }
-    } catch (e) {
-      print('⚠️ Could not determine iOS simulator status: $e');
-    }
-  }
-
-  bool firebaseInitializedBeforeApp = false;
-  if (!shouldSkipFirebase) {
-    try {
-      if (Firebase.apps.isNotEmpty) {
-        print('🔔 Firebase found existing instance before app start');
-        firebaseInitializedBeforeApp = true;
-        _isFirebaseInitialized = true;
-      }
-    } catch (e) {
-      print('⚠️ Error checking Firebase status: $e');
-    }
-  }
 
   final accountProvider = AccountProvider()..initialize();
 
@@ -218,21 +236,17 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
-        Provider<GoogleSignIn>.value(value: googleSignIn), // Add this line
+        Provider<GoogleSignIn>.value(value: googleSignIn),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
   );
 
+  // Final Firebase status update with special handling for iOS simulator
   Timer(const Duration(milliseconds: 1500), () async {
-    bool success = firebaseInitializedBeforeApp;
+    bool success = _isFirebaseInitialized;
 
-    if (shouldSkipFirebase) {
-      success = false;
-    } else if (!firebaseInitializedBeforeApp) {
-      success = await initFirebaseSafely();
-    }
-
+    // Set the status for the app to know
     firebaseStatusNotifier.setInitialized(success);
 
     const divider = "======================================";
@@ -241,11 +255,15 @@ Future<void> main() async {
       print(divider);
       print('✅ FIREBASE CONNECTION VERIFIED! ✅');
       print(divider);
-    } else if (shouldSkipFirebase) {
-      print(
-          '🔕 Firebase initialization was deliberately skipped for iOS simulator');
+    } else if (_isIosSimulator) {
+      print('🔕 App is running in limited mode on iOS simulator');
+      print('💡 This is expected behavior on simulators');
+      print(divider);
+      print('⚠️ RUNNING WITH LIMITED FIREBASE FUNCTIONALITY ⚠️');
+      print(divider);
     } else {
       print('🔕 App is running without Firebase services');
+      print(divider);
     }
   });
 }
