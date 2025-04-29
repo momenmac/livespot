@@ -1,12 +1,24 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/user_service.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 // Add this import for RecommendedRoomsSection
 import 'package:flutter_application_2/ui/pages/messages/recommended_rooms_section.dart';
+// Add this import for ApiUrls
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
+// Add this import for CachedNetworkImage
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+// Add this import for ChatDetailPage
+import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/user.dart'; // <-- Add this import
+import 'package:flutter_application_2/ui/pages/messages/models/message.dart'; // <-- Add this import
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
@@ -15,18 +27,23 @@ class MessagesPage extends StatefulWidget {
   State<MessagesPage> createState() => _MessagesPageState();
 }
 
-class _MessagesPageState extends State<MessagesPage> {
+class _MessagesPageState extends State<MessagesPage>
+    with WidgetsBindingObserver {
   late MessagesController _controller;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = MessagesController();
     _loadMessages();
 
     // Ensure all messages have controller references
     _controller.ensureMessageControllerReferences();
+
+    // Set user online status to true
+    _setUserOnlineStatus(true);
   }
 
   Future<void> _loadMessages() async {
@@ -54,10 +71,32 @@ class _MessagesPageState extends State<MessagesPage> {
     }
   }
 
+  Future<void> _setUserOnlineStatus(bool isOnline) async {
+    final currentUserId = _controller.currentUserId;
+    if (currentUserId != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .update({'isOnline': isOnline});
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _setUserOnlineStatus(false); // Set user offline status
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _setUserOnlineStatus(true); // Set user online status
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _setUserOnlineStatus(false); // Set user offline status
+    }
   }
 
   @override
@@ -238,7 +277,6 @@ class _MessagesPageState extends State<MessagesPage> {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    // Create user dialog with mock data
     showDialog(
       context: context,
       builder: (context) {
@@ -246,6 +284,25 @@ class _MessagesPageState extends State<MessagesPage> {
           searchController: searchController,
           theme: theme,
           isDarkMode: isDarkMode,
+          controller: _controller,
+          onConversationCreated: (conversation) async {
+            _controller.selectConversation(conversation);
+            setState(() {});
+            Navigator.of(context).pop(); // Close the dialog first
+            await Future.delayed(const Duration(milliseconds: 100));
+            if (mounted) {
+              // Navigate to chat detail page
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatDetailPage(
+                    controller: _controller,
+                    conversation: conversation,
+                  ),
+                ),
+              );
+            }
+          },
         );
       },
     );
@@ -256,11 +313,15 @@ class _SearchableContactsDialog extends StatefulWidget {
   final TextEditingController searchController;
   final ThemeData theme;
   final bool isDarkMode;
+  final MessagesController controller;
+  final void Function(Conversation conversation)? onConversationCreated;
 
   const _SearchableContactsDialog({
     required this.searchController,
     required this.theme,
     required this.isDarkMode,
+    required this.controller,
+    this.onConversationCreated,
   });
 
   @override
@@ -269,6 +330,7 @@ class _SearchableContactsDialog extends StatefulWidget {
 }
 
 class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
+  static List<UserWithEmail>? _cachedUsers; // Static cache for dialog session
   List<UserWithEmail> users = [];
   List<UserWithEmail> filteredUsers = [];
   bool isLoading = true;
@@ -276,74 +338,92 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
   @override
   void initState() {
     super.initState();
-    // Load users from mock data
-    _loadUsers();
-
-    // Add listener to the controller for immediate search response
+    if (_cachedUsers != null) {
+      users = List.from(_cachedUsers!);
+      filteredUsers = List.from(_cachedUsers!);
+      isLoading = false;
+    } else {
+      _loadUsersFromDjango();
+    }
     widget.searchController.addListener(_handleSearchChange);
   }
 
-  Future<void> _loadUsers() async {
-    // TODO: Replace with Firebase auth and Firestore in the future
+  // Fetch all users from Django backend and merge with online status from Firestore
+  Future<void> _loadUsersFromDjango() async {
+    setState(() {
+      isLoading = true;
+    });
+
     try {
-      final userService = UserService();
+      final baseUrl = ApiUrls.baseUrl;
+      final url = Uri.parse('$baseUrl/accounts/all-users/');
+      final response = await http.get(url);
 
-      // Load all users as UserWithEmail objects directly
-      final loadedUsers = await userService.getUsers();
+      if (response.statusCode == 200) {
+        final List<dynamic> userList = jsonDecode(response.body);
 
-      if (mounted) {
-        setState(() {
-          // Make sure we're working with the proper types
-          users = loadedUsers.whereType<UserWithEmail>().toList();
-          // If there are no users after filtering, try manual casting
-          if (users.isEmpty && loadedUsers.isNotEmpty) {
-            users = loadedUsers.map((user) {
-              // Try to convert regular User to UserWithEmail
-              if (user is! UserWithEmail) {
-                return UserWithEmail(
-                  id: user.id,
-                  name: user.name,
-                  avatarUrl: user.avatarUrl,
-                  email:
-                      '${user.name.toLowerCase().replaceAll(' ', '.')}@example.com',
-                  isOnline: user.isOnline,
-                );
+        // Fetch online status for all users from Firestore
+        final firestore = FirebaseFirestore.instance;
+        final statusSnapshot = await firestore.collection('users').get();
+        final statusMap = <String, bool>{};
+        for (final doc in statusSnapshot.docs) {
+          final data = doc.data();
+          final id = (data['id'] ?? doc.id).toString();
+          statusMap[id] = data['isOnline'] ?? false;
+        }
+
+        final currentUserId = widget.controller.currentUserId?.toString();
+        final loadedUsers = userList
+            .map((user) {
+              final id = user['id'].toString();
+              if (id == currentUserId) return null;
+              final name = user['name'] ?? '';
+              String avatarUrl = user['avatarUrl'] ?? '';
+              if (avatarUrl.isNotEmpty && !avatarUrl.startsWith('http')) {
+                avatarUrl = '$baseUrl$avatarUrl';
               }
-              return user;
-            }).toList();
-          }
+              final email = user['email'] ?? '';
+              return UserWithEmail(
+                id: id,
+                name: name,
+                avatarUrl: avatarUrl,
+                email: email,
+                isOnline: statusMap[id] ?? false,
+              );
+            })
+            .whereType<UserWithEmail>()
+            .toList();
 
-          filteredUsers = List.from(users);
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading users: $e');
-      // Create some fallback users if loading fails
-      if (mounted) {
+        // Cache the loaded users for this session
+        _cachedUsers = List.from(loadedUsers);
+
         setState(() {
-          // Create some default users as fallback
-          users = [
-            UserWithEmail(
-              id: 'user1',
-              name: 'John Smith',
-              email: 'john.smith@example.com',
-              avatarUrl: 'https://ui-avatars.com/api/?name=John+Smith',
-              isOnline: true,
-            ),
-            UserWithEmail(
-              id: 'user2',
-              name: 'Sarah Johnson',
-              email: 'sarah.j@example.com',
-              avatarUrl: 'https://ui-avatars.com/api/?name=Sarah+Johnson',
-              isOnline: false,
-            ),
-          ];
+          users = loadedUsers;
           filteredUsers = List.from(users);
           isLoading = false;
         });
+      } else {
+        print('Failed to fetch users from Django: ${response.statusCode}');
+        setState(() {
+          users = [];
+          filteredUsers = [];
+          isLoading = false;
+        });
       }
+    } catch (e, stack) {
+      print('Error loading users from Django: $e');
+      print(stack);
+      setState(() {
+        users = [];
+        filteredUsers = [];
+        isLoading = false;
+      });
     }
+  }
+
+  // Optionally, add a method to clear cache if needed
+  static void clearUserCache() {
+    _cachedUsers = null;
   }
 
   // Search handler triggered by controller changes
@@ -366,6 +446,116 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
         }).toList();
       }
     });
+  }
+
+  // Helper to create or get a conversation with a user
+  Future<Conversation> _createOrGetConversation(UserWithEmail user) async {
+    final firestore = FirebaseFirestore.instance;
+    final currentUserId = widget.controller.currentUserId;
+
+    // Query for existing conversation between current user and selected user
+    final query = await firestore
+        .collection('conversations')
+        .where('isGroup', isEqualTo: false)
+        .where('participants', arrayContains: currentUserId)
+        .get();
+
+    for (final doc in query.docs) {
+      final data = doc.data();
+      final participants = List<String>.from(data['participants'] ?? []);
+      if (participants.contains(user.id) && participants.length == 2) {
+        // Conversation exists, return from Firestore doc (not mock)
+        // Build a Conversation object with minimal info for navigation
+        return Conversation(
+          id: doc.id,
+          participants: [
+            User(
+              id: currentUserId.toString(),
+              name: "Me",
+              avatarUrl: "",
+              isOnline: true,
+            ),
+            User(
+              id: user.id,
+              name: user.name,
+              avatarUrl: user.avatarUrl,
+              isOnline: user.isOnline,
+            ),
+          ],
+          messages: [],
+          lastMessage: Message(
+            id: data['lastMessage']?['id'] ?? '',
+            senderId: data['lastMessage']?['senderId'] ?? '',
+            senderName: data['lastMessage']?['senderName'] ?? '',
+            content: data['lastMessage']?['content'] ?? '',
+            timestamp:
+                DateTime.tryParse(data['lastMessage']?['timestamp'] ?? '') ??
+                    DateTime.now(),
+            conversationId: doc.id, // Add the conversation ID
+          ),
+          unreadCount: data['unreadCount'] ?? 0,
+          isGroup: false,
+          groupName: null,
+          isMuted: data['isMuted'] ?? false,
+          isArchived: data['isArchived'] ?? false,
+        );
+      }
+    }
+
+    // Create new conversation in Firestore
+    final newDoc = firestore.collection('conversations').doc();
+    final now = DateTime.now();
+    final conversationData = {
+      'id': newDoc.id,
+      'participants': [currentUserId, user.id],
+      'isGroup': false,
+      'groupName': null,
+      'unreadCount': 0,
+      'isMuted': false,
+      'isArchived': false,
+      'lastMessage': {
+        'id': 'empty',
+        'senderId': '',
+        'senderName': '',
+        'content': 'No messages',
+        'timestamp': now.toIso8601String(),
+      },
+      'lastMessageTimestamp': now,
+    };
+    await newDoc.set(conversationData);
+
+    // Build a Conversation object for navigation
+    return Conversation(
+      id: newDoc.id,
+      participants: [
+        User(
+          id: currentUserId.toString(),
+          name: "Me",
+          avatarUrl: "",
+          isOnline: true,
+        ),
+        User(
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          isOnline: user.isOnline,
+        ),
+      ],
+      messages: [],
+      lastMessage: Message(
+        id: 'empty',
+        senderId: '',
+        senderName: '',
+        content: 'No messages',
+        timestamp: now,
+        conversationId: newDoc.id, // Add the conversation ID
+      ),
+      unreadCount: 0,
+      isGroup: false,
+      groupName: null,
+      isMuted: false,
+      isArchived: false,
+    );
   }
 
   @override
@@ -482,18 +672,17 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                               final user = filteredUsers[index];
                               return ListTile(
                                 leading: CircleAvatar(
-                                  backgroundImage: NetworkImage(user.avatarUrl),
                                   backgroundColor: ThemeConstants.primaryColor,
-                                  onBackgroundImageError: (_, __) {
-                                    // Handle image loading errors silently
-                                  },
                                   child: user.avatarUrl.isEmpty
                                       ? Text(user.name[0])
+                                      : null,
+                                  foregroundImage: user.avatarUrl.isNotEmpty
+                                      ? CachedNetworkImageProvider(
+                                          user.avatarUrl)
                                       : null,
                                 ),
                                 title: Text(user.name),
                                 subtitle: Text(user.email),
-                                // Online status indicator
                                 trailing: user.isOnline
                                     ? Container(
                                         width: 12,
@@ -508,13 +697,18 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                                         ),
                                       )
                                     : null,
-                                onTap: () {
-                                  // TODO: Create new conversation in Firebase
+                                onTap: () async {
                                   ResponsiveSnackBar.showInfo(
                                     context: context,
                                     message:
                                         "${TextStrings.startingConversationWith} ${user.name}",
                                   );
+                                  // Create or get conversation, then notify parent and close dialog
+                                  final conversation =
+                                      await _createOrGetConversation(user);
+                                  if (widget.onConversationCreated != null) {
+                                    widget.onConversationCreated!(conversation);
+                                  }
                                   Navigator.pop(context);
                                 },
                               );

@@ -4,6 +4,8 @@ import os
 import uuid
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
+from firebase_admin import firestore, credentials, initialize_app
+from django.conf import settings
 
 def user_profile_path(instance, filename):
     # Get the file extension
@@ -12,6 +14,33 @@ def user_profile_path(instance, filename):
     filename = f"{uuid.uuid4()}.{ext}"
     # Return the upload path
     return os.path.join('profile_pics', str(instance.id), filename)
+
+def sync_user_to_firestore(user, update_online=None):
+    """
+    Sync a Django Account instance to Firestore 'users' collection.
+    If update_online is not None, force isOnline to that value.
+    """
+    try:
+        # Only initialize once
+        if not hasattr(sync_user_to_firestore, "_firebase_initialized"):
+            cred_path = getattr(settings, 'FIREBASE_CRED_PATH', '/Users/momen_mac/Desktop/flutter_application/server/livespot-b1eb4-firebase-adminsdk-fbsvc-f5e95b9818.json')
+            if not firestore.client._apps:
+                cred = credentials.Certificate(cred_path)
+                initialize_app(cred)
+            sync_user_to_firestore._firebase_initialized = True
+
+        db = firestore.client()
+        user_data = {
+            'id': str(user.id),
+            'name': f"{user.first_name} {user.last_name}".strip(),
+            'email': user.email,
+            'avatarUrl': user.profile_picture.url if user.profile_picture else '',
+            'isOnline': update_online if update_online is not None else False,
+        }
+        db.collection('users').document(str(user.id)).set(user_data)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to sync user to Firestore: {e}")
 
 class AccountManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -66,6 +95,17 @@ class Account(AbstractBaseUser, PermissionsMixin):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Sync to Firestore on every save (create/update)
+        sync_user_to_firestore(self)
+
+    def set_online(self):
+        sync_user_to_firestore(self, update_online=True)
+
+    def set_offline(self):
+        sync_user_to_firestore(self, update_online=False)
 
 class VerificationCode(models.Model):
     user = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='verification_codes')

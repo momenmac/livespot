@@ -8,6 +8,7 @@ import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/ui/widgets/safe_network_image.dart'; // Add this import
+import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Add this import
 
 // Simple class to hold action button data
 class ActionItem {
@@ -129,14 +130,22 @@ class ConversationList extends StatelessWidget {
     // Otherwise, show the conversation list
     return ListView.builder(
       controller: controller.listScrollController,
-      itemCount: controller.conversations.length,
+      itemCount: controller.conversations.length + 1, // +1 for bottom spacing
       itemBuilder: (context, index) {
+        if (index == controller.conversations.length) {
+          // Add extra spacing at the bottom
+          return const SizedBox(height: 32);
+        }
         final conversation = controller.conversations[index];
 
         // Make sure conversation has a reference to controller
         conversation.controller = controller;
 
-        // Wrap the conversation tile in a Dismissible widget
+        // You can fetch messages for this conversation here if needed
+        // For example, if you want to show the latest message from Firestore:
+        // (Assuming you have a method to fetch messages for a conversation)
+        // await controller.fetchMessagesForConversation(conversation);
+
         return Dismissible(
           key: Key(conversation.id),
           // Allow swipes in both directions
@@ -538,6 +547,14 @@ class _ConversationTile extends StatefulWidget {
 class _ConversationTileState extends State<_ConversationTile> {
   bool _isHovering = false;
 
+  String _absoluteAvatarUrl(String url) {
+    if (url.isEmpty) return url;
+    if (url.startsWith('http')) return url;
+    // Always prepend base URL for non-absolute URLs
+    final fixedUrl = url.startsWith('/') ? url : '/$url';
+    return '${ApiUrls.baseUrl}$fixedUrl';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -545,6 +562,9 @@ class _ConversationTileState extends State<_ConversationTile> {
 
     final formattedTime =
         _formatMessageTime(widget.conversation.lastMessage.timestamp);
+
+    // --- FIX: Show last message content even if messages list is empty ---
+    final lastMessage = widget.conversation.lastMessage;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -562,6 +582,9 @@ class _ConversationTileState extends State<_ConversationTile> {
                 for (final message in widget.conversation.messages) {
                   message.controller = widget.controller;
                 }
+
+                // --- FIX: Select the conversation in the controller before navigating ---
+                widget.controller.selectConversation(widget.conversation);
 
                 // Now navigate to the chat detail page
                 Navigator.push(
@@ -587,7 +610,7 @@ class _ConversationTileState extends State<_ConversationTile> {
               leading: Stack(
                 children: [
                   SafeNetworkImage(
-                    imageUrl: widget.conversation.avatarUrl,
+                    imageUrl: _absoluteAvatarUrl(widget.conversation.avatarUrl),
                     size: 48,
                     fallbackText: widget.conversation.displayName,
                   ),
@@ -651,7 +674,8 @@ class _ConversationTileState extends State<_ConversationTile> {
                     ),
                   Expanded(
                     child: Text(
-                      _formatLastMessage(widget.conversation),
+                      _formatLastMessageFromLastMessage(
+                          lastMessage, widget.conversation),
                       style: TextStyle(
                         fontWeight: widget.conversation.unreadCount > 0
                             ? FontWeight.bold
@@ -664,8 +688,6 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Remove the unread badge from here to avoid duplication
-                  // We'll only show it in the hover menu
                 ],
               ),
             ),
@@ -944,6 +966,25 @@ class _ConversationTileState extends State<_ConversationTile> {
           : '$sender${TextStrings.voiceMessage}';
     }
 
+    return conversation.isGroup && message.senderId != 'current'
+        ? '${message.senderName}: ${message.content}'
+        : '$sender${message.content}';
+  }
+
+  // Show last message content from the lastMessage field (not from messages list)
+  String _formatLastMessageFromLastMessage(
+      Message message, Conversation conversation) {
+    final sender = message.senderId == 'current' ? TextStrings.sentByYou : '';
+    if (message.content.isEmpty) {
+      return conversation.isGroup && message.senderId != 'current'
+          ? '${message.senderName}: ${TextStrings.noMessage}'
+          : TextStrings.noMessage;
+    }
+    if (message.messageType == MessageType.voice) {
+      return conversation.isGroup && message.senderId != 'current'
+          ? '${message.senderName}: ${TextStrings.voiceMessage}'
+          : '$sender${TextStrings.voiceMessage}';
+    }
     return conversation.isGroup && message.senderId != 'current'
         ? '${message.senderName}: ${message.content}'
         : '$sender${message.content}';

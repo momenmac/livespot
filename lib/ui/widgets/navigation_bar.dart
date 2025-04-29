@@ -265,7 +265,7 @@ class CustomNavigationBar extends StatelessWidget {
               color: currentIndex == 0
                   ? ThemeConstants.primaryColor
                   : theme.iconTheme.color!,
-              size: theme.iconTheme.size!,
+              size: theme.iconTheme.size ?? 28,
               onPressed: () => onTap(0),
             ),
             AnimatedIconButton(
@@ -287,7 +287,7 @@ class CustomNavigationBar extends StatelessWidget {
               color: currentIndex == 3
                   ? ThemeConstants.primaryColor
                   : theme.iconTheme.color!,
-              size: theme.iconTheme.size!,
+              size: theme.iconTheme.size ?? 28,
               onPressed: () => onTap(3),
               badgeCount: unreadNotificationCount,
             ),
@@ -298,7 +298,7 @@ class CustomNavigationBar extends StatelessWidget {
               color: currentIndex == 4
                   ? ThemeConstants.primaryColor
                   : theme.iconTheme.color!,
-              size: theme.iconTheme.size!,
+              size: theme.iconTheme.size ?? 28,
               onPressed: () => onTap(4),
             ),
           ],

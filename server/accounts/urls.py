@@ -4,7 +4,8 @@ from .views import (
     CustomTokenObtainPairView, RegisterView, LoginView, GoogleLoginView, ProfileView, ProfileImageView,
     VerifyEmailView, ResendVerificationCodeView,
     ForgotPasswordView, VerifyResetCodeView, ResetPasswordView,
-    LogoutView, ValidateTokenView  # Add ValidateTokenView
+    LogoutView, ValidateTokenView,  # Add ValidateTokenView
+    all_users_minimal,  # <-- import the new view
 )
 
 urlpatterns = [
@@ -18,6 +19,8 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('google-login/', GoogleLoginView.as_view(), name='google_login'),
     path('logout/', LogoutView.as_view(), name='logout'),
+    # Add minimal all users endpoint
+    path('all-users/', all_users_minimal, name='all_users_minimal'),
     
     # Profile management
     path('profile/', ProfileView.as_view(), name='profile'),

@@ -108,7 +108,21 @@ Future<bool> initFirebaseSafely() async {
 }
 
 Future<void> main() async {
+  // Enable Flutter binding before any platform interaction
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Apply system optimizations
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
+  // Set system UI mode for better performance
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
+  // Enable skia shader warm-up for smoother first render
+  PaintingBinding.instance.imageCache.maximumSize = 100; // Reduce memory usage
 
   // Configure GoogleSignIn optimally
   final GoogleSignIn googleSignIn = GoogleSignIn(
@@ -466,10 +480,11 @@ class _MyAppState extends State<MyApp> {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            title: 'My App',
+            title: 'Optimized Flutter App',
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode,
-            theme: TAppTheme.lightTheme,
+            theme:
+                TAppTheme.lightTheme, // <-- Use your custom light theme here!
             darkTheme: TAppTheme.darkTheme,
             navigatorKey: NavigationService().navigatorKey,
             initialRoute: AppRoutes.initial,

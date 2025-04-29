@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/providers/theme_provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
@@ -960,7 +961,11 @@ class _ProfilePageState extends State<ProfilePage>
                     pageContext,
                     MaterialPageRoute(
                       builder: (context) => AccountSettingsPage(
-                        onThemeChanged: (ThemeMode value) {},
+                        onThemeChanged: (ThemeMode value) {
+                          // Use Provider to update theme globally
+                          Provider.of<ThemeProvider>(context, listen: false)
+                              .setThemeMode(value);
+                        },
                       ),
                     ),
                   );

@@ -20,6 +20,8 @@ from rest_framework import status, permissions
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.decorators import api_view, permission_classes
+from django.http import JsonResponse
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -834,3 +836,32 @@ class ValidateTokenView(APIView):
             'valid': True,
             'user_id': request.user.id,
         }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def all_users_minimal(request):
+    """
+    Return all users with minimal info: id, name, email, avatarUrl.
+    Ensures avatarUrl is a full URL using BASE_URL if needed.
+    """
+    users = Account.objects.all()
+    data = []
+    from django.conf import settings
+    base_url = getattr(settings, "BASE_URL", None)
+    for user in users:
+        name = f"{user.first_name} {user.last_name}".strip()
+        avatar_url = user.profile_picture.url if user.profile_picture else ""
+        if avatar_url and not avatar_url.startswith("http"):
+            # Add BASE_URL if needed
+            if base_url:
+                # Ensure avatar_url starts with a single slash
+                if not avatar_url.startswith("/"):
+                    avatar_url = "/" + avatar_url
+                avatar_url = base_url.rstrip("/") + avatar_url
+        data.append({
+            "id": str(user.id),
+            "name": name,
+            "email": user.email,
+            "avatarUrl": avatar_url,
+        })
+    return add_cors_headers(JsonResponse(data, safe=False))

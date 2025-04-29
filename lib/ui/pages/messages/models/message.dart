@@ -1,4 +1,6 @@
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'package:uuid/uuid.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import for Timestamp
 
 enum MessageType {
   text,
@@ -23,8 +25,8 @@ class Message {
   final String content;
   final DateTime timestamp;
   final MessageType messageType;
-  final MessageStatus? status; // Only for outgoing messages
-  final bool isRead;
+  late final MessageStatus? status; // Only for outgoing messages
+  bool isRead; // Make mutable for marking as read
   final bool isSent;
   final bool isEdited;
   final String? mediaUrl; // URL for voice messages, images, etc.
@@ -35,8 +37,7 @@ class Message {
   final MessageType? replyToMessageType; // Type of the replied message
   final String? forwardedFrom; // Name of the original sender if forwarded
   final DateTime? editedAt; // When the message was last edited
-
-  // Change from final to allow setting after initialization
+  final String conversationId; // Add conversationId field
   MessagesController? controller; // Reference to the controller
 
   Message({
@@ -45,6 +46,7 @@ class Message {
     required this.senderName,
     required this.content,
     required this.timestamp,
+    required this.conversationId, // Make conversationId required
     this.messageType = MessageType.text,
     this.status,
     this.isRead = false,
@@ -86,6 +88,7 @@ class Message {
     MessageType? replyToMessageType,
     String? forwardedFrom,
     DateTime? editedAt,
+    String? conversationId,
     MessagesController? controller,
   }) {
     return Message(
@@ -107,6 +110,7 @@ class Message {
       replyToMessageType: replyToMessageType ?? this.replyToMessageType,
       forwardedFrom: forwardedFrom ?? this.forwardedFrom,
       editedAt: editedAt ?? this.editedAt,
+      conversationId: conversationId ?? this.conversationId,
       controller: controller ?? this.controller,
     );
   }
@@ -131,21 +135,57 @@ class Message {
       'replyToMessageType': replyToMessageType?.toString().split('.').last,
       'forwardedFrom': forwardedFrom,
       'editedAt': editedAt?.millisecondsSinceEpoch,
+      'conversationId': conversationId,
     };
   }
 
   static Message fromJson(Map<String, dynamic> json) {
+    int timestampMillis;
+    if (json['timestamp'] is int) {
+      timestampMillis = json['timestamp'];
+    } else if (json['timestamp'] is String) {
+      try {
+        timestampMillis =
+            DateTime.parse(json['timestamp']).millisecondsSinceEpoch;
+      } catch (_) {
+        try {
+          timestampMillis = int.parse(json['timestamp']);
+        } catch (_) {
+          timestampMillis = DateTime.now().millisecondsSinceEpoch;
+        }
+      }
+    } else if (json['timestamp'] is Timestamp) {
+      // Now Timestamp is properly imported from cloud_firestore
+      timestampMillis =
+          (json['timestamp'] as Timestamp).toDate().millisecondsSinceEpoch;
+    } else {
+      timestampMillis = DateTime.now().millisecondsSinceEpoch;
+    }
+
+    DateTime? editedAt;
+    if (json['editedAt'] is int) {
+      editedAt = DateTime.fromMillisecondsSinceEpoch(json['editedAt']);
+    } else if (json['editedAt'] is String) {
+      try {
+        editedAt = DateTime.parse(json['editedAt']);
+      } catch (_) {
+        editedAt = null;
+      }
+    } else if (json['editedAt'] is Timestamp) {
+      // Now Timestamp is properly imported from cloud_firestore
+      editedAt = (json['editedAt'] as Timestamp).toDate();
+    }
+
     return Message(
-      id: json['id'],
-      senderId: json['senderId'],
-      senderName: json['senderName'],
-      content: json['content'],
-      timestamp: json['timestamp'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'])
-          : DateTime.now(),
+      id: json['id'] ?? const Uuid().v4(),
+      senderId: json['senderId'] ?? '',
+      senderName: json['senderName'] ?? 'Unknown',
+      content: json['content'] ?? '',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMillis),
       messageType: _parseMessageType(json['messageType']),
-      status:
-          json['status'] != null ? _parseMessageStatus(json['status']) : null,
+      status: json['status'] != null
+          ? _parseMessageStatus(json['status'].toString())
+          : null,
       isRead: json['isRead'] ?? false,
       isSent: json['isSent'] ?? true,
       isEdited: json['isEdited'] ?? false,
@@ -155,12 +195,11 @@ class Message {
       replyToSenderName: json['replyToSenderName'],
       replyToContent: json['replyToContent'],
       replyToMessageType: json['replyToMessageType'] != null
-          ? _parseMessageType(json['replyToMessageType'])
+          ? _parseMessageType(json['replyToMessageType'].toString())
           : null,
       forwardedFrom: json['forwardedFrom'],
-      editedAt: json['editedAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(json['editedAt'])
-          : null,
+      editedAt: editedAt,
+      conversationId: json['conversationId'] ?? '',
     );
   }
 

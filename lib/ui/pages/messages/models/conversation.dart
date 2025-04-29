@@ -1,6 +1,7 @@
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 
 class Conversation {
   final String id;
@@ -12,7 +13,6 @@ class Conversation {
   final String? groupName;
   final bool isMuted;
   final bool isArchived;
-  // Add reference to controller to maintain state
   MessagesController? controller;
 
   Conversation({
@@ -49,20 +49,17 @@ class Conversation {
       groupName: groupName ?? this.groupName,
       isMuted: isMuted ?? this.isMuted,
       isArchived: isArchived ?? this.isArchived,
-      controller: controller, // Preserve the controller reference
+      controller: controller,
     );
   }
 
-  // Get the conversation display name based on participants
   String get displayName {
     if (isGroup && groupName != null) return groupName!;
-
-    // Filter out the current user and get the other participants
+    // Use the actual current user id from the controller if available
+    final currentUserId = controller?.currentUserId ?? 'current';
     final otherParticipants =
-        participants.where((p) => p.id != 'current').toList();
-
+        participants.where((p) => p.id != currentUserId).toList();
     if (otherParticipants.isEmpty) return "Me";
-
     if (otherParticipants.length == 1) {
       return otherParticipants.first.name;
     } else {
@@ -70,33 +67,31 @@ class Conversation {
     }
   }
 
-  // Get the avatar URL for display
   String get avatarUrl {
     if (isGroup) {
       return "https://ui-avatars.com/api/?name=${Uri.encodeComponent(groupName ?? "Group")}&background=random";
     }
-
+    final currentUserId = controller?.currentUserId ?? 'current';
     final otherParticipants =
-        participants.where((p) => p.id != 'current').toList();
-
+        participants.where((p) => p.id != currentUserId).toList();
     if (otherParticipants.isEmpty) return "";
-
-    return otherParticipants.first.avatarUrl;
+    final url = otherParticipants.first.avatarUrl;
+    // Always return a fully qualified URL for avatars
+    if (url.isEmpty) return "";
+    if (url.startsWith('http')) return url;
+    final fixedUrl = url.startsWith('/') ? url : '/$url';
+    return '${ApiUrls.baseUrl}$fixedUrl';
   }
 
-  // Get online status
   bool get isOnline {
     if (isGroup) return false;
-
+    final currentUserId = controller?.currentUserId ?? 'current';
     final otherParticipants =
-        participants.where((p) => p.id != 'current').toList();
-
+        participants.where((p) => p.id != currentUserId).toList();
     if (otherParticipants.isEmpty) return false;
-
     return otherParticipants.first.isOnline;
   }
 
-  // Convert to map for Firestore
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -111,9 +106,65 @@ class Conversation {
     };
   }
 
-  // Create from Firestore document
-  static Future<Conversation> fromFirestore(Map<String, dynamic> doc) async {
-    // TODO: Implement when integrating with Firebase
-    throw UnimplementedError("Firebase integration not implemented yet");
+  // Firestore integration for Conversation
+  static Conversation fromFirestore(
+      Map<String, dynamic> doc, List<User> users) {
+    // users: list of all users, so we can match participant ids to User objects
+    final participantIds = List<String>.from(doc['participants'] ?? []);
+    final participants =
+        users.where((u) => participantIds.contains(u.id)).toList();
+
+    return Conversation(
+      id: doc['id'],
+      participants: participants,
+      messages: [], // You should fetch messages from the messages collection
+      lastMessage: Message.fromJson(doc['lastMessage'] ?? {}),
+      unreadCount: doc['unreadCount'] ?? 0,
+      isGroup: doc['isGroup'] ?? false,
+      groupName: doc['groupName'],
+      isMuted: doc['isMuted'] ?? false,
+      isArchived: doc['isArchived'] ?? false,
+    );
   }
 }
+
+// --- FIRESTORE STRUCTURE SUGGESTION ---
+//
+// Collection: conversations
+//   - id: string (Firestore document id)
+//   - participants: [userId1, userId2, ...]
+//   - isGroup: bool
+//   - groupName: string (nullable)
+//   - lastMessage: Map (see Message.toJson())
+//   - unreadCount: int
+//   - isMuted: bool
+//   - isArchived: bool
+//   - updatedAt: timestamp (for sorting)
+//
+// Collection: messages (subcollection under each conversation)
+//   conversations/{conversationId}/messages/{messageId}
+//   - id: string
+//   - senderId: string
+//   - senderName: string
+//   - content: string
+//   - timestamp: int (millisecondsSinceEpoch)
+//   - messageType: string
+//   - status: string
+//   - isRead: bool
+//   - isSent: bool
+//   - isEdited: bool
+//   - mediaUrl: string
+//   - voiceDuration: int
+//   - replyToId: string
+//   - replyToSenderName: string
+//   - replyToContent: string
+//   - replyToMessageType: string
+//   - forwardedFrom: string
+//   - editedAt: int
+//
+// Collection: users
+//   - id: string
+//   - name: string
+//   - email: string
+//   - avatarUrl: string
+//   - isOnline: bool

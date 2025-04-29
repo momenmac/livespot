@@ -13,34 +13,25 @@ class TAppTheme {
   TAppTheme._();
 
   static ThemeData lightTheme = ThemeData(
-    // Ensure the color scheme uses our primary color as the seed for all components
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: ThemeConstants.primaryColor,
+    colorScheme: ColorScheme(
       brightness: Brightness.light,
       primary: ThemeConstants.primaryColor,
-      // Explicitly set common colors to ensure consistency
+      onPrimary: Colors.white,
       secondary: ThemeConstants.primaryColor,
+      onSecondary: Colors.white,
       error: ThemeConstants.red,
+      onError: Colors.white,
+      background: ThemeConstants.lightBackgroundColor,
+      onBackground: ThemeConstants.black,
+      surface: ThemeConstants.lightCardColor,
+      onSurface: ThemeConstants.black,
     ),
-    // Set primarySwatch for older components that don't use ColorScheme
-    primarySwatch: MaterialColor(ThemeConstants.primaryColor.toARGB32(), {
-      50: ThemeConstants.primaryColor.withAlpha(26),
-      100: ThemeConstants.primaryColor.withAlpha(51),
-      200: ThemeConstants.primaryColor.withAlpha(77),
-      300: ThemeConstants.primaryColor.withAlpha(102),
-      400: ThemeConstants.primaryColor.withAlpha(128),
-      500: ThemeConstants.primaryColor.withAlpha(153),
-      600: ThemeConstants.primaryColor.withAlpha(179),
-      700: ThemeConstants.primaryColor.withAlpha(204),
-      800: ThemeConstants.primaryColor.withAlpha(230),
-      900: ThemeConstants.primaryColor,
-    }),
     fontFamily: 'Poppins',
     brightness: Brightness.light,
     primaryColor: ThemeConstants.primaryColor,
     scaffoldBackgroundColor: ThemeConstants.lightBackgroundColor,
     useMaterial3: true,
-    textTheme: TTextTheme.lightTextTheme,
+    textTheme: TTextTheme.lightTextTheme, // Make sure this is correct!
     elevatedButtonTheme: TElevatedButtonTheme.lightElevatedButtonTheme,
     appBarTheme: TAppBarTheme.lightAppBarTheme,
     bottomSheetTheme: TBottomSheetTheme.lightBottomSheetTheme,
@@ -50,7 +41,6 @@ class TAppTheme {
     iconTheme: TNavigationTheme.navigationBarItemThemeLight,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonLight,
     cardTheme: TNotificationTheme.notificationCardThemeLight,
-    // Configure date picker theme to use primary color
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.lightBackgroundColor,
       headerBackgroundColor: ThemeConstants.primaryColor,
@@ -72,30 +62,24 @@ class TAppTheme {
         return null;
       }),
     ),
+    // Add visualDensity for consistent sizing across platforms
+    visualDensity: VisualDensity.adaptivePlatformDensity,
   );
 
   static ThemeData darkTheme = ThemeData(
-    // Same approach for dark theme
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: ThemeConstants.primaryColor,
+    colorScheme: ColorScheme(
       brightness: Brightness.dark,
       primary: ThemeConstants.primaryColor,
+      onPrimary: Colors.white,
       secondary: ThemeConstants.primaryColor,
+      onSecondary: Colors.white,
       error: ThemeConstants.red,
+      onError: Colors.white,
+      background: ThemeConstants.darkBackgroundColor,
+      onBackground: Colors.white,
+      surface: ThemeConstants.darkCardColor,
+      onSurface: Colors.white,
     ),
-    // Set primarySwatch for older components
-    primarySwatch: MaterialColor(ThemeConstants.primaryColor.toARGB32(), {
-      50: ThemeConstants.primaryColor.withAlpha(25),
-      100: ThemeConstants.primaryColor.withAlpha(51),
-      200: ThemeConstants.primaryColor.withAlpha(77),
-      300: ThemeConstants.primaryColor.withAlpha(102),
-      400: ThemeConstants.primaryColor.withAlpha(127),
-      500: ThemeConstants.primaryColor.withAlpha(153),
-      600: ThemeConstants.primaryColor.withAlpha(179),
-      700: ThemeConstants.primaryColor.withAlpha(204),
-      800: ThemeConstants.primaryColor.withAlpha(229),
-      900: ThemeConstants.primaryColor,
-    }),
     fontFamily: 'Poppins',
     primaryColor: ThemeConstants.primaryColor,
     scaffoldBackgroundColor: ThemeConstants.darkBackgroundColor,
@@ -110,8 +94,6 @@ class TAppTheme {
     iconTheme: TNavigationTheme.navigationBarItemThemeDark,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke,
     cardTheme: TNotificationTheme.notificationCardThemeDark,
-
-    // Dark mode date picker theme
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.darkBackgroundColor,
       headerBackgroundColor: ThemeConstants.primaryColor,
@@ -133,5 +115,6 @@ class TAppTheme {
         return null;
       }),
     ),
+    visualDensity: VisualDensity.adaptivePlatformDensity,
   );
 }
