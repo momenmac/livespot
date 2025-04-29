@@ -263,7 +263,7 @@ class SessionManager {
   Future<bool> _validateTokenWithServer(JwtToken token) async {
     try {
       final url = Uri.parse('${ApiUrls.baseUrl}/accounts/token/validate/');
-      developer.log('Validating token with server: ${url}',
+      developer.log('Validating token with server: $url',
           name: 'TokenValidation');
 
       final response = await http.post(

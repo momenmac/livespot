@@ -73,13 +73,11 @@ class _MessagesPageState extends State<MessagesPage>
 
   Future<void> _setUserOnlineStatus(bool isOnline) async {
     final currentUserId = _controller.currentUserId;
-    if (currentUserId != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .update({'isOnline': isOnline});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .update({'isOnline': isOnline});
     }
-  }
 
   @override
   void dispose() {
@@ -372,7 +370,7 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
           statusMap[id] = data['isOnline'] ?? false;
         }
 
-        final currentUserId = widget.controller.currentUserId?.toString();
+        final currentUserId = widget.controller.currentUserId.toString();
         final loadedUsers = userList
             .map((user) {
               final id = user['id'].toString();
@@ -673,12 +671,12 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                               return ListTile(
                                 leading: CircleAvatar(
                                   backgroundColor: ThemeConstants.primaryColor,
-                                  child: user.avatarUrl.isEmpty
-                                      ? Text(user.name[0])
-                                      : null,
                                   foregroundImage: user.avatarUrl.isNotEmpty
                                       ? CachedNetworkImageProvider(
                                           user.avatarUrl)
+                                      : null,
+                                  child: user.avatarUrl.isEmpty
+                                      ? Text(user.name[0])
                                       : null,
                                 ),
                                 title: Text(user.name),

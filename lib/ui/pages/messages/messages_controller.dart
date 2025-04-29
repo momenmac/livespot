@@ -31,7 +31,7 @@ class MessagesController extends ChangeNotifier {
 
   String get currentUserId {
     final user = accountProvider.currentUser;
-    if (user != null && user.id != null && user.id.toString().isNotEmpty) {
+    if (user != null && user.id.toString().isNotEmpty) {
       return user.id.toString();
     }
     return ''; // Fallback for debugging: show all conversations if not authenticated
@@ -50,7 +50,7 @@ class MessagesController extends ChangeNotifier {
   Message? _editingMessage;
   Message? get editingMessage => _editingMessage;
 
-  List<StreamSubscription> _subscriptions = [];
+  final List<StreamSubscription> _subscriptions = [];
 
   List<Conversation> get conversations => _filteredConversations;
   Conversation? get selectedConversation {
@@ -113,7 +113,7 @@ class MessagesController extends ChangeNotifier {
     final subscription = conversationsStream.listen((snapshot) async {
       _conversations = await Future.wait(
         snapshot.docs.map((doc) async => Conversation.fromFirestore(
-            doc.data() as Map<String, dynamic>, users)),
+            doc.data(), users)),
       );
       _applyFilters();
       notifyListeners();
@@ -132,7 +132,7 @@ class MessagesController extends ChangeNotifier {
 
       _conversations = await Future.wait(
         snapshot.docs.map((doc) async => Conversation.fromFirestore(
-            doc.data() as Map<String, dynamic>, users)),
+            doc.data(), users)),
       );
       _applyFilters();
       notifyListeners();
