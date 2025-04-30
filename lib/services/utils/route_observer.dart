@@ -71,6 +71,13 @@ class AppRouteObserver extends NavigatorObserver {
       } else {
         _currentRouteName = route.settings.name;
       }
+      
+      // Debug the actual widget type to help diagnose routing issues
+      developer.log(
+        'Route widget type: ${route.settings.name} -> ${route.settings.arguments} -> ${route.navigator?.widget.runtimeType}',
+        name: 'RouteObserver',
+      );
+      
       // Keep NavigationService in sync
       NavigationService().setCurrentRoute(_currentRouteName!);
     } else if (route == null) {
@@ -81,8 +88,50 @@ class AppRouteObserver extends NavigatorObserver {
       // Also clear NavigationService route
       NavigationService().setCurrentRoute('/');
     } else {
-      // Optional: Log if a route without a name is encountered after the initial one
-      // developer.log('NAV OBSERVER: Encountered route without a name: ${route.runtimeType}', name: 'RouteObserver');
+      // If we have a route but no name, try to infer what it might be
+      developer.log('NAV OBSERVER: Encountered route without a name: ${route.runtimeType}', 
+          name: 'RouteObserver');
+          
+      // Attempt to identify the route by widget type when name is missing
+      final routeContent = _identifyRouteByContent(route);
+      if (routeContent != null) {
+        _currentRouteName = routeContent;
+        NavigationService().setCurrentRoute(routeContent);
+      }
+    }
+  }
+  
+  // Helper method to identify routes by their content when the route name is missing
+  String? _identifyRouteByContent(Route<dynamic> route) {
+    try {
+      // Try to extract route info from the route's builder
+      final settings = route.settings;
+      final content = settings.arguments;
+      
+      if (content != null) {
+        developer.log('Route content: $content', name: 'RouteObserver');
+      }
+      
+      // Use runtimeType to help identify what screen we're on
+      developer.log('Route runtime type: ${route.runtimeType}', name: 'RouteObserver');
+      
+      // If this is a MaterialPageRoute, try to identify the page
+      if (route is MaterialPageRoute) {
+        final pageWidget = route.builder(route.navigator!.context);
+        developer.log('Page widget: ${pageWidget.runtimeType}', name: 'RouteObserver');
+        
+        // Check for specific page types
+        if (pageWidget.toString().contains('LoginScreen')) {
+          return '/login';
+        } else if (pageWidget.toString().contains('GetStartedScreen')) {
+          return '/';
+        }
+      }
+      
+      return null;
+    } catch (e) {
+      developer.log('Error identifying route: $e', name: 'RouteObserver');
+      return null;
     }
   }
 }

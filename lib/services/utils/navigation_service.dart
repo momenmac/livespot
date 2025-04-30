@@ -1,260 +1,186 @@
 import 'package:flutter/material.dart';
-import 'route_observer.dart'; // Import the new observer
-import 'dart:developer' as developer; // Import developer for logging
+import 'route_observer.dart';
+import 'dart:developer' as developer;
 
+/// A simplified navigation service that prioritizes reliability over complexity
 class NavigationService {
-  // Singleton implementation
+  // Singleton pattern
   static final NavigationService _instance = NavigationService._internal();
   factory NavigationService() => _instance;
   NavigationService._internal();
 
-  // Navigation key for app-wide navigation without context
+  // Navigation key for app-wide navigation
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-  // Get the navigator state
+  
+  // Navigator state accessor
   NavigatorState? get navigator => navigatorKey.currentState;
-
-  // Add a debounce mechanism to prevent rapid navigation
+  
+  // Simple route tracking
+  String? _currentRoute;
+  
+  // Store last navigation time for basic throttling
   DateTime? _lastNavigationTime;
-  String? _lastNavigationTarget;
-  static const _minNavigationInterval =
-      Duration(milliseconds: 800); // Increased from 500ms
-  static const _generalThrottleInterval =
-      Duration(milliseconds: 300); // Increased from 200ms
-
-  // Track navigations in progress to prevent overlapping navigations
-  bool _isNavigating = false;
-
-  // Method to reset navigation throttling state - use with caution
-  void resetNavigationThrottling() {
-    developer.log('⚠️ Navigation throttling flags reset',
-        name: 'NavigationService');
-    _lastNavigationTime = null;
-    _lastNavigationTarget = null;
-    _isNavigating = false;
-  }
-
-  // Check if we should throttle navigation
-  bool _shouldThrottleNavigation([String? targetRoute]) {
-    final now = DateTime.now();
-
-    // If we're already in a navigation operation, always throttle
-    if (_isNavigating) {
-      developer.log('Navigation throttled: Already navigating',
-          name: 'NavigationService');
-      return true;
-    }
-
-    if (_lastNavigationTime != null) {
-      final timeSinceLastNav = now.difference(_lastNavigationTime!);
-
-      // If it's the same target route and navigation happened recently, throttle it
-      if (targetRoute != null &&
-          targetRoute == _lastNavigationTarget &&
-          timeSinceLastNav < _minNavigationInterval) {
-        developer.log(
-            'Navigation throttled: Too many navigation requests to $targetRoute (last navigation was ${timeSinceLastNav.inMilliseconds}ms ago)',
-            name: 'NavigationService');
-        return true;
-      }
-
-      // General throttling for any navigation
-      if (timeSinceLastNav < _generalThrottleInterval) {
-        developer.log(
-            'Navigation throttled: Navigation requests too frequent (${timeSinceLastNav.inMilliseconds}ms since last navigation)',
-            name: 'NavigationService');
-        return true;
-      }
-    }
-
-    _lastNavigationTime = now;
-    _lastNavigationTarget = targetRoute;
-    return false;
-  }
-
-  String? _currentRoute; // Store the last route set
-
-  // Getter for the current route name with added debugging
+  
+  // No more navigating flag - we'll use a simpler approach
+  
+  // Getter for the current route name - keep it simple
   String? get currentRoute {
     final observerRoute = AppRouteObserver.currentRouteName;
     String? modalRouteName;
-
-    // Attempt to get route from ModalRoute at the time of access
-    final currentState = navigatorKey.currentState;
-    if (currentState != null && currentState.context.mounted) {
-      try {
-        modalRouteName = ModalRoute.of(currentState.context)?.settings.name;
-      } catch (e) {
-        // ModalRoute.of can fail if context is not right, ignore error for logging purpose
+    
+    try {
+      final currentContext = navigatorKey.currentContext;
+      if (currentContext != null) {
+        modalRouteName = ModalRoute.of(currentContext)?.settings.name;
       }
+    } catch (e) {
+      // Silently handle error
     }
-
+    
     developer.log(
-      'NAV SERVICE: currentRoute getter called. Observer reports: "$observerRoute", ModalRoute reports: "$modalRouteName"',
+      'Current route: observer=$observerRoute, modal=$modalRouteName, cached=$_currentRoute',
       name: 'NavigationService',
     );
-
-    // Prefer observer, fallback to local cache
-    return observerRoute ?? _currentRoute;
+    
+    return modalRouteName ?? observerRoute ?? _currentRoute;
   }
-
-  // Add this setter to allow route observer to update the current route
+  
+  // Method to allow route observer to update the current route
   void setCurrentRoute(String route) {
-    developer.log('NAV SERVICE: setCurrentRoute called with "$route"',
-        name: 'NavigationService');
     _currentRoute = route;
+    developer.log('Route set to: $route', name: 'NavigationService');
   }
-
-  // Navigate to a new route
-  Future<T?> navigateTo<T>(String routeName, {Object? arguments}) {
-    if (_shouldThrottleNavigation(routeName)) return Future.value(null);
-
-    // Check if we're already at this route
-    if (_currentRoute == routeName) {
-      developer.log('Navigation redundant: Already at $routeName',
-          name: 'NavigationService');
-      return Future.value(null);
-    }
-
-    _isNavigating = true;
-    return navigator!
-        .pushNamed(
-      routeName,
-      arguments: arguments,
-    )
-        .then((value) {
-      _isNavigating = false;
-      return value as T?;
-    }).catchError((e) {
-      _isNavigating = false;
-      developer.log('Navigation error: $e', name: 'NavigationService');
+  
+  // Simple direct navigation methods
+  
+  // Navigate to a new route (push)
+  Future<T?> navigateTo<T>(String routeName, {Object? arguments}) async {
+    if (_shouldThrottle()) {
+      developer.log('Navigation throttled for $routeName', name: 'NavigationService');
       return null;
-    });
-  }
-
-  // Replace current route
-  Future<T?> replaceTo<T>(String routeName, {Object? arguments}) {
-    if (_shouldThrottleNavigation(routeName)) return Future.value(null);
-
-    // Check if we're already at this route
-    if (_currentRoute == routeName) {
-      developer.log('Navigation redundant: Already at $routeName',
-          name: 'NavigationService');
-      return Future.value(null);
     }
-
-    _isNavigating = true;
-    return navigator!
-        .pushReplacementNamed(
-      routeName,
-      arguments: arguments,
-    )
-        .then((value) {
-      _isNavigating = false;
-      return value as T?;
-    }).catchError((e) {
-      _isNavigating = false;
-      developer.log('Navigation error: $e', name: 'NavigationService');
-      return null;
-    });
-  }
-
-  // Replace all routes
-  Future<T?> replaceAllWith<T>(String routeName, {Object? arguments}) {
-    // Enhanced throttling check for critical operations
-    if (_shouldThrottleNavigation(routeName)) {
-      developer.log(
-          '⚠️ Critical navigation throttled: replaceAllWith to $routeName',
-          name: 'NavigationService');
-      return Future.value(null);
-    }
-
-    // Extra safety check for duplicate navigation
-    if (_currentRoute == routeName) {
-      developer.log('⚠️ Navigation redundant: Already at $routeName',
-          name: 'NavigationService');
-      return Future.value(null);
-    }
-
+    
+    developer.log('Navigating to $routeName', name: 'NavigationService');
+    
     try {
-      // Set the _lastNavigationTarget before the operation to prevent race conditions
-      _lastNavigationTarget = routeName;
-      _lastNavigationTime = DateTime.now();
-      _isNavigating = true;
-
-      developer.log('✅ Executing replaceAllWith to $routeName',
-          name: 'NavigationService');
-
-      return navigator!
-          .pushNamedAndRemoveUntil(
+      return await navigator?.pushNamed(routeName, arguments: arguments) as T?;
+    } catch (e) {
+      developer.log('Navigation error: $e', name: 'NavigationService');
+      return null;
+    } finally {
+      _updateNavigationTime();
+    }
+  }
+  
+  // Replace current route
+  Future<T?> replaceTo<T>(String routeName, {Object? arguments}) async {
+    if (_shouldThrottle()) {
+      developer.log('Navigation throttled for $routeName', name: 'NavigationService');
+      return null;
+    }
+    
+    developer.log('Replacing route with $routeName', name: 'NavigationService');
+    
+    try {
+      return await navigator?.pushReplacementNamed(routeName, arguments: arguments) as T?;
+    } catch (e) {
+      developer.log('Navigation error: $e', name: 'NavigationService');
+      return null;
+    } finally {
+      _updateNavigationTime();
+    }
+  }
+  
+  // Replace all routes
+  Future<T?> replaceAllWith<T>(String routeName, {Object? arguments}) async {
+    if (_shouldThrottle()) {
+      developer.log('Navigation throttled for $routeName', name: 'NavigationService');
+      return null;
+    }
+    
+    developer.log('Replacing all routes with $routeName', name: 'NavigationService');
+    
+    try {
+      return await navigator?.pushNamedAndRemoveUntil(
         routeName,
         (route) => false,
         arguments: arguments,
-      )
-          .then((value) {
-        _isNavigating = false;
-        return value as T?;
-      }).catchError((e) {
-        _isNavigating = false;
-        developer.log('⚠️ Navigation error: $e', name: 'NavigationService');
-        return null;
-      });
+      ) as T?;
     } catch (e) {
-      _isNavigating = false;
-      developer.log('⚠️ Navigation error: $e', name: 'NavigationService');
-      return Future.value(null);
-    }
-  }
-
-  // Replace routes until home or a specific route
-  Future<T?> replaceUntilHome<T>(String routeName, {Object? arguments}) {
-    if (_shouldThrottleNavigation(routeName)) return Future.value(null);
-
-    // Check if we're already at this route
-    if (_currentRoute == routeName) {
-      developer.log('Navigation redundant: Already at $routeName',
-          name: 'NavigationService');
-      return Future.value(null);
-    }
-
-    _isNavigating = true;
-    return navigator!
-        .pushNamedAndRemoveUntil(
-      routeName,
-      (route) => route.isFirst,
-      arguments: arguments,
-    )
-        .then((value) {
-      _isNavigating = false;
-      return value as T?;
-    }).catchError((e) {
-      _isNavigating = false;
       developer.log('Navigation error: $e', name: 'NavigationService');
       return null;
-    });
+    } finally {
+      _updateNavigationTime();
+    }
   }
-
-  // Go back to previous screen
+  
+  // Replace until home
+  Future<T?> replaceUntilHome<T>(String routeName, {Object? arguments}) async {
+    if (_shouldThrottle()) {
+      developer.log('Navigation throttled for $routeName', name: 'NavigationService');
+      return null;
+    }
+    
+    developer.log('Replacing routes until home with $routeName', name: 'NavigationService');
+    
+    try {
+      return await navigator?.pushNamedAndRemoveUntil(
+        routeName,
+        (route) => route.isFirst,
+        arguments: arguments,
+      ) as T?;
+    } catch (e) {
+      developer.log('Navigation error: $e', name: 'NavigationService');
+      return null;
+    } finally {
+      _updateNavigationTime();
+    }
+  }
+  
+  // Go back (pop) - simplified and robust
   void goBack<T>([T? result]) {
-    if (_shouldThrottleNavigation()) return;
-
-    _isNavigating = true;
+    developer.log('Going back', name: 'NavigationService');
+    
     try {
-      navigator!.pop(result);
-    } finally {
-      _isNavigating = false;
+      // Direct navigation without flags
+      navigator?.pop(result);
+      developer.log('Back navigation executed', name: 'NavigationService');
+    } catch (e) {
+      developer.log('Back navigation error: $e', name: 'NavigationService');
     }
   }
-
-  // Go back to the home screen
+  
+  // Pop until home
   void popUntilHome() {
-    if (_shouldThrottleNavigation()) return;
-
-    _isNavigating = true;
+    developer.log('Popping until home', name: 'NavigationService');
+    
     try {
-      navigator!.popUntil((route) => route.isFirst);
-    } finally {
-      _isNavigating = false;
+      navigator?.popUntil((route) => route.isFirst);
+    } catch (e) {
+      developer.log('Pop until home error: $e', name: 'NavigationService');
     }
+  }
+  
+  // Helper methods
+  
+  // Simple throttling check - prevent navigation faster than 300ms
+  bool _shouldThrottle() {
+    if (_lastNavigationTime == null) return false;
+    
+    final now = DateTime.now();
+    final diff = now.difference(_lastNavigationTime!);
+    return diff.inMilliseconds < 300;
+  }
+  
+  // Update navigation time
+  void _updateNavigationTime() {
+    _lastNavigationTime = DateTime.now();
+  }
+  
+  // Reset all internal state - can be used as emergency fix
+  void reset() {
+    developer.log('Navigation service reset', name: 'NavigationService');
+    _lastNavigationTime = null;
+    // We keep _currentRoute as it may be needed
   }
 }

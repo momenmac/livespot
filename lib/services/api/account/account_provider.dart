@@ -95,6 +95,17 @@ class AccountProvider extends ChangeNotifier {
     _debouncedNotify();
   }
 
+  // Method to immediately reset auth state transition
+  // This is useful for cancel/back operations that need to bypass transition delays
+  void resetAuthTransition() {
+    _inAuthStateTransition = false;
+    _isLoading = false;
+    _debouncedNotify();
+    
+    developer.log('Auth transition state forcefully reset',
+        name: 'AccountProvider');
+  }
+
   // Wrapper to manage auth transitions safely
   Future<T> withAuthTransition<T>(Future<T> Function() operation) async {
     if (_inAuthStateTransition) {

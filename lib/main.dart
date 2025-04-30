@@ -514,7 +514,7 @@ class _MyAppState extends State<MyApp> {
       developer.log(
           'Forcing logout navigation to $routeName - resetting navigation flags',
           name: 'AuthNavigateDebug');
-      NavigationService().resetNavigationThrottling();
+      NavigationService().reset();
     }
 
     // Set navigating flag to prevent concurrent navigation

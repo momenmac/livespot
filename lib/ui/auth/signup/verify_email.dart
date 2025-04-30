@@ -188,8 +188,11 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     return [
       TextButton(
         onPressed: () {
-          Navigator.of(context).pop();
-          Navigator.of(context).pop();
+          // Reset auth transition state before navigating back
+          Provider.of<AccountProvider>(context, listen: false)
+              .resetAuthTransition();
+          Navigator.of(context).pop(); // Close dialog
+          Navigator.of(context).pop(); // Go back from verify screen
         },
         child: const Text(TextStrings.goBack),
       ),
@@ -458,8 +461,12 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
                                 const SizedBox(height: 37),
                                 Center(
                                   child: TextButton(
-                                    onPressed: () =>
-                                        NavigationService().goBack(),
+                                    onPressed: () {
+                                      // Reset auth transition state before navigation
+                                      Provider.of<AccountProvider>(context, listen: false)
+                                          .resetAuthTransition();
+                                      NavigationService().goBack();
+                                    },
                                     child: Text(TextStrings.cancel),
                                   ),
                                 ),
