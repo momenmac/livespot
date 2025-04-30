@@ -147,7 +147,7 @@ class CreateAccountScreenState extends State<CreateAccountScreen>
             message: TextStrings.accountCreatedSuccessfully,
           );
 
-          // Move to the next screen
+          // Move to the next screen (always verify email after registration)
           NavigationService().navigateTo(
             AppRoutes.verifyEmail,
             arguments: {

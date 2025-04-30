@@ -26,6 +26,12 @@ class AccountProvider extends ChangeNotifier {
   bool get isUserVerified => _sessionManager.isUserVerified;
   bool get shouldRefreshToken => _sessionManager.shouldRefreshToken;
 
+  // Add this getter for compatibility with main.dart navigation logic
+  bool get isEmailVerified {
+    // Adjust the property name if your Account model uses a different field
+    return currentUser?.isEmailVerified ?? false;
+  }
+
   final AuthService _authService = AuthService();
 
   // Constructor that listens for session state changes
@@ -63,8 +69,14 @@ class AccountProvider extends ChangeNotifier {
           final token = JwtToken.fromJson(result['tokens']);
 
           // Save preferences
-          await SharedPrefs.saveJwtToken(token);
-          await SharedPrefs.setRememberMe(rememberMe);
+          if (rememberMe) {
+            await SharedPrefs.saveJwtToken(token);
+            await SharedPrefs.setRememberMe(true);
+          } else {
+            // Don't persist token, but clear any previous token from disk
+            await SharedPrefs.clearJwtToken();
+            await SharedPrefs.setRememberMe(false);
+          }
           await SharedPrefs.setLastUsedEmail(email);
           await SharedPrefs.setLastLoginTime();
           await SharedPrefs.setLastActivity();
@@ -375,20 +387,28 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _authorizedApiCall(
-          (token) => _authService.verifyEmail(token, code));
-
-      if (result['success']) {
-        if (result['user'] != null) {
-          _sessionManager.setUser(result['user'] as Account);
-        } else {
-          await _fetchUserProfile();
-        }
+      final url = Uri.parse(ApiUrls.verifyEmail);
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${token?.accessToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'code': code}),
+      );
+      print('🌐 POST request to: $url');
+      print('🌐 Request body: {"code": "$code"}');
+      print('🌐 Response status: ${response.statusCode}');
+      print('🌐 Response body: ${response.body}');
+      if (response.statusCode == 200) {
+        // Optionally update user state here
+        await _fetchUserProfile();
         return true;
       } else {
         return false;
       }
     } catch (e) {
+      print('Verify email error: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -402,15 +422,25 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _authorizedApiCall(
-          (token) => _authService.resendVerificationCode(token));
-
-      if (result['success']) {
+      final url = Uri.parse(ApiUrls
+          .resendVerificationCode); // Should be /accounts/resend-verification-code/
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${token?.accessToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+      print('🌐 POST request to: $url');
+      print('🌐 Response status: ${response.statusCode}');
+      print('🌐 Response body: ${response.body}');
+      if (response.statusCode == 200) {
         return true;
       } else {
         return false;
       }
     } catch (e) {
+      print('Resend verification code error: $e');
       return false;
     } finally {
       _isLoading = false;

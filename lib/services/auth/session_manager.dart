@@ -47,6 +47,9 @@ class SessionManager {
       _token!.isAccessTokenExpired &&
       !_token!.isRefreshTokenExpired;
 
+  // Add this getter for compatibility with route_guard.dart
+  bool get isEmailVerified => _user?.isEmailVerified ?? false;
+
   // Factory constructor to return the singleton instance
   factory SessionManager() {
     return _instance;

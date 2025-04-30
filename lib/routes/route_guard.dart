@@ -5,6 +5,7 @@ import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();
+
 /// Route Guard to protect routes based on authentication status
 class RouteGuard {
   static final List<String> _protectedRoutes = [
@@ -81,6 +82,7 @@ class RouteGuard {
     Future.microtask(() async {
       final bool isAuthenticated = await RouteGuard.isAuthenticated();
       final NavigationService nav = NavigationService();
+      final sessionManager = SessionManager();
 
       if (isPublicRoute(routeName)) {
         return;
@@ -111,6 +113,16 @@ class RouteGuard {
         print(
             '🔒 Authenticated user trying to access $routeName, redirecting to home');
         nav.replaceTo(AppRoutes.home);
+      } else if (isAuthenticated) {
+        // NEW: Check email verification status
+        if (sessionManager.isEmailVerified) {
+          nav.replaceTo(AppRoutes.home);
+        } else {
+          // Only redirect if not already on /verify-email
+          if (nav.currentRoute != AppRoutes.verifyEmail) {
+            nav.replaceTo(AppRoutes.verifyEmail);
+          }
+        }
       }
     });
   }

@@ -45,6 +45,9 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   final GlobalKey<VerificationCodeFieldState> _verificationKey = GlobalKey();
   bool _isVerifying = false;
 
+  String? _effectiveEmail;
+  bool _hasSentInitialCode = false;
+
   void _startResendTimer() {
     setState(() {
       _isResendEnabled = false;
@@ -80,15 +83,15 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
         });
         _startResendTimer();
 
-        ResponsiveSnackBar.showSuccess(
+        ResponsiveSnackBar.showInfo(
           context: context,
-          message: TextStrings.verificationCodeResent,
+          message: "Verification code resent! Please check your email.",
         );
       } else {
         ResponsiveSnackBar.showError(
           context: context,
-          message:
-              accountProvider.error ?? "Failed to resend verification code",
+          message: accountProvider.error ??
+              "Failed to resend verification code. Please try again later.",
         );
         setState(() {
           _isResendEnabled = true;
@@ -98,7 +101,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       print('🔄 Resend code error: $e');
       ResponsiveSnackBar.showError(
         context: context,
-        message: "Error: ${e.toString()}",
+        message: "Error sending code: ${e.toString()}",
       );
       setState(() {
         _isResendEnabled = true;
@@ -112,7 +115,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     if (_attemptCount >= _maxAttempts) {
       ResponsiveSnackBar.showError(
         context: context,
-        message: TextStrings.tooManyAttempts,
+        message: "Too many attempts. Please request a new code.",
       );
       return;
     }
@@ -134,7 +137,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       if (result) {
         ResponsiveSnackBar.showSuccess(
           context: context,
-          message: TextStrings.verificationSuccessful,
+          message: "Your email has been verified! You can now log in.",
         );
         NavigationService().replaceAllWith(AppRoutes.login);
       } else {
@@ -146,8 +149,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           ResponsiveSnackBar.showError(
             context: context,
             message: accountProvider.error ??
-                TextStrings.invalidCode
-                    .replaceAll('%d', '${_maxAttempts - _attemptCount}'),
+                "Invalid code. You have ${_maxAttempts - _attemptCount} attempts left.",
           );
         }
       }
@@ -155,7 +157,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       print('✉️ Verification error: $e');
       ResponsiveSnackBar.showError(
         context: context,
-        message: "Error: ${e.toString()}",
+        message: "Verification failed: ${e.toString()}",
       );
     } finally {
       setState(() {
@@ -205,18 +207,22 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   }
 
   void _checkEmailAndRedirectIfInvalid() {
-    // Prevent direct access to verification screen without a valid email
-    if (widget.email == null || widget.email!.isEmpty) {
-      print('⚠️ Attempted to access verification screen without valid email');
+    // Try to get email from widget or provider
+    String? email = widget.email;
+    if (email == null || email.isEmpty) {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+      email = accountProvider.currentUser?.email;
+    }
+    _effectiveEmail = email;
 
-      // Use a microtask to avoid build errors during initState
+    if (_effectiveEmail == null || _effectiveEmail!.isEmpty) {
+      print('⚠️ Attempted to access verification screen without valid email');
       Future.microtask(() {
         ResponsiveSnackBar.showError(
           context: context,
           message: "Email verification requires registration first",
         );
-
-        // Navigate back to login screen
         NavigationService().replaceAllWith(AppRoutes.login);
       });
     }
@@ -232,17 +238,44 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
 
-    // Check if the user is already verified
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkVerificationStatus();
+      // Only send code if not verified and not already sent
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+      if (!accountProvider.isUserVerified && !_hasSentInitialCode) {
+        if ((widget.email != null && widget.email!.isNotEmpty) ||
+            (_effectiveEmail != null && _effectiveEmail!.isNotEmpty)) {
+          _startResendTimer();
+          _sendInitialVerificationCode();
+        }
+      }
     });
 
-    // Security check to prevent direct access without email
     _checkEmailAndRedirectIfInvalid();
+  }
 
-    // Only start timer if we have a valid email
-    if (widget.email != null && widget.email!.isNotEmpty) {
-      _startResendTimer();
+  void _sendInitialVerificationCode() async {
+    if (_hasSentInitialCode) return;
+    _hasSentInitialCode = true;
+
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    final result = await accountProvider.resendVerificationCode();
+    if (!mounted) return; // Prevent setState or snackbar if unmounted
+
+    if (result) {
+      ResponsiveSnackBar.showSuccess(
+        context: context,
+        message: "Verification code sent! Please check your email.",
+      );
+    } else {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: accountProvider.error ??
+            "Failed to send verification code. Please try again.",
+      );
     }
   }
 
@@ -277,9 +310,12 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Use _effectiveEmail for display and logic
+    final emailToShow = _effectiveEmail ?? widget.email;
+
     // Return a loading indicator if email is invalid
     // The _checkEmailAndRedirectIfInvalid method will handle the redirection
-    if (widget.email == null || widget.email!.isEmpty) {
+    if (emailToShow == null || emailToShow.isEmpty) {
       return Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -382,11 +418,11 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
                                   style: Theme.of(context).textTheme.bodyLarge,
                                   textAlign: TextAlign.center,
                                 ),
-                                if (widget.email != null)
+                                if (emailToShow != null)
                                   Text(
                                     widget.censorEmail
-                                        ? censorEmail(widget.email!)
-                                        : widget.email!,
+                                        ? censorEmail(emailToShow)
+                                        : emailToShow,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyLarge

@@ -35,10 +35,6 @@ class ApiUrls {
   static String get profileImage => '$baseUrl/accounts/profile-image/';
   static String get updateProfile => '$baseUrl/accounts/update-profile/';
 
-  // Remove CSRF-related endpoints
-  // static String get csrfToken => '$baseUrl/accounts/csrf-token/';
-  // static String get getCsrfToken => '$baseUrl/get-csrf-token/';
-
   // Email verification URLs
   static String get verifyEmail => '$baseUrl/accounts/verify-email/';
   static String get resendVerificationCode =>

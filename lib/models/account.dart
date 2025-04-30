@@ -30,6 +30,9 @@ class Account {
 
   String get fullName => '$firstName $lastName';
 
+  // Add this getter for compatibility with AccountProvider
+  bool get isEmailVerified => isVerified;
+
   factory Account.fromJson(Map<String, dynamic> json) {
     String? profilePictureUrl = json['profile_picture_url'];
 

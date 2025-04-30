@@ -280,6 +280,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _initialAuthCheckComplete = false;
   final bool _hasSetLoadingTimeout = false;
+  bool _navigatingToVerifyEmail = false;
 
   @override
   void initState() {
@@ -321,14 +322,10 @@ class _MyAppState extends State<MyApp> {
 
     final isAuthenticated = widget.accountProvider.isAuthenticated;
     final isLoading = widget.accountProvider.isLoading;
-    // Get route reliably from NavigationService (which now uses the observer)
+    // Add email verification check if available
+    final isEmailVerified = widget.accountProvider.isEmailVerified ??
+        true; // fallback to true if not available
     final currentRoute = NavigationService().currentRoute;
-
-    // Flags based on the reliable currentRoute
-    final isAtHome = currentRoute == AppRoutes.home;
-    final isAtInitial = currentRoute == AppRoutes.initial ||
-        currentRoute == null ||
-        currentRoute == '/'; // Keep '/' check for initial load
 
     // --- DETAILED DEBUGGING START ---
     developer.log(
@@ -348,6 +345,10 @@ class _MyAppState extends State<MyApp> {
       name: 'AuthListenerDebug',
     );
     developer.log(
+      '    isEmailVerified: $isEmailVerified',
+      name: 'AuthListenerDebug',
+    );
+    developer.log(
       '    _initialAuthCheckComplete: $_initialAuthCheckComplete',
       name: 'AuthListenerDebug',
     );
@@ -357,14 +358,6 @@ class _MyAppState extends State<MyApp> {
     );
     developer.log(
       '    Current Route: "$currentRoute"',
-      name: 'AuthListenerDebug',
-    );
-    developer.log(
-      '    Is At Home Route Flag (isAtHome): $isAtHome (compares "$currentRoute" == "${AppRoutes.home}")',
-      name: 'AuthListenerDebug',
-    );
-    developer.log(
-      '    Is At Initial Route Flag (isAtInitial): $isAtInitial (compares "$currentRoute" == "${AppRoutes.initial}" or null or "/")',
       name: 'AuthListenerDebug',
     );
     developer.log(
@@ -379,7 +372,7 @@ class _MyAppState extends State<MyApp> {
 
     // Add more detailed logging about loading state
     developer.log(
-        '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, initialCheckComplete=$_initialAuthCheckComplete',
+        '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, isEmailVerified=$isEmailVerified, initialCheckComplete=$_initialAuthCheckComplete',
         name: 'AuthListener');
 
     // --- NEW: Warn if backend is unreachable but Google sign-in is cached ---
@@ -399,7 +392,7 @@ class _MyAppState extends State<MyApp> {
     // -----------------------------------------------------------------------
 
     if (!isLoading) {
-      _processAuthState(isAuthenticated, isAtHome, isAtInitial);
+      _processAuthState(isAuthenticated, isEmailVerified, currentRoute);
     } else {
       developer.log(
           '⏳ Auth state changed while loading. Waiting for loading to finish.',
@@ -408,20 +401,30 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _processAuthState(
-      bool isAuthenticated, bool isAtHome, bool isAtInitial) {
-    final currentRoute = NavigationService().currentRoute;
+      bool isAuthenticated, bool isEmailVerified, String? currentRoute) {
+    final isAtHome = currentRoute == AppRoutes.home;
+    final isAtInitial = currentRoute == AppRoutes.initial ||
+        currentRoute == null ||
+        currentRoute == '/';
+
+    final isAtAuthRoute = [
+      AppRoutes.login,
+      AppRoutes.createAccount,
+      AppRoutes.forgotPassword,
+      AppRoutes.resetPassword,
+    ].contains(currentRoute);
+
     if (!_initialAuthCheckComplete) {
       _initialAuthCheckComplete = true;
       developer.log(
-          '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated',
+          '🏁 Initial auth check complete. Final state: isAuthenticated=$isAuthenticated, isEmailVerified=$isEmailVerified',
           name: 'AuthListener');
 
-      if (isAuthenticated && !isAtHome) {
+      if (isAuthenticated && isEmailVerified && !isAtHome) {
         _navigateTo(AppRoutes.home);
-      } else if (!isAuthenticated &&
-          (!isAtInitial || currentRoute != AppRoutes.initial)) {
+      } else if (!isAuthenticated && (!isAtInitial && !isAtAuthRoute)) {
         developer.log(
-            'User is unauthenticated and not at initial route (or currentRoute is null/not initial). Forcing navigation to initial.',
+            'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
         _navigateTo(AppRoutes.initial);
       }
@@ -429,16 +432,34 @@ class _MyAppState extends State<MyApp> {
       developer.log('👤 Auth state changed after initialization.',
           name: 'AuthListener');
 
-      if (isAuthenticated && !isAtHome) {
+      if (isAuthenticated && isEmailVerified && !isAtHome) {
         _navigateTo(AppRoutes.home);
-      } else if (!isAuthenticated &&
-          (!isAtInitial || currentRoute != AppRoutes.initial)) {
+      } else if (!isAuthenticated && (!isAtInitial && !isAtAuthRoute)) {
         developer.log(
-            'User is unauthenticated and not at initial route (or currentRoute is null/not initial). Forcing navigation to initial.',
+            'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
         _navigateTo(AppRoutes.initial);
       }
     }
+  }
+
+  void _navigateToVerifyEmail(String? email) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && NavigationService().navigatorKey.currentState != null) {
+        NavigationService().navigatorKey.currentState!.pushNamedAndRemoveUntil(
+          AppRoutes.verifyEmail,
+          (route) => false,
+          arguments: {
+            if (email != null) 'email': email,
+            // Add other arguments if needed
+          },
+        );
+        // Reset the flag after navigation completes
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _navigatingToVerifyEmail = false;
+        });
+      }
+    });
   }
 
   void _navigateTo(String routeName) {
