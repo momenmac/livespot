@@ -18,6 +18,9 @@ class MapPageController extends ChangeNotifier {
   // Add a Completer to track map readiness
   final Completer<void> _mapReadyCompleter = Completer<void>();
 
+  // Add flag to track disposed state
+  bool _isDisposed = false;
+
   BuildContext? _context;
 
   LatLng? currentLocation;
@@ -46,8 +49,19 @@ class MapPageController extends ChangeNotifier {
 
   // Helper to move the map only when the controller is ready
   Future<void> _moveMapWhenReady(LatLng target, double zoom) async {
-    await _mapReadyCompleter.future;
-    mapController.move(target, zoom);
+    if (_isDisposed) return; // Safety check
+    try {
+      await _mapReadyCompleter.future;
+      if (!_isDisposed) {
+        try {
+          mapController.move(target, zoom);
+        } catch (e) {
+          print('Error moving map: $e');
+        }
+      }
+    } catch (e) {
+      print('Error waiting for map ready: $e');
+    }
   }
 
   // Set context for error messages
@@ -57,14 +71,29 @@ class MapPageController extends ChangeNotifier {
 
   @override
   void dispose() {
-    super.dispose();
+    _isDisposed = true;
     positionStreamSubscription?.cancel();
     debounce?.cancel();
-    mapController.dispose();
+    try {
+      mapController.dispose();
+    } catch (e) {
+      // Ignore errors during disposal
+      print('Ignoring error during map controller disposal: $e');
+    }
     locationController.dispose();
+    super.dispose();
+  }
+
+  // Safe version of notifyListeners that checks for disposed state
+  void _safeNotifyListeners() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   Future<void> initializeLocation() async {
+    if (_isDisposed) return; // Safety check
+
     try {
       bool hasPermission = await _checkPermissions();
       if (!hasPermission) {
@@ -78,10 +107,12 @@ class MapPageController extends ChangeNotifier {
         // Use helper to move map when ready
         _moveMapWhenReady(currentLocation!, 10);
         hasInitializedLocation = true;
-        notifyListeners();
+        _safeNotifyListeners();
       }
 
       // Start position stream
+      positionStreamSubscription
+          ?.cancel(); // Cancel existing subscription if any
       positionStreamSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -89,9 +120,11 @@ class MapPageController extends ChangeNotifier {
         ),
       ).listen(
         (Position position) {
+          if (_isDisposed) return; // Safety check
+
           final newLocation = LatLng(position.latitude, position.longitude);
           currentLocation = newLocation;
-          notifyListeners();
+          _safeNotifyListeners();
 
           if (!hasInitializedLocation) {
             _moveMapWhenReady(newLocation, 10);
@@ -99,11 +132,15 @@ class MapPageController extends ChangeNotifier {
           }
         },
         onError: (error) {
-          showErrorMessage('Error getting location: $error');
+          if (!_isDisposed) {
+            showErrorMessage('Error getting location: $error');
+          }
         },
       );
     } catch (e) {
-      showErrorMessage('${TextStrings.failedToInitializeLocationServices}$e');
+      if (!_isDisposed) {
+        showErrorMessage('${TextStrings.failedToInitializeLocationServices}$e');
+      }
     }
   }
 
@@ -140,6 +177,8 @@ class MapPageController extends ChangeNotifier {
   }
 
   Future<void> centerOnUserLocation() async {
+    if (_isDisposed) return; // Safety check
+
     try {
       if (currentLocation != null) {
         await _moveMapWhenReady(currentLocation!, 12.0);
@@ -149,19 +188,25 @@ class MapPageController extends ChangeNotifier {
         final newLocation = LatLng(position.latitude, position.longitude);
         currentLocation = newLocation;
         await _moveMapWhenReady(newLocation, 15.0);
-        notifyListeners();
+        _safeNotifyListeners();
       }
     } catch (e) {
-      showErrorMessage(TextStrings.unableToGetCurrentLocation);
+      if (!_isDisposed) {
+        showErrorMessage(TextStrings.unableToGetCurrentLocation);
+      }
     }
   }
 
   Future<void> fetchCoordinatesPoints(String location) async {
+    if (_isDisposed) return; // Safety check
+
     final url = Uri.parse(
         'https://nominatim.openstreetmap.org/search?q=$location&format=json&limit=1');
 
     try {
       final response = await http.get(url);
+
+      if (_isDisposed) return; // Check again after async operation
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -176,13 +221,13 @@ class MapPageController extends ChangeNotifier {
           if (!showRoute) {
             route = [];
           }
-          notifyListeners();
+          _safeNotifyListeners();
 
           // Move to the location immediately
           await _moveMapWhenReady(newLocation, 13.0);
 
           // Only fetch route if route mode is enabled
-          if (showRoute) {
+          if (showRoute && !_isDisposed) {
             await fetchRoute();
           }
         } else {
@@ -192,11 +237,14 @@ class MapPageController extends ChangeNotifier {
         showErrorMessage(TextStrings.failedToFetchLocation);
       }
     } catch (e) {
-      showErrorMessage('Error fetching location: $e');
+      if (!_isDisposed) {
+        showErrorMessage('Error fetching location: $e');
+      }
     }
   }
 
   Future<void> fetchRoute() async {
+    if (_isDisposed) return; // Safety check
     if (currentLocation == null || destination == null) return;
 
     final url = Uri.parse("http://router.project-osrm.org/route/v1/driving/"
@@ -206,29 +254,39 @@ class MapPageController extends ChangeNotifier {
     try {
       final response = await http.get(url);
 
+      if (_isDisposed) return; // Check again after async operation
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final geometry = data['routes'][0]['geometry'];
         _decodePolyline(geometry);
-        notifyListeners();
+        _safeNotifyListeners();
 
         // After route is decoded, fit bounds to show entire route
-        if (route.isNotEmpty) {
+        if (route.isNotEmpty && !_isDisposed) {
           final bounds = LatLngBounds.fromPoints(route);
           await _mapReadyCompleter.future;
-          mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(50.0),
-              maxZoom: 7,
-            ),
-          );
+          if (!_isDisposed) {
+            try {
+              mapController.fitCamera(
+                CameraFit.bounds(
+                  bounds: bounds,
+                  padding: const EdgeInsets.all(50.0),
+                  maxZoom: 7,
+                ),
+              );
+            } catch (e) {
+              print('Error fitting camera bounds: $e');
+            }
+          }
         }
       } else {
         showErrorMessage(TextStrings.failedToFetchRoute);
       }
     } catch (e) {
-      showErrorMessage('Error fetching route: $e');
+      if (!_isDisposed) {
+        showErrorMessage('Error fetching route: $e');
+      }
     }
   }
 
@@ -243,6 +301,7 @@ class MapPageController extends ChangeNotifier {
   }
 
   void showErrorMessage(String message) {
+    if (_isDisposed) return; // Safety check
     if (_context == null) {
       print("Error: $message"); // Fallback when context is not available
       return;
@@ -255,7 +314,7 @@ class MapPageController extends ChangeNotifier {
   }
 
   void showInfoMessage(String message) {
-    if (_context == null) return;
+    if (_isDisposed || _context == null) return; // Safety check
 
     ResponsiveSnackBar.showInfo(
       context: _context!,
@@ -264,7 +323,7 @@ class MapPageController extends ChangeNotifier {
   }
 
   void showSuccessMessage(String message) {
-    if (_context == null) return;
+    if (_isDisposed || _context == null) return; // Safety check
 
     ResponsiveSnackBar.showSuccess(
       context: _context!,
@@ -273,6 +332,8 @@ class MapPageController extends ChangeNotifier {
   }
 
   void onSearch() {
+    if (_isDisposed) return; // Safety check
+
     final location = locationController.text.trim();
     if (location.isNotEmpty) {
       fetchCoordinatesPoints(location);
@@ -280,23 +341,39 @@ class MapPageController extends ChangeNotifier {
   }
 
   Future<void> zoomIn() async {
-    final currentCenter = mapController.camera.center;
-    final currentZoom = mapController.camera.zoom;
-    await _moveMapWhenReady(currentCenter, currentZoom + 1);
+    if (_isDisposed) return; // Safety check
+
+    try {
+      final currentCenter = mapController.camera.center;
+      final currentZoom = mapController.camera.zoom;
+      await _moveMapWhenReady(currentCenter, currentZoom + 1);
+    } catch (e) {
+      print('Error zooming in: $e');
+    }
   }
 
   Future<void> zoomOut() async {
-    final currentCenter = mapController.camera.center;
-    final currentZoom = mapController.camera.zoom;
-    await _moveMapWhenReady(currentCenter, currentZoom - 1);
+    if (_isDisposed) return; // Safety check
+
+    try {
+      final currentCenter = mapController.camera.center;
+      final currentZoom = mapController.camera.zoom;
+      await _moveMapWhenReady(currentCenter, currentZoom - 1);
+    } catch (e) {
+      print('Error zooming out: $e');
+    }
   }
 
   void toggleMarkersAndRoute() {
+    if (_isDisposed) return; // Safety check
+
     showMarkersAndRoute = !showMarkersAndRoute;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void toggleRoute() {
+    if (_isDisposed) return; // Safety check
+
     showRoute = !showRoute;
     if (!showRoute) {
       // Clear the route when disabling route mode
@@ -305,14 +382,16 @@ class MapPageController extends ChangeNotifier {
       // Only fetch route if destination exists and route mode is enabled
       fetchRoute();
     }
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   Future<void> fetchSuggestions(String query) async {
+    if (_isDisposed) return; // Safety check
+
     if (query.isEmpty) {
       searchSuggestions = [];
       showSuggestions = false;
-      notifyListeners();
+      _safeNotifyListeners();
       return;
     }
 
@@ -321,12 +400,15 @@ class MapPageController extends ChangeNotifier {
 
     try {
       final response = await http.get(url);
+
+      if (_isDisposed) return; // Check again after async operation
+
       if (response.statusCode == 200) {
         final List data = json.decode(response.body);
         searchSuggestions =
             data.map((place) => place['display_name'].toString()).toList();
         showSuggestions = searchSuggestions.isNotEmpty;
-        notifyListeners();
+        _safeNotifyListeners();
       }
     } catch (e) {
       print('Error fetching suggestions: $e');
@@ -334,16 +416,20 @@ class MapPageController extends ChangeNotifier {
   }
 
   void onSuggestionSelected(String suggestion) {
+    if (_isDisposed) return; // Safety check
+
     locationController.text = suggestion;
     showSuggestions = false;
-    notifyListeners();
+    _safeNotifyListeners();
     fetchCoordinatesPoints(suggestion);
   }
 
   void handleCategorySelected(List<CategoryItem> selectedCategories) {
+    if (_isDisposed) return; // Safety check
+
     // TODO: Filter map markers based on selected categories
     // This would update the map based on category selection
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   String formatDate(DateTime date) {
@@ -351,10 +437,12 @@ class MapPageController extends ChangeNotifier {
   }
 
   void handleDateChanged(DateTime newDate) {
+    if (_isDisposed) return; // Safety check
+
     selectedDate = newDate;
     // TODO: Update map data based on the selected date
     showInfoMessage(
         TextStrings.showingDataForDate.replaceFirst('%s', formatDate(newDate)));
-    notifyListeners();
+    _safeNotifyListeners();
   }
 }

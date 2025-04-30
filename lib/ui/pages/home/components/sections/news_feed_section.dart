@@ -26,7 +26,7 @@ class NewsFeedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    // TODO: Implement dark mode support for news feed section
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,8 +204,8 @@ class NewsFeedSection extends StatelessWidget {
         ? Colors.black.withOpacity(0.15)
         : Colors.black.withOpacity(0.06);
 
-    // Text colors for overlay
-    final overlayTextColor = Colors.white;
+    // Removed unused overlayTextColor variable
+    // TODO: Consider adding text overlay with better accessibility
 
     return InkWell(
       // Fix: Remove context parameter from onTap callback

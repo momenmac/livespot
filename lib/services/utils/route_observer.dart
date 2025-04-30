@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
+import 'package:flutter_application_2/services/utils/navigation_service.dart';
 
 class AppRouteObserver extends NavigatorObserver {
   static String? _currentRouteName;
@@ -70,11 +71,15 @@ class AppRouteObserver extends NavigatorObserver {
       } else {
         _currentRouteName = route.settings.name;
       }
+      // Keep NavigationService in sync
+      NavigationService().setCurrentRoute(_currentRouteName!);
     } else if (route == null) {
       // Handle cases where the stack might be empty after removal/pop
       _currentRouteName = null;
       developer.log('NAV OBSERVER: Route became null (stack likely empty?)',
           name: 'RouteObserver');
+      // Also clear NavigationService route
+      NavigationService().setCurrentRoute('/');
     } else {
       // Optional: Log if a route without a name is encountered after the initial one
       // developer.log('NAV OBSERVER: Encountered route without a name: ${route.runtimeType}', name: 'RouteObserver');

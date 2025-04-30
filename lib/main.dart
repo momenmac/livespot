@@ -279,8 +279,8 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _initialAuthCheckComplete = false;
-  final bool _hasSetLoadingTimeout = false;
-  bool _navigatingToVerifyEmail = false;
+  bool _isNavigating = false;
+  String? _lastNavigatedRoute; // Track last navigated route
 
   @override
   void initState() {
@@ -323,8 +323,7 @@ class _MyAppState extends State<MyApp> {
     final isAuthenticated = widget.accountProvider.isAuthenticated;
     final isLoading = widget.accountProvider.isLoading;
     // Add email verification check if available
-    final isEmailVerified = widget.accountProvider.isEmailVerified ??
-        true; // fallback to true if not available
+    final isEmailVerified = widget.accountProvider.isEmailVerified;
     final currentRoute = NavigationService().currentRoute;
 
     // --- DETAILED DEBUGGING START ---
@@ -391,6 +390,19 @@ class _MyAppState extends State<MyApp> {
     }
     // -----------------------------------------------------------------------
 
+    // Check if we're in a transition (but still allow logout transitions)
+    if (widget.accountProvider.inAuthStateTransition) {
+      // If the transition is not related to logging out, skip this update
+      if (isAuthenticated || isLoading) {
+        developer.log('Auth state change ignored: already in transition',
+            name: 'AuthListenerDebug');
+        return;
+      } else {
+        developer.log('Allowing logout transition to proceed despite flag',
+            name: 'AuthListenerDebug');
+      }
+    }
+
     if (!isLoading) {
       _processAuthState(isAuthenticated, isEmailVerified, currentRoute);
     } else {
@@ -413,6 +425,13 @@ class _MyAppState extends State<MyApp> {
       AppRoutes.forgotPassword,
       AppRoutes.resetPassword,
     ].contains(currentRoute);
+
+    // Special handling for authenticated user trying to access initial route
+    if (isAuthenticated && isEmailVerified && isAtInitial) {
+      print('🔒 Authenticated user trying to access /, redirecting to home');
+      _navigateTo(AppRoutes.home);
+      return;
+    }
 
     if (!_initialAuthCheckComplete) {
       _initialAuthCheckComplete = true;
@@ -443,68 +462,98 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  void _navigateToVerifyEmail(String? email) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && NavigationService().navigatorKey.currentState != null) {
-        NavigationService().navigatorKey.currentState!.pushNamedAndRemoveUntil(
-          AppRoutes.verifyEmail,
-          (route) => false,
-          arguments: {
-            if (email != null) 'email': email,
-            // Add other arguments if needed
-          },
-        );
-        // Reset the flag after navigation completes
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _navigatingToVerifyEmail = false;
-        });
-      }
-    });
-  }
-
   void _navigateTo(String routeName) {
     final currentRoute = NavigationService().currentRoute;
     developer.log(
         'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}, currentRoute=$currentRoute',
         name: 'AuthNavigateDebug');
 
-    // For logout (navigating to initial route), use a more forceful approach
-    if (routeName == AppRoutes.initial && !mounted) {
-      developer.log('Critical navigation to initial route after logout',
+    // Special handling for logout navigation to initial route
+    final isLogoutNavigation = !widget.accountProvider.isAuthenticated &&
+        routeName == AppRoutes.initial &&
+        currentRoute != AppRoutes.initial;
+
+    // Defensive exit conditions to prevent navigation flood
+    // 1. Check if already navigating, but make an exception for logout
+    if (_isNavigating && !isLogoutNavigation) {
+      developer.log('Navigation skipped: already navigating',
           name: 'AuthNavigateDebug');
-      // Force a rebuild of the entire app through navigator key
-      NavigationService()
-          .navigatorKey
-          .currentState
-          ?.pushNamedAndRemoveUntil(AppRoutes.initial, (route) => false);
       return;
     }
 
-    // Prevent duplicate navigation if already at target route, but always navigate if currentRoute is null
-    if (currentRoute == routeName && currentRoute != null) {
+    // 2. Check if already at the target route
+    if (currentRoute == routeName) {
       developer.log('Navigation skipped: already at $routeName',
           name: 'AuthNavigateDebug');
       return;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // 3. Check if just navigated to this route (prevents bouncing)
+    // Exception for logout navigation
+    if (_lastNavigatedRoute == routeName && !isLogoutNavigation) {
+      developer.log('Navigation skipped: just navigated to $routeName',
+          name: 'AuthNavigateDebug');
+      return;
+    }
+
+    // Don't check auth state transition for logout navigation
+    if (widget.accountProvider.inAuthStateTransition && !isLogoutNavigation) {
+      developer.log('Navigation deferred: auth state transition in progress',
+          name: 'AuthNavigateDebug');
+      // Schedule deferred navigation after transition completes
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!_isNavigating && mounted) {
+          _navigateTo(routeName); // Retry after delay
+        }
+      });
+      return;
+    }
+
+    // For logout navigation, reset the navigation service's throttling
+    if (isLogoutNavigation) {
+      developer.log(
+          'Forcing logout navigation to $routeName - resetting navigation flags',
+          name: 'AuthNavigateDebug');
+      NavigationService().resetNavigationThrottling();
+    }
+
+    // Set navigating flag to prevent concurrent navigation
+    _isNavigating = true;
+    _lastNavigatedRoute = routeName;
+
+    // Only set transition flag for non-logout operations
+    if (!isLogoutNavigation) {
+      widget.accountProvider.beginAuthStateTransition();
+    }
+
+    // Execute the navigation with a delay to ensure UI stability
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted && NavigationService().navigatorKey.currentState != null) {
         developer.log(
             '🚀 Executing navigation via pushAndRemoveUntil to: $routeName',
             name: 'AuthListener');
-        // Use pushNamedAndRemoveUntil for more reliable navigation post-logout
-        NavigationService()
-            .navigatorKey
-            .currentState!
-            .pushNamedAndRemoveUntil(routeName, (route) => false);
+        NavigationService().replaceAllWith(routeName).then((_) {
+          _isNavigating = false;
+          if (!isLogoutNavigation) {
+            widget.accountProvider.endAuthStateTransition();
+          }
+        });
       } else if (mounted) {
         developer.log(
             '⚠️ Navigator not ready during scheduled navigation to $routeName.',
             name: 'AuthListener');
+        _isNavigating = false;
+        if (!isLogoutNavigation) {
+          widget.accountProvider.endAuthStateTransition();
+        }
       } else {
         developer.log(
             '⚠️ Widget unmounted before scheduled navigation to $routeName could execute.',
             name: 'AuthListener');
+        _isNavigating = false;
+        if (!isLogoutNavigation) {
+          widget.accountProvider.endAuthStateTransition();
+        }
       }
     });
   }

@@ -29,11 +29,7 @@ class ExternalNewsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-
-    // Use theme.scaffoldBackgroundColor or ThemeConstants.darkBackground based on existence
-    final backgroundColor = isDarkMode
-        ? ThemeConstants.darkBackground
-        : theme.scaffoldBackgroundColor;
+    // TODO: Implement proper dark mode theming for this section
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

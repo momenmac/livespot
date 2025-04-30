@@ -20,7 +20,6 @@ class _NotificationsPageState extends State<NotificationsPage>
   bool _notificationsEnabled = false;
   NotificationFilter _selectedFilter = NotificationFilter.all;
   late AnimationController _animationController;
-  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
 
   // Sample notifications - replace with your actual data source
   final List<NotificationModel> notifications = [
@@ -120,18 +119,11 @@ class _NotificationsPageState extends State<NotificationsPage>
 
     setState(() {
       _showBanner = false;
-      _notificationsEnabled = true; // Fixed: removed extra parenthesis
+      _notificationsEnabled = true;
     });
   }
 
-  Future<void> _resetNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notifications_enabled', false);
-    setState(() {
-      _showBanner = true;
-      _notificationsEnabled = false; // Fixed: removed extra parenthesis
-    });
-  }
+  // TODO: Implement notification reset functionality for settings page
 
   void _hideBanner() {
     setState(() {

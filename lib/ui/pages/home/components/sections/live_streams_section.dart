@@ -17,12 +17,12 @@ class LiveStreamsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = Colors.white;
+    // Removed unused darkBackgroundColor variable
+    // Keeping comment to preserve structure
 
-    // Use theme.scaffoldBackgroundColor or define a dark background color variable
-    final darkBackgroundColor =
-        isDarkMode ? ThemeConstants.darkBackground : Colors.white;
+    // TODO: Implement dark mode support for the live streams section
 
     // Check if there are any live streams - for now, we'll assume there are
     final hasLiveStreams = true;
@@ -56,9 +56,9 @@ class LiveStreamsSection extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     TextStrings.liveStreams,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ],
               ),

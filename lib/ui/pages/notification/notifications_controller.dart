@@ -7,13 +7,8 @@ import 'notification_model.dart';
 // import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NotificationsController extends ChangeNotifier {
-  // TODO: Add Firebase instances
-  // final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  // final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   List<NotificationModel> _notifications = [];
   bool _isPermissionGranted = false;
-  String? _fcmToken;
 
   List<NotificationModel> get notifications => _notifications;
   bool get isPermissionGranted => _isPermissionGranted;
@@ -29,7 +24,7 @@ class NotificationsController extends ChangeNotifier {
     // _isPermissionGranted = settings.authorizationStatus == AuthorizationStatus.authorized;
 
     // Get FCM token
-    // _fcmToken = await _messaging.getToken();
+    // TODO: Implement FCM token handling for push notifications
 
     // Save token to Firestore
     // if (_fcmToken != null) {

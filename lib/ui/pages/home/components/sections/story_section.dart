@@ -455,37 +455,9 @@ class StorySection extends StatelessWidget {
     ],
   };
 
-  // Keep compatibility with existing code
-  static List<Map<String, dynamic>> get _mockStoryData {
-    List<Map<String, dynamic>> allStories = [];
-    _mockStoryDataByUser.forEach((user, stories) {
-      allStories.addAll(stories);
-    });
-    return allStories;
-  }
-
   // Make the mock data accessible to other classes
   static Map<String, List<Map<String, dynamic>>> getUserStories() {
     return _mockStoryDataByUser;
-  }
-
-  void _navigateToStory(BuildContext context, Map<String, dynamic> storyData) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailPage(
-          title: storyData['title'],
-          description: storyData['description'],
-          imageUrl: storyData['imageUrl'],
-          location: storyData['location'],
-          time: storyData['time'],
-          honesty: storyData['honesty'],
-          upvotes: storyData['upvotes'],
-          comments: storyData['comments'],
-          isVerified: storyData['isVerified'],
-        ),
-      ),
-    );
   }
 
   // New method to navigate to StoryViewer for multiple stories

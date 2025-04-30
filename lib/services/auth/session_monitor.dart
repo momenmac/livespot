@@ -19,6 +19,13 @@ class SessionMonitorState extends State<SessionMonitor> {
   @override
   void initState() {
     super.initState();
+
+    print('SessionMonitor: Initializing');
+    print('SessionMonitor: Current widget: ${widget.child}');
+
+    // TODO: Implement session expiration handling
+    // Removed unused _handleSessionStateChange method
+
     _initializeSessionMonitoring();
   }
 
@@ -58,43 +65,17 @@ class SessionMonitorState extends State<SessionMonitor> {
 
     // Check if we have a valid overlay
     try {
-      final overlay = Overlay.of(context, debugRequiredFor: widget);
+      // Removed unused overlay variable
       if (isError) {
         ResponsiveSnackBar.showError(context: context, message: message);
       } else {
         ResponsiveSnackBar.showInfo(context: context, message: message);
       }
-        } catch (e) {
+    } catch (e) {
       print('⚠️ SessionMonitor: Error showing notification: $e');
       // Just print the notification message to console since we can't show UI
       print('📢 Notification (${isError ? 'ERROR' : 'INFO'}): $message');
     }
-  }
-
-  void _handleSessionStateChange(AccountProvider provider) {
-    // Wait for the context to be ready
-    Future.microtask(() {
-      if (!mounted) return;
-
-      final state =
-          provider.isAuthenticated ? 'authenticated' : 'unauthenticated';
-      print('🔒 Session state changed: $state');
-
-      // Only try to show UI notifications if we think it's safe
-      if (WidgetsBinding.instance.isRootWidgetAttached &&
-          context.findRenderObject() != null) {
-        try {
-          if (provider.error != null) {
-            _safelyShowNotification(context, provider.error!, isError: true);
-          } else if (!provider.isAuthenticated && provider.error == null) {
-            _safelyShowNotification(
-                context, 'Session expired, please login again');
-          }
-        } catch (e) {
-          print('⚠️ SessionMonitor: Error handling session state change: $e');
-        }
-      }
-    });
   }
 
   @override

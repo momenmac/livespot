@@ -13,6 +13,7 @@ import 'package:provider/provider.dart'; // Import Provider
 import 'dart:developer' as developer; // Import developer for logging
 import 'package:flutter/services.dart'; // Add this import for clipboard functionality
 import 'package:google_sign_in/google_sign_in.dart'; // Import GoogleSignIn
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart'; // Add import for ResponsiveSnackBar
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -1109,9 +1110,9 @@ class _ProfilePageState extends State<ProfilePage>
         final accountProvider =
             Provider.of<AccountProvider>(pageContext, listen: false);
 
-        // Show a loading indicator
-        ScaffoldMessenger.of(pageContext)
-            .showSnackBar(const SnackBar(content: Text('Logging out...')));
+        // Show a loading indicator using ResponsiveSnackBar instead of standard SnackBar
+        ResponsiveSnackBar.showInfo(
+            context: pageContext, message: 'Logging out...');
 
         developer.log('Calling accountProvider.logout()...',
             name: 'LogoutTrace');
@@ -1124,12 +1125,10 @@ class _ProfilePageState extends State<ProfilePage>
 
         // Navigation will be handled by the Auth listener in main.dart
       } catch (e, stackTrace) {
-        // Show error if logout fails
-        ScaffoldMessenger.of(pageContext).showSnackBar(
-          SnackBar(
-            content: Text('Logout failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        // Show error if logout fails using ResponsiveSnackBar instead of standard SnackBar
+        ResponsiveSnackBar.showError(
+          context: pageContext,
+          message: 'Logout failed: ${e.toString()}',
         );
 
         developer.log('Error calling accountProvider.logout(): $e',

@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 class TopToast {
   static OverlayEntry? _overlayEntry;
   static Timer? _timer;
+  // Add a timestamp-based ID generator for unique Hero tags
+  static int _uniqueId = 0;
+  static String _generateUniqueHeroTag() =>
+      'toast_hero_tag_${DateTime.now().microsecondsSinceEpoch}_${_uniqueId++}';
 
   static void show({
     required BuildContext context,
@@ -23,12 +27,16 @@ class TopToast {
       return;
     }
 
+    // Generate a unique Hero tag for this toast instance
+    final uniqueHeroTag = _generateUniqueHeroTag();
+
     // Create and insert the new overlay entry
     _overlayEntry = OverlayEntry(
       builder: (BuildContext context) => _ToastWidget(
         message: message,
         backgroundColor: backgroundColor,
         icon: icon,
+        heroTag: uniqueHeroTag,
       ),
     );
 
@@ -66,10 +74,12 @@ class _ToastWidget extends StatefulWidget {
   final String message;
   final Color backgroundColor;
   final IconData? icon;
+  final String heroTag;
 
   const _ToastWidget({
     required this.message,
     required this.backgroundColor,
+    required this.heroTag,
     this.icon,
   });
 
@@ -117,34 +127,38 @@ class _ToastWidgetState extends State<_ToastWidget>
             begin: const Offset(0, -1),
             end: Offset.zero,
           ).animate(_animation),
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            color: widget.backgroundColor,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              child: Row(
-                children: [
-                  if (widget.icon != null) ...[
-                    Icon(
-                      widget.icon,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Text(
-                      widget.message,
-                      style: const TextStyle(
+          // Wrap Material with a Hero widget that has a unique tag
+          child: Hero(
+            tag: widget.heroTag,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(8),
+              color: widget.backgroundColor,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    if (widget.icon != null) ...[
+                      Icon(
+                        widget.icon,
                         color: Colors.white,
-                        fontSize: 16,
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Text(
+                        widget.message,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -6,6 +6,7 @@ import '../../../models/account.dart';
 import '../../../models/jwt_token.dart';
 import 'auth_service.dart';
 import 'dart:convert';
+import 'dart:async'; // Add Timer import
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:developer' as developer; // Import developer for logging
@@ -13,6 +14,14 @@ import 'dart:developer' as developer; // Import developer for logging
 class AccountProvider extends ChangeNotifier {
   final SessionManager _sessionManager = SessionManager();
   bool _isLoading = false;
+
+  // Debounce mechanism to prevent rapid state changes
+  Timer? _debounceTimer;
+  bool _notificationPending = false;
+  static const _debounceTime = Duration(milliseconds: 300);
+
+  // Flag to track if we're currently processing a navigation related state change
+  bool _inAuthStateTransition = false;
 
   // Getters
   bool get isLoading =>
@@ -25,6 +34,7 @@ class AccountProvider extends ChangeNotifier {
   JwtToken? get token => _sessionManager.token;
   bool get isUserVerified => _sessionManager.isUserVerified;
   bool get shouldRefreshToken => _sessionManager.shouldRefreshToken;
+  bool get inAuthStateTransition => _inAuthStateTransition;
 
   // Add this getter for compatibility with main.dart navigation logic
   bool get isEmailVerified {
@@ -37,15 +47,71 @@ class AccountProvider extends ChangeNotifier {
   // Constructor that listens for session state changes
   AccountProvider() {
     _sessionManager.onStateChanged.listen((_) {
-      // Notify UI to rebuild whenever session state changes
-      notifyListeners();
+      // Use debounced notification to prevent rapid UI rebuilds
+      _debouncedNotify();
     });
+  }
+
+  // Debounced version of notifyListeners to prevent notification storms
+  void _debouncedNotify() {
+    if (_debounceTimer?.isActive ?? false) {
+      _notificationPending = true;
+      return;
+    }
+
+    // First notification happens immediately
+    notifyListeners();
+
+    // Set timer for subsequent rapid notifications
+    _debounceTimer = Timer(_debounceTime, () {
+      if (_notificationPending) {
+        _notificationPending = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 
   // Initialize provider
   Future<void> initialize() async {
     // Session initialization happens automatically in the SessionManager constructor
-    notifyListeners();
+    _debouncedNotify();
+  }
+
+  // Method to set auth state transition flag
+  void beginAuthStateTransition() {
+    _inAuthStateTransition = true;
+    _debouncedNotify();
+  }
+
+  // Method to clear auth state transition flag
+  void endAuthStateTransition() {
+    _inAuthStateTransition = false;
+    _debouncedNotify();
+  }
+
+  // Wrapper to manage auth transitions safely
+  Future<T> withAuthTransition<T>(Future<T> Function() operation) async {
+    if (_inAuthStateTransition) {
+      developer.log('Auth transition already in progress, operation deferred',
+          name: 'AccountProvider');
+      // Wait for the current transition to complete
+      await Future.delayed(Duration(milliseconds: 500));
+    }
+
+    beginAuthStateTransition();
+    try {
+      return await operation();
+    } finally {
+      // Add a small delay before ending to allow UI to stabilize
+      await Future.delayed(Duration(milliseconds: 300));
+      endAuthStateTransition();
+    }
   }
 
   // Login method
@@ -54,8 +120,10 @@ class AccountProvider extends ChangeNotifier {
     required String password,
     bool rememberMe = false,
   }) async {
+    // Begin auth state transition to signal navigation system
+    beginAuthStateTransition();
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final result = await _authService.login(
@@ -81,14 +149,18 @@ class AccountProvider extends ChangeNotifier {
           await SharedPrefs.setLastLoginTime();
           await SharedPrefs.setLastActivity();
 
-          // Update SessionManager
+          // Update SessionManager - this happens regardless of remember me setting
           _sessionManager.setSession(
             token: token,
             user: result['user'] as Account,
           );
-        }
 
-        return true;
+          // Force a notification after session is set
+          _debouncedNotify();
+
+          return true;
+        }
+        return false;
       } else {
         return false;
       }
@@ -97,7 +169,11 @@ class AccountProvider extends ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
+
+      // Add a small delay to ensure UI updates before ending transition
+      await Future.delayed(const Duration(milliseconds: 300));
+      endAuthStateTransition();
     }
   }
 
@@ -105,8 +181,12 @@ class AccountProvider extends ChangeNotifier {
   Future<void> logout() async {
     developer.log('--- Logout Start (AccountProvider) ---',
         name: 'LogoutTrace');
+
+    // Set transition flag at the start of logout process
+    beginAuthStateTransition();
+
     _isLoading = true;
-    notifyListeners(); // Notify UI that loading has started
+    _debouncedNotify(); // Notify UI that loading has started
 
     final currentToken = await SharedPrefs.getJwtToken();
     String? refreshToken = currentToken?.refreshToken;
@@ -171,10 +251,16 @@ class AccountProvider extends ChangeNotifier {
     developer.log('Local session cleared. Setting isLoading=false.',
         name: 'LogoutTrace');
     developer.log(
-        'AccountProvider: State updated (isAuthenticated=false). Calling notifyListeners()...',
+        'AccountProvider: State updated (isAuthenticated=false). Calling _debouncedNotify()...',
         name: 'AccountProvider');
-    notifyListeners(); // Notify UI about state change (isLoading=false, isAuthenticated=false)
-    developer.log('AccountProvider: notifyListeners() called.',
+    _debouncedNotify(); // Notify UI about state change (isLoading=false, isAuthenticated=false)
+
+    // Ensure we reset the navigation transition at the end of logout
+    // with a small delay to ensure state changes have propagated
+    await Future.delayed(const Duration(milliseconds: 100));
+    endAuthStateTransition();
+
+    developer.log('AccountProvider: _debouncedNotify() called.',
         name: 'AccountProvider');
     developer.log('--- Logout End (AccountProvider) ---', name: 'LogoutTrace');
   }
@@ -200,13 +286,13 @@ class AccountProvider extends ChangeNotifier {
   // Record activity
   Future<void> recordActivity() async {
     await _sessionManager.recordActivity();
-    notifyListeners();
+    _debouncedNotify();
   }
 
   // Verify and refresh token if needed
   Future<bool> verifyAndRefreshTokenIfNeeded() async {
     final result = await _sessionManager.verifyAndRefreshTokenIfNeeded();
-    notifyListeners();
+    _debouncedNotify();
     return result;
   }
 
@@ -225,7 +311,7 @@ class AccountProvider extends ChangeNotifier {
   }) async {
     try {
       _isLoading = true;
-      notifyListeners();
+      _debouncedNotify();
 
       final result = await _authService.register(
         email: email,
@@ -270,7 +356,7 @@ class AccountProvider extends ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
@@ -384,7 +470,7 @@ class AccountProvider extends ChangeNotifier {
   // Verify email with code
   Future<bool> verifyEmail(String code) async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final url = Uri.parse(ApiUrls.verifyEmail);
@@ -412,14 +498,14 @@ class AccountProvider extends ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
   // Resend verification code
   Future<bool> resendVerificationCode() async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final url = Uri.parse(ApiUrls
@@ -444,14 +530,14 @@ class AccountProvider extends ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
   // Sign in with Google
   Future<Map<String, dynamic>> signInWithGoogle() async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       if (isAuthenticated &&
@@ -498,14 +584,14 @@ class AccountProvider extends ChangeNotifier {
       };
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
   // Request password reset
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final result = await _authService.forgotPassword(email);
@@ -531,7 +617,7 @@ class AccountProvider extends ChangeNotifier {
       };
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
@@ -539,7 +625,7 @@ class AccountProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> verifyResetCode(
       String email, String code) async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final result = await _authService.verifyResetCode(email, code);
@@ -560,14 +646,14 @@ class AccountProvider extends ChangeNotifier {
       };
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _debouncedNotify();
     }
   }
 
   // Reset password
   Future<bool> resetPassword(String resetToken, String newPassword) async {
     _isLoading = true;
-    notifyListeners();
+    _debouncedNotify();
 
     try {
       final result = await _authService.resetPassword(resetToken, newPassword);
@@ -589,36 +675,7 @@ class AccountProvider extends ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Method to handle any API calls that require authorization
-  Future<Map<String, dynamic>> _authorizedApiCall(
-      Future<Map<String, dynamic>> Function(String token) apiCall) async {
-    if (token == null) {
-      return {'success': false, 'error': 'Authentication required'};
-    }
-
-    try {
-      if (!await verifyAndRefreshTokenIfNeeded()) {
-        return {'success': false, 'error': 'Authentication failed'};
-      }
-
-      final result = await apiCall(token!.accessToken);
-
-      if (result['token_expired'] == true) {
-        if (await refreshToken()) {
-          return await apiCall(token!.accessToken);
-        } else {
-          await logout();
-          return {'success': false, 'error': 'Session expired'};
-        }
-      }
-
-      return result;
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      _debouncedNotify();
     }
   }
 }

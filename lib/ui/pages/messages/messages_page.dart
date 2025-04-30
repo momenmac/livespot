@@ -19,6 +19,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart'; // <-- Add this import
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart'; // <-- Add this import
+import 'dart:developer' as developer;
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
@@ -42,8 +43,8 @@ class _MessagesPageState extends State<MessagesPage>
     // Ensure all messages have controller references
     _controller.ensureMessageControllerReferences();
 
-    // Set user online status to true
-    _setUserOnlineStatus(true);
+    // Set user online status to true (with safety check)
+    _safeSetUserOnlineStatus(true);
   }
 
   Future<void> _loadMessages() async {
@@ -71,18 +72,41 @@ class _MessagesPageState extends State<MessagesPage>
     }
   }
 
-  Future<void> _setUserOnlineStatus(bool isOnline) async {
-    final currentUserId = _controller.currentUserId;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUserId)
-        .update({'isOnline': isOnline});
+  // Safe method to update online status that checks for empty user ID
+  Future<void> _safeSetUserOnlineStatus(bool isOnline) async {
+    final String currentUserId = _controller.currentUserId;
+    developer.log(
+        'Setting user online status: $isOnline for ID: "$currentUserId"',
+        name: 'MessagesPage');
+
+    // Only update if we have a valid user ID
+    if (currentUserId.isEmpty) {
+      developer.log('Skipping online status update: empty user ID',
+          name: 'MessagesPage');
+      return;
     }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .update({'isOnline': isOnline});
+      developer.log('Online status updated successfully to $isOnline',
+          name: 'MessagesPage');
+    } catch (e) {
+      developer.log('Error updating online status: $e', name: 'MessagesPage');
+      // Silently fail - this is a non-critical operation
+    }
+  }
 
   @override
   void dispose() {
+    developer.log('MessagesPage disposing', name: 'MessagesPage');
     WidgetsBinding.instance.removeObserver(this);
-    _setUserOnlineStatus(false); // Set user offline status
+
+    // Set user offline status (with safety check)
+    _safeSetUserOnlineStatus(false);
+
     _controller.dispose();
     super.dispose();
   }
@@ -90,10 +114,10 @@ class _MessagesPageState extends State<MessagesPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _setUserOnlineStatus(true); // Set user online status
+      _safeSetUserOnlineStatus(true); // Set user online status
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _setUserOnlineStatus(false); // Set user offline status
+      _safeSetUserOnlineStatus(false); // Set user offline status
     }
   }
 
@@ -419,11 +443,6 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
     }
   }
 
-  // Optionally, add a method to clear cache if needed
-  static void clearUserCache() {
-    _cachedUsers = null;
-  }
-
   // Search handler triggered by controller changes
   void _handleSearchChange() {
     final query = widget.searchController.text;
@@ -505,7 +524,10 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
     final now = DateTime.now();
     final conversationData = {
       'id': newDoc.id,
-      'participants': [currentUserId, user.id],
+      'participants': [
+        currentUserId,
+        user.id.toString()
+      ], // Convert int to String
       'isGroup': false,
       'groupName': null,
       'unreadCount': 0,

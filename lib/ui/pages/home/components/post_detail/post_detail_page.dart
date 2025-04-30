@@ -42,7 +42,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
   final TextEditingController _threadController = TextEditingController();
   late MapPageController _mapController;
   late bool _mapInitialized = false;
-  late LatLng _postLocation;
 
   // Updated image URLs with reliable placeholders
   final List<String> _imageUrls = [
@@ -102,9 +101,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
     super.initState();
     _upvotes = widget.upvotes;
     _downvotes = widget.upvotes ~/ 5; // Just a mock value
-
-    // Set a default location (this will be replaced with geocoding in a real app)
-    _postLocation = LatLng(40.7128, -74.0060); // NYC coordinates as fallback
 
     // Initialize map controller
     _mapController = MapPageController();
