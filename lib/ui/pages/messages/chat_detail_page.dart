@@ -37,6 +37,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     super.initState();
     _setupMessagesStream();
     _listenForTyping();
+
+    // Add listener to scroll controller to detect when scrolling finishes
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients &&
+          !_scrollController.position.isScrollingNotifier.value) {
+        // This gets called when the scrolling stops
+        _maybeNeedToScrollToBottom();
+      }
+    });
   }
 
   @override
@@ -53,8 +62,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         .doc(widget.conversation.id)
         .collection('messages')
         .orderBy('timestamp',
-            descending: true) // Change to true for reverse order
-        .limit(50)
+            descending: false) // Change to ascending order (oldest to newest)
+        .limit(150) // Increased limit for more history
         .snapshots();
   }
 
@@ -80,19 +89,47 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   }
 
   void _scrollToBottom({bool animated = true}) {
-    if (_scrollController.hasClients) {
-      final position = _scrollController.position.maxScrollExtent;
-      if (animated) {
-        // Use a shorter duration for less laggy feel
-        _scrollController.animateTo(
-          position,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scrollController.jumpTo(position);
-      }
+    // Don't attempt to scroll if we don't have a valid scroll controller
+    if (!_scrollController.hasClients) return;
+
+    try {
+      // Get the max scroll extent - this is the bottom of the list
+      final maxScroll = _scrollController.position.maxScrollExtent;
+
+      // Use a more robust approach with delayed execution to ensure rendering is complete
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!mounted || !_scrollController.hasClients) return;
+
+        if (animated) {
+          _scrollController.animateTo(
+            maxScroll + 100, // Add extra padding to ensure we get to the bottom
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          );
+        } else {
+          _scrollController.jumpTo(maxScroll + 100); // Add padding here too
+        }
+      });
+    } catch (e) {
+      debugPrint('Error in _scrollToBottom: $e');
     }
+  }
+
+  // A more aggressive approach to ensure scrolling to bottom
+  void _maybeNeedToScrollToBottom() {
+    if (!_scrollController.hasClients) return;
+
+    // Schedule this after the frame to ensure all widgets are laid out
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+
+      try {
+        // Use jumpTo for immediate response
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      } catch (e) {
+        debugPrint('Scroll error in _maybeNeedToScrollToBottom: $e');
+      }
+    });
   }
 
   @override
@@ -128,15 +165,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _replyToMessage = null;
       });
 
-      // Scroll to bottom after sending
+      // Improved scrolling after sending message
+      // Use a double post-frame callback for more reliable scrolling
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
+        // Short delay to ensure message is rendered
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted && _scrollController.hasClients) {
+            _scrollToBottom(animated: true);
+          }
+        });
       });
 
       _updateTypingStatus(false);
@@ -267,9 +304,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           TextButton(
             child: const Text('Delete'),
             onPressed: () {
+              // First pop the dialog
               Navigator.pop(context);
+
+              // Then delete the conversation
               widget.controller.deleteConversation(widget.conversation);
-              if (mounted) Navigator.pop(context);
+
+              // Use Navigator.of with the right context, and check if we can pop
+              if (mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop(); // Return to previous screen safely
+              }
             },
           ),
         ],
@@ -277,9 +321,43 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
+  // Helper to validate and fix avatar URLs
+  String _getValidAvatarUrl(String url, String userName) {
+    if (url.isEmpty) return '';
+
+    // If URL starts with file:/// - convert to proper HTTP URL
+    if (url.startsWith('file:///media/')) {
+      // Replace file:/// with the actual server base URL
+      return 'http://localhost:8000${url.substring(7)}';
+    }
+
+    // Handle URLs that are just paths without domain
+    if (url.startsWith('/media/')) {
+      return 'http://localhost:8000$url';
+    }
+
+    // Already a valid URL (starts with http:// or https://)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    // Default case - use a placeholder avatar
+    return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(userName)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Get other participant (not the current user)
+    final otherParticipant = widget.conversation.participants.firstWhere(
+      (user) => user.id != widget.controller.currentUserId,
+      orElse: () => widget.conversation.participants.first,
+    );
+
+    // Fix and validate the avatar URL
+    final validAvatarUrl =
+        _getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name);
 
     return Scaffold(
       resizeToAvoidBottomInset: true, // Ensure keyboard pushes up the view
@@ -287,12 +365,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         title: Row(
           children: [
             CircleAvatar(
-              backgroundImage: widget.conversation.avatarUrl.isNotEmpty
-                  ? NetworkImage(widget.conversation.avatarUrl)
+              backgroundImage: validAvatarUrl.isNotEmpty
+                  ? NetworkImage(validAvatarUrl)
                   : null,
-              child: widget.conversation.avatarUrl.isEmpty
-                  ? Text(widget.conversation.displayName.isNotEmpty
-                      ? widget.conversation.displayName[0].toUpperCase()
+              child: validAvatarUrl.isEmpty
+                  ? Text(otherParticipant.name.isNotEmpty
+                      ? otherParticipant.name[0].toUpperCase()
                       : '?')
                   : null,
             ),
@@ -302,7 +380,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.conversation.displayName,
+                  otherParticipant.name,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 if (isTyping)
@@ -526,6 +604,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Widget _buildMessageBubble(Message message, bool isCurrentUser) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // Fix media URL if needed (for images)
+    String? fixedMediaUrl;
+    if (message.messageType == MessageType.image && message.mediaUrl != null) {
+      if (message.mediaUrl!.startsWith('file:///')) {
+        fixedMediaUrl =
+            'http://localhost:8000${message.mediaUrl!.substring(7)}';
+      } else if (message.mediaUrl!.startsWith('/media/')) {
+        fixedMediaUrl = 'http://localhost:8000${message.mediaUrl!}';
+      } else {
+        fixedMediaUrl = message.mediaUrl;
+      }
+    }
+
     return Align(
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
@@ -576,11 +667,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   ),
                 )
               else if (message.messageType == MessageType.image &&
-                  message.mediaUrl != null)
+                  fixedMediaUrl != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    message.mediaUrl!,
+                    fixedMediaUrl,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
                       return SizedBox(
@@ -593,6 +684,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                     loadingProgress.expectedTotalBytes!
                                 : null,
                           ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('Error loading image: $error');
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, color: Colors.grey[600]),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image could not be loaded',
+                              style: TextStyle(color: Colors.grey[600]),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       );
                     },

@@ -295,35 +295,77 @@ class _MessagesPageState extends State<MessagesPage>
   }
 
   void _showNewConversationDialog(BuildContext context) {
+    // Use a global key to access context safely
+    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
     final TextEditingController searchController = TextEditingController();
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
+    // Keep track of whether we're currently navigating
+    bool isNavigating = false;
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return _SearchableContactsDialog(
           searchController: searchController,
           theme: theme,
           isDarkMode: isDarkMode,
           controller: _controller,
-          onConversationCreated: (conversation) async {
+          onConversationCreated: (conversation) {
+            // Prevent multiple navigation attempts
+            if (isNavigating) return;
+            isNavigating = true;
+
+            // Store the conversation in controller first
             _controller.selectConversation(conversation);
-            setState(() {});
-            Navigator.of(context).pop(); // Close the dialog first
-            await Future.delayed(const Duration(milliseconds: 100));
-            if (mounted) {
-              // Navigate to chat detail page
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatDetailPage(
-                    controller: _controller,
-                    conversation: conversation,
-                  ),
-                ),
-              );
+
+            // First close the dialog safely
+            if (Navigator.of(dialogContext).canPop()) {
+              Navigator.of(dialogContext).pop();
             }
+
+            // Use a delay to ensure dialog is dismissed before navigating
+            Future.delayed(const Duration(milliseconds: 350), () {
+              // Only navigate if parent context is still valid
+              if (mounted) {
+                try {
+                  // Use pushReplacement to avoid having to hit back multiple times
+                  Navigator.push(
+                    context, // Use parent stable context
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation1, animation2) =>
+                          ChatDetailPage(
+                        controller: _controller,
+                        conversation: conversation,
+                      ),
+                      transitionDuration: const Duration(milliseconds: 200),
+                      reverseTransitionDuration:
+                          const Duration(milliseconds: 200),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.easeInOut;
+                        var tween = Tween(begin: begin, end: end)
+                            .chain(CurveTween(curve: curve));
+                        var offsetAnimation = animation.drive(tween);
+                        return SlideTransition(
+                            position: offsetAnimation, child: child);
+                      },
+                    ),
+                  );
+                } catch (e) {
+                  print("Navigation error: $e");
+                  // Show snackbar if navigation fails
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Error opening conversation")),
+                  );
+                }
+              }
+              // Reset navigation flag
+              isNavigating = false;
+            });
           },
         );
       },
@@ -468,114 +510,158 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
   // Helper to create or get a conversation with a user
   Future<Conversation> _createOrGetConversation(UserWithEmail user) async {
     final firestore = FirebaseFirestore.instance;
-    final currentUserId = widget.controller.currentUserId;
+    final currentUserId = widget.controller.currentUserId.toString();
+    final targetUserId = user.id.toString();
 
-    // Query for existing conversation between current user and selected user
-    final query = await firestore
-        .collection('conversations')
-        .where('isGroup', isEqualTo: false)
-        .where('participants', arrayContains: currentUserId)
-        .get();
-
-    for (final doc in query.docs) {
-      final data = doc.data();
-      final participants = List<String>.from(data['participants'] ?? []);
-      if (participants.contains(user.id) && participants.length == 2) {
-        // Conversation exists, return from Firestore doc (not mock)
-        // Build a Conversation object with minimal info for navigation
-        return Conversation(
-          id: doc.id,
-          participants: [
-            User(
-              id: currentUserId.toString(),
-              name: "Me",
-              avatarUrl: "",
-              isOnline: true,
-            ),
-            User(
-              id: user.id,
-              name: user.name,
-              avatarUrl: user.avatarUrl,
-              isOnline: user.isOnline,
-            ),
-          ],
-          messages: [],
-          lastMessage: Message(
-            id: data['lastMessage']?['id'] ?? '',
-            senderId: data['lastMessage']?['senderId'] ?? '',
-            senderName: data['lastMessage']?['senderName'] ?? '',
-            content: data['lastMessage']?['content'] ?? '',
-            timestamp:
-                DateTime.tryParse(data['lastMessage']?['timestamp'] ?? '') ??
-                    DateTime.now(),
-            conversationId: doc.id, // Add the conversation ID
-          ),
-          unreadCount: data['unreadCount'] ?? 0,
-          isGroup: false,
-          groupName: null,
-          isMuted: data['isMuted'] ?? false,
-          isArchived: data['isArchived'] ?? false,
-        );
-      }
-    }
-
-    // Create new conversation in Firestore
-    final newDoc = firestore.collection('conversations').doc();
-    final now = DateTime.now();
-    final conversationData = {
-      'id': newDoc.id,
-      'participants': [
-        currentUserId,
-        user.id.toString()
-      ], // Convert int to String
-      'isGroup': false,
-      'groupName': null,
-      'unreadCount': 0,
-      'isMuted': false,
-      'isArchived': false,
-      'lastMessage': {
-        'id': 'empty',
-        'senderId': '',
-        'senderName': '',
-        'content': 'No messages',
-        'timestamp': now.toIso8601String(),
-      },
-      'lastMessageTimestamp': now,
-    };
-    await newDoc.set(conversationData);
-
-    // Build a Conversation object for navigation
-    return Conversation(
-      id: newDoc.id,
-      participants: [
-        User(
-          id: currentUserId.toString(),
-          name: "Me",
-          avatarUrl: "",
-          isOnline: true,
-        ),
-        User(
-          id: user.id,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-          isOnline: user.isOnline,
-        ),
-      ],
-      messages: [],
-      lastMessage: Message(
-        id: 'empty',
-        senderId: '',
-        senderName: '',
-        content: 'No messages',
-        timestamp: now,
-        conversationId: newDoc.id, // Add the conversation ID
-      ),
-      unreadCount: 0,
-      isGroup: false,
-      groupName: null,
-      isMuted: false,
-      isArchived: false,
+    developer.log(
+      'Attempting to find or create conversation between "$currentUserId" and "$targetUserId"',
+      name: 'MessagesPage',
     );
+
+    try {
+      // First try to find existing conversation - using a more reliable filter with collection group query
+      final query = await firestore
+          .collection('conversations')
+          .where('isGroup', isEqualTo: false)
+          .where('participants', arrayContains: currentUserId)
+          .get();
+
+      // Check each conversation for the target user
+      for (final doc in query.docs) {
+        final data = doc.data();
+
+        // Safely handle participants array and convert to Set<String>
+        final List<dynamic> participantsRaw = data['participants'] ?? [];
+        final Set<String> participants = participantsRaw
+            .map((p) => p.toString()) // Convert each participant ID to string
+            .toSet();
+
+        developer.log(
+          'Checking conversation ${doc.id} - participants: $participants',
+          name: 'MessagesPage',
+        );
+
+        // Check for exact match of participants
+        if (participants.length == 2 &&
+            participants.contains(currentUserId) &&
+            participants.contains(targetUserId)) {
+          developer.log('Found matching conversation: ${doc.id}',
+              name: 'MessagesPage');
+
+          // Safely handle message data with null coalescing and type conversion
+          final lastMessageData =
+              data['lastMessage'] as Map<String, dynamic>? ?? {};
+
+          return Conversation(
+            id: doc.id,
+            participants: [
+              User(
+                id: currentUserId,
+                name: "Me",
+                avatarUrl: "",
+                isOnline: true,
+              ),
+              User(
+                id: targetUserId,
+                name: user.name,
+                avatarUrl: user.avatarUrl,
+                isOnline: user.isOnline,
+              ),
+            ],
+            messages: [],
+            lastMessage: Message(
+              id: lastMessageData['id']?.toString() ?? '',
+              senderId: lastMessageData['senderId']?.toString() ?? '',
+              senderName: lastMessageData['senderName']?.toString() ?? '',
+              content: lastMessageData['content']?.toString() ?? '',
+              timestamp: DateTime.tryParse(
+                      lastMessageData['timestamp']?.toString() ?? '') ??
+                  DateTime.now(),
+              conversationId: doc.id,
+            ),
+            unreadCount: (data['unreadCount'] as num?)?.toInt() ?? 0,
+            isGroup: data['isGroup'] ?? false,
+            groupName: data['groupName']?.toString(),
+            isMuted: data['isMuted'] ?? false,
+            isArchived: data['isArchived'] ?? false,
+          );
+        }
+      }
+
+      // No existing conversation found, create new one
+      developer.log('No existing conversation found, creating new one',
+          name: 'MessagesPage');
+
+      final newDoc = firestore.collection('conversations').doc();
+      final now = DateTime.now();
+
+      // Store all IDs as strings in the document
+      final conversationData = {
+        'id': newDoc.id,
+        'participants': [
+          currentUserId,
+          targetUserId
+        ], // Both IDs are already strings
+        'isGroup': false,
+        'groupName': null,
+        'unreadCount': 0,
+        'isMuted': false,
+        'isArchived': false,
+        'lastMessage': {
+          'id': 'empty',
+          'senderId': '',
+          'senderName': '',
+          'content': 'No messages',
+          'timestamp': now.toIso8601String(),
+        },
+        'lastMessageTimestamp': now,
+        'createdAt': now,
+      };
+
+      await newDoc.set(conversationData);
+
+      developer.log('Created new conversation with ID: ${newDoc.id}',
+          name: 'MessagesPage');
+
+      return Conversation(
+        id: newDoc.id,
+        participants: [
+          User(
+            id: currentUserId,
+            name: "Me",
+            avatarUrl: "",
+            isOnline: true,
+          ),
+          User(
+            id: targetUserId,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            isOnline: user.isOnline,
+          ),
+        ],
+        messages: [],
+        lastMessage: Message(
+          id: 'empty',
+          senderId: '',
+          senderName: '',
+          content: 'No messages',
+          timestamp: now,
+          conversationId: newDoc.id,
+        ),
+        unreadCount: 0,
+        isGroup: false,
+        groupName: null,
+        isMuted: false,
+        isArchived: false,
+      );
+    } catch (e, stack) {
+      developer.log(
+        'Error in conversation lookup/creation: $e\n$stack',
+        name: 'MessagesPage',
+        error: e,
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -718,18 +804,81 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                                       )
                                     : null,
                                 onTap: () async {
-                                  ResponsiveSnackBar.showInfo(
-                                    context: context,
-                                    message:
-                                        "${TextStrings.startingConversationWith} ${user.name}",
-                                  );
-                                  // Create or get conversation, then notify parent and close dialog
-                                  final conversation =
-                                      await _createOrGetConversation(user);
-                                  if (widget.onConversationCreated != null) {
-                                    widget.onConversationCreated!(conversation);
+                                  try {
+                                    // Show loading indicator
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (BuildContext context) {
+                                        return const Dialog(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(20.0),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                CircularProgressIndicator(),
+                                                SizedBox(width: 20),
+                                                Text(
+                                                    "Creating conversation..."),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+
+                                    // Create or get conversation
+                                    final conversation =
+                                        await _createOrGetConversation(user);
+
+                                    // Dismiss loading dialog
+                                    if (mounted && Navigator.canPop(context)) {
+                                      Navigator.of(context).pop();
+                                    }
+
+                                    // First close the contacts dialog
+                                    if (mounted && Navigator.canPop(context)) {
+                                      Navigator.of(context).pop();
+                                    }
+
+                                    // Use a small delay to ensure animations complete
+                                    await Future.delayed(
+                                        const Duration(milliseconds: 150));
+
+                                    // Only navigate if still mounted
+                                    if (mounted) {
+                                      // Set the selected conversation in controller first
+                                      widget.controller
+                                          .selectConversation(conversation);
+
+                                      // Then navigate using MaterialPageRoute with named routes
+                                      // and proper stack management to avoid empty stack issues
+                                      if (widget.onConversationCreated !=
+                                          null) {
+                                        widget.onConversationCreated!(
+                                            conversation);
+                                      }
+                                    }
+                                  } catch (e, stack) {
+                                    developer.log(
+                                      'Error navigating to conversation: $e\n$stack',
+                                      name: 'MessagesPage',
+                                      error: e,
+                                    );
+
+                                    // Dismiss loading dialog if still showing
+                                    if (mounted && Navigator.canPop(context)) {
+                                      Navigator.of(context).pop();
+                                    }
+
+                                    // Show error to user
+                                    if (mounted) {
+                                      ResponsiveSnackBar.showError(
+                                          context: context,
+                                          message:
+                                              "Error creating conversation: ${e.toString().split('\n').first}");
+                                    }
                                   }
-                                  Navigator.pop(context);
                                 },
                               );
                             },

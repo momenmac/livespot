@@ -463,7 +463,8 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
                                   child: TextButton(
                                     onPressed: () {
                                       // Reset auth transition state before navigation
-                                      Provider.of<AccountProvider>(context, listen: false)
+                                      Provider.of<AccountProvider>(context,
+                                              listen: false)
                                           .resetAuthTransition();
                                       NavigationService().goBack();
                                     },

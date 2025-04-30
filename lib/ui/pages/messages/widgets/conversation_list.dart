@@ -5,6 +5,7 @@ import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/ui/widgets/safe_network_image.dart'; // Add this import
@@ -547,12 +548,37 @@ class _ConversationTile extends StatefulWidget {
 class _ConversationTileState extends State<_ConversationTile> {
   bool _isHovering = false;
 
-  String _absoluteAvatarUrl(String url) {
-    if (url.isEmpty) return url;
-    if (url.startsWith('http')) return url;
-    // Always prepend base URL for non-absolute URLs
-    final fixedUrl = url.startsWith('/') ? url : '/$url';
-    return '${ApiUrls.baseUrl}$fixedUrl';
+  // Helper to get the other participant in a conversation (not the current user)
+  User _getOtherParticipant() {
+    final currentUserId = widget.controller.currentUserId;
+    return widget.conversation.participants.firstWhere(
+      (user) => user.id != currentUserId,
+      orElse: () => widget.conversation.participants.first,
+    );
+  }
+
+  // Helper to get a valid avatar URL
+  String _getValidAvatarUrl(String url) {
+    if (url.isEmpty) return "";
+
+    // If URL starts with file:/// - convert to proper HTTP URL
+    if (url.startsWith('file:///media/')) {
+      return 'http://localhost:8000${url.substring(7)}';
+    }
+
+    // Handle URLs that are just paths without domain
+    if (url.startsWith('/media/')) {
+      return 'http://localhost:8000$url';
+    }
+
+    // Already a valid URL (starts with http:// or https://)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    // Default case - use UI avatars for placeholder
+    final otherUser = _getOtherParticipant();
+    return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(otherUser.name)}';
   }
 
   @override
@@ -562,6 +588,12 @@ class _ConversationTileState extends State<_ConversationTile> {
 
     final formattedTime =
         _formatMessageTime(widget.conversation.lastMessage.timestamp);
+
+    // Get the other participant (not the current user)
+    final otherParticipant = _getOtherParticipant();
+
+    // Get a valid avatar URL
+    final avatarUrl = _getValidAvatarUrl(otherParticipant.avatarUrl);
 
     // --- FIX: Show last message content even if messages list is empty ---
     final lastMessage = widget.conversation.lastMessage;
@@ -610,11 +642,11 @@ class _ConversationTileState extends State<_ConversationTile> {
               leading: Stack(
                 children: [
                   SafeNetworkImage(
-                    imageUrl: _absoluteAvatarUrl(widget.conversation.avatarUrl),
+                    imageUrl: avatarUrl,
                     size: 48,
-                    fallbackText: widget.conversation.displayName,
+                    fallbackText: otherParticipant.name,
                   ),
-                  if (widget.conversation.isOnline)
+                  if (otherParticipant.isOnline)
                     Positioned(
                       right: 0,
                       bottom: 0,
@@ -639,7 +671,8 @@ class _ConversationTileState extends State<_ConversationTile> {
                 children: [
                   Expanded(
                     child: Text(
-                      widget.conversation.displayName,
+                      // Use other participant's name instead of conversation displayName
+                      otherParticipant.name,
                       style: TextStyle(
                         fontWeight: widget.conversation.unreadCount > 0
                             ? FontWeight.bold

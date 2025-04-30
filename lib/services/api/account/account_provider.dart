@@ -101,7 +101,7 @@ class AccountProvider extends ChangeNotifier {
     _inAuthStateTransition = false;
     _isLoading = false;
     _debouncedNotify();
-    
+
     developer.log('Auth transition state forcefully reset',
         name: 'AccountProvider');
   }
