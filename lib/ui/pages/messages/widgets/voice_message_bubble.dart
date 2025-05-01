@@ -278,10 +278,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
                                         ?.withOpacity(0.8),
                               ),
                             ),
-                            if (widget.isSent && widget.message.status != null)
+                            if (widget.isSent)
                               Padding(
                                 padding: const EdgeInsets.only(left: 4),
-                                child: _buildStatusIcon(widget.message.status!),
+                                child: _buildStatusIcon(widget.message.status),
                               ),
                           ],
                         ),

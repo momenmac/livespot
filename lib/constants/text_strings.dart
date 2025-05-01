@@ -221,14 +221,38 @@ class TextStrings {
   static const String forwarded = 'Forwarded';
   static const String editMessage = 'Edit Message';
   static const String messageEdited = 'Edited';
-  static const String messageSaved = 'Message forwareded';
+  static const String messageSaved = 'Message forwarded';
   static const String cancelReply = 'Cancel reply';
   static const String cancelEdit = 'Cancel edit';
   static const String noConversationsForward = 'No conversations to forward to';
   static const String copiedToClipboard = 'Text copied to clipboard';
-
   static const String conversationMuted = 'Conversation muted';
   static const String conversationUnmuted = 'Conversation unmuted';
+
+  // New message status strings
+  static const String messageSending = 'Sending...';
+  static const String messageSent = 'Sent';
+  static const String messageDelivered = 'Delivered';
+  static const String messageRead = 'Read';
+  static const String messageFailed = 'Failed to send';
+
+  // Media message types
+  static const String photo = '📷 Photo';
+  static const String video = '🎥 Video';
+  static const String file = '📎 File';
+  static const String location = '📍 Location';
+  static const String contact = '👤 Contact';
+
+  // Message actions
+  static const String saveToGallery = 'Save to gallery';
+  static const String download = 'Download';
+
+  // Group chat strings
+  static const String createGroup = 'Create Group';
+  static const String addParticipants = 'Add participants';
+  static const String leaveGroup = 'Leave group';
+  static const String addToGroup = 'Add to group';
+  static const String removeFromGroup = 'Remove from group';
 
   // Image related strings
   static const String imageDownloaded = 'Image saved to gallery';
@@ -238,8 +262,6 @@ class TextStrings {
   static const String imageOpenedForDownload = 'Image opened for download';
   static const String imageDownloadInProgress = 'Downloading image...';
   static const String imageSaveManually = 'Right-click to save image manually';
-
-  // Image download strings
 
   //! Notifications
   static const String turnOnNotifications = 'Turn on notifications';

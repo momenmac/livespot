@@ -67,6 +67,12 @@ class FirebaseTransformer {
         return 'video';
       case MessageType.file:
         return 'file';
+      case MessageType.location:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case MessageType.system:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 

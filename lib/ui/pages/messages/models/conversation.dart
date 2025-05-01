@@ -6,59 +6,65 @@ import 'package:flutter_application_2/services/api/account/api_urls.dart';
 class Conversation {
   final String id;
   final List<User> participants;
+  final String? groupName;
+  final bool isGroup;
+  final bool isArchived;
+  final bool isMuted;
+  int unreadCount;
   final List<Message> messages;
   final Message lastMessage;
-  final int unreadCount;
-  final bool isGroup;
-  final String? groupName;
-  final bool isMuted;
-  final bool isArchived;
-  MessagesController? controller;
 
   Conversation({
     required this.id,
     required this.participants,
-    required this.messages,
     required this.lastMessage,
-    this.unreadCount = 0,
-    this.isGroup = false,
     this.groupName,
-    this.isMuted = false,
+    this.isGroup = false,
     this.isArchived = false,
-    this.controller,
-  });
+    this.isMuted = false,
+    this.unreadCount = 0,
+    List<Message>? messages,
+  }) : messages = messages ?? [];
 
+  // Instead of storing the controller, we'll provide a getter that gets it from context when needed
+  MessagesController? get controller =>
+      null; // This will be handled by the widget tree
+
+  // Safely get members excluding the current user
+  List<User> getMembersExcludingCurrentUser(String currentUserId) {
+    return participants.where((user) => user.id != currentUserId).toList();
+  }
+
+  // Create a copy with potentially different values
   Conversation copyWith({
     String? id,
     List<User>? participants,
+    String? groupName,
+    bool? isGroup,
+    bool? isArchived,
+    bool? isMuted,
+    int? unreadCount,
     List<Message>? messages,
     Message? lastMessage,
-    int? unreadCount,
-    bool? isGroup,
-    String? groupName,
-    bool? isMuted,
-    bool? isArchived,
+    MessagesController? controller,
   }) {
     return Conversation(
       id: id ?? this.id,
       participants: participants ?? this.participants,
+      groupName: groupName ?? this.groupName,
+      isGroup: isGroup ?? this.isGroup,
+      isArchived: isArchived ?? this.isArchived,
+      isMuted: isMuted ?? this.isMuted,
+      unreadCount: unreadCount ?? this.unreadCount,
       messages: messages ?? this.messages,
       lastMessage: lastMessage ?? this.lastMessage,
-      unreadCount: unreadCount ?? this.unreadCount,
-      isGroup: isGroup ?? this.isGroup,
-      groupName: groupName ?? this.groupName,
-      isMuted: isMuted ?? this.isMuted,
-      isArchived: isArchived ?? this.isArchived,
-      controller: controller,
     );
   }
 
   String get displayName {
     if (isGroup && groupName != null) return groupName!;
-    // Use the actual current user id from the controller if available
     final currentUserId = controller?.currentUserId ?? 'current';
-    final otherParticipants =
-        participants.where((p) => p.id != currentUserId).toList();
+    final otherParticipants = getMembersExcludingCurrentUser(currentUserId);
     if (otherParticipants.isEmpty) return "Me";
     if (otherParticipants.length == 1) {
       return otherParticipants.first.name;
@@ -72,11 +78,9 @@ class Conversation {
       return "https://ui-avatars.com/api/?name=${Uri.encodeComponent(groupName ?? "Group")}&background=random";
     }
     final currentUserId = controller?.currentUserId ?? 'current';
-    final otherParticipants =
-        participants.where((p) => p.id != currentUserId).toList();
+    final otherParticipants = getMembersExcludingCurrentUser(currentUserId);
     if (otherParticipants.isEmpty) return "";
     final url = otherParticipants.first.avatarUrl;
-    // Always return a fully qualified URL for avatars
     if (url.isEmpty) return "";
     if (url.startsWith('http')) return url;
     final fixedUrl = url.startsWith('/') ? url : '/$url';
@@ -86,8 +90,7 @@ class Conversation {
   bool get isOnline {
     if (isGroup) return false;
     final currentUserId = controller?.currentUserId ?? 'current';
-    final otherParticipants =
-        participants.where((p) => p.id != currentUserId).toList();
+    final otherParticipants = getMembersExcludingCurrentUser(currentUserId);
     if (otherParticipants.isEmpty) return false;
     return otherParticipants.first.isOnline;
   }
@@ -106,10 +109,8 @@ class Conversation {
     };
   }
 
-  // Firestore integration for Conversation
   static Conversation fromFirestore(
       Map<String, dynamic> doc, List<User> users) {
-    // users: list of all users, so we can match participant ids to User objects
     final participantIds = List<String>.from(doc['participants'] ?? []);
     final participants =
         users.where((u) => participantIds.contains(u.id)).toList();
@@ -117,7 +118,7 @@ class Conversation {
     return Conversation(
       id: doc['id'],
       participants: participants,
-      messages: [], // You should fetch messages from the messages collection
+      messages: [],
       lastMessage: Message.fromJson(doc['lastMessage'] ?? {}),
       unreadCount: doc['unreadCount'] ?? 0,
       isGroup: doc['isGroup'] ?? false,

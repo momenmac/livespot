@@ -22,7 +22,9 @@ import 'package:flutter_application_2/ui/pages/messages/models/message.dart'; //
 import 'dart:developer' as developer;
 
 class MessagesPage extends StatefulWidget {
-  const MessagesPage({super.key});
+  final MessagesController? controller;
+
+  const MessagesPage({super.key, this.controller});
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -31,19 +33,23 @@ class MessagesPage extends StatefulWidget {
 class _MessagesPageState extends State<MessagesPage>
     with WidgetsBindingObserver {
   late MessagesController _controller;
+  late final bool _ownsController;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _controller = MessagesController();
+    // Use the controller provided via props or create a new one if not provided
+    if (widget.controller != null) {
+      _controller = widget.controller!;
+      _ownsController = false;
+    } else {
+      _controller = MessagesController();
+      _ownsController = true;
+    }
     _loadMessages();
-
-    // Ensure all messages have controller references
     _controller.ensureMessageControllerReferences();
-
-    // Set user online status to true (with safety check)
     _safeSetUserOnlineStatus(true);
   }
 
@@ -107,7 +113,9 @@ class _MessagesPageState extends State<MessagesPage>
     // Set user offline status (with safety check)
     _safeSetUserOnlineStatus(false);
 
-    _controller.dispose();
+    if (_ownsController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -182,23 +190,34 @@ class _MessagesPageState extends State<MessagesPage>
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          // Replace with a scrollable layout that includes both sections
-          return ListView(
+          // Show recommended rooms section at the top with conversation list below
+          return Column(
             children: [
-              // Add RecommendedRoomsSection that will scroll with the list
+              // Recommended rooms section (taking up just the space it needs)
               const RecommendedRoomsSection(),
 
-              // Wrap ConversationList in a Container with fixed height
-              // This allows it to be part of the ListView
-              SizedBox(
-                // Set a reasonable height or use MediaQuery to calculate it
-                // Subtracting space for the RecommendedRoomsSection and padding
-                height: MediaQuery.of(context).size.height - 300,
+              // Conversation list (expanding to fill remaining space)
+              Expanded(
                 child: ConversationList(
                   controller: _controller,
                   onConversationSelected: (conversation) {
-                    _controller.selectConversation(conversation);
-                    setState(() {});
+                    // Create a new controller instance for ChatDetailPage
+                    // This prevents using a potentially disposed controller
+                    final detailController = MessagesController();
+
+                    // Copy the selected conversation to the new controller
+                    detailController.selectConversation(conversation);
+
+                    // Navigate to chat detail page when a conversation is selected
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatDetailPage(
+                          controller: detailController,
+                          conversation: conversation,
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -210,7 +229,7 @@ class _MessagesPageState extends State<MessagesPage>
       floatingActionButton: _controller.isSearchMode
           ? null
           : FloatingActionButton(
-              heroTag: 'messagesPageFAB', // Add this unique hero tag
+              heroTag: 'messagesPageFAB',
               backgroundColor: ThemeConstants.primaryColor,
               child: const Icon(Icons.add_comment, color: Colors.white),
               onPressed: () {
@@ -295,8 +314,6 @@ class _MessagesPageState extends State<MessagesPage>
   }
 
   void _showNewConversationDialog(BuildContext context) {
-    // Use a global key to access context safely
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
     final TextEditingController searchController = TextEditingController();
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
@@ -317,9 +334,6 @@ class _MessagesPageState extends State<MessagesPage>
             if (isNavigating) return;
             isNavigating = true;
 
-            // Store the conversation in controller first
-            _controller.selectConversation(conversation);
-
             // First close the dialog safely
             if (Navigator.of(dialogContext).canPop()) {
               Navigator.of(dialogContext).pop();
@@ -330,13 +344,17 @@ class _MessagesPageState extends State<MessagesPage>
               // Only navigate if parent context is still valid
               if (mounted) {
                 try {
-                  // Use pushReplacement to avoid having to hit back multiple times
+                  // Create a new controller for the chat detail page
+                  final detailController = MessagesController();
+                  detailController.selectConversation(conversation);
+
+                  // Navigate to the chat detail page
                   Navigator.push(
                     context, // Use parent stable context
                     PageRouteBuilder(
                       pageBuilder: (context, animation1, animation2) =>
                           ChatDetailPage(
-                        controller: _controller,
+                        controller: detailController,
                         conversation: conversation,
                       ),
                       transitionDuration: const Duration(milliseconds: 200),
@@ -410,6 +428,14 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
       _loadUsersFromDjango();
     }
     widget.searchController.addListener(_handleSearchChange);
+  }
+
+  @override
+  void dispose() {
+    // Remove the listener to prevent callbacks after disposal
+    widget.searchController.removeListener(_handleSearchChange);
+    // Note: Don't dispose the controller here as it's owned by the parent
+    super.dispose();
   }
 
   // Fetch all users from Django backend and merge with online status from Firestore
@@ -847,12 +873,8 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
 
                                     // Only navigate if still mounted
                                     if (mounted) {
-                                      // Set the selected conversation in controller first
-                                      widget.controller
-                                          .selectConversation(conversation);
-
-                                      // Then navigate using MaterialPageRoute with named routes
-                                      // and proper stack management to avoid empty stack issues
+                                      // Create a new controller for the chat detail page
+                                      // instead of using the widget's controller
                                       if (widget.onConversationCreated !=
                                           null) {
                                         widget.onConversationCreated!(

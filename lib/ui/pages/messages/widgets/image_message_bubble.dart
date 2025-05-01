@@ -110,10 +110,10 @@ class ImageMessageBubble extends StatelessWidget {
                           color: textColor?.withOpacity(0.7),
                         ),
                       ),
-                      if (isSent && message.status != null)
+                      if (isSent)
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
-                          child: _buildStatusIcon(message.status!, textColor),
+                          child: _buildStatusIcon(message.status, textColor),
                         ),
                     ],
                   ),

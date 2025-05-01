@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/voice_message_bubble.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/image_message_bubble.dart';
+import 'package:logging/logging.dart';
 
 class MessageBubble extends StatefulWidget {
   final Message message;
@@ -33,7 +34,7 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   bool _isHovering = false;
-  final GlobalKey _popupMenuKey = GlobalKey();
+  final Logger _logger = Logger('MessageBubble');
 
   @override
   void dispose() {
@@ -45,7 +46,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final isSent = widget.message.senderId == 'current';
+    final isSent =
+        widget.message.senderId == widget.message.controller?.currentUserId;
     final bubbleColor = isSent
         ? ThemeConstants.primaryColor
         : isDarkMode
@@ -219,7 +221,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withAlpha(38),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -282,8 +284,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
 
     // Add edit option only for user's own text messages
-    if (widget.message.senderId == 'current' &&
-        widget.message.messageType != MessageType.voice) {
+    if (isSent && widget.message.messageType != MessageType.voice) {
       items.add(
         PopupMenuItem<String>(
           value: 'edit',
@@ -338,14 +339,14 @@ class _MessageBubbleState extends State<MessageBubble> {
       // Check if widget is still mounted before proceeding
       if (!mounted || value == null) return;
 
-      print("Selected option: $value"); // Debug log
+      _logger.info("Selected option: $value");
 
       // Get the controller from the message
       final controller = widget.message.controller;
 
       switch (value) {
         case 'reply':
-          print("Replying to message: ${widget.message.id}");
+          _logger.info("Replying to message: ${widget.message.id}");
           if (controller != null) {
             controller.setReplyToMessage(widget.message);
           } else if (widget.onSwipeReply != null) {
@@ -354,28 +355,28 @@ class _MessageBubbleState extends State<MessageBubble> {
           break;
 
         case 'forward':
-          print("Forwarding message: ${widget.message.id}");
+          _logger.info("Forwarding message: ${widget.message.id}");
           if (controller != null) {
             _showForwardSheet(context, widget.message, controller);
           }
           break;
 
         case 'copy':
-          print("Copying message: ${widget.message.content}");
+          _logger.info("Copying message: ${widget.message.content}");
           if (controller != null) {
             controller.copyToClipboard(widget.message.content, context);
           }
           break;
 
         case 'edit':
-          print("Editing message: ${widget.message.id}");
+          _logger.info("Editing message: ${widget.message.id}");
           if (controller != null) {
             controller.setEditingMessage(widget.message);
           }
           break;
 
         case 'delete':
-          print("Deleting message: ${widget.message.id}");
+          _logger.info("Deleting message: ${widget.message.id}");
           if (controller != null) {
             controller.deleteMessage(widget.message);
           }
@@ -635,23 +636,10 @@ class _MessageBubbleState extends State<MessageBubble> {
       // Check for InheritedWidgets or use other methods to get controller
       return null; // Fallback if not found
     } catch (e) {
-      print('Error finding controller: $e');
+      _logger.severe('Error finding controller: $e');
       return null;
     }
   }
-
-// Update _showForwardOptions to accept an optional controller parameter
-  void _showForwardOptions(BuildContext context, Message message,
-      [MessagesController? providedController]) {
-    final controller = providedController ?? message.controller;
-    if (controller == null) return;
-
-    // ...existing code for forward options...
-  }
-
-  // Add this method to handle forwarding directly from the message bubble
-
-  // Helper method to truncate text for preview
 
   Widget _buildSenderName() {
     return Padding(
@@ -685,11 +673,11 @@ class _MessageBubbleState extends State<MessageBubble> {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isSent
-              ? ThemeConstants.primaryColor.withOpacity(0.3)
+              ? ThemeConstants.primaryColor.withAlpha(77)
               : (isDarkMode ? Colors.grey[800] : Colors.grey[200]),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: ThemeConstants.primaryColor.withOpacity(0.3),
+            color: ThemeConstants.primaryColor.withAlpha(77),
             width: 1,
           ),
         ),
@@ -732,7 +720,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 .textTheme
                                 .bodySmall
                                 ?.color
-                                ?.withOpacity(0.7),
+                                ?.withAlpha(179),
                       ),
                     ],
                   ),
@@ -758,11 +746,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  // Fixed: Corrected the previously corrupted swipe background method
   Widget _buildSwipeBackground(bool isSent) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      color: ThemeConstants.green.withOpacity(0.3),
+      color: ThemeConstants.green.withAlpha(77),
       alignment: isSent ? Alignment.centerLeft : Alignment.centerRight,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -780,7 +767,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  // Fixed: Completely rewrote the message bubble builder with proper syntax
   Widget _buildMessageBubble(BuildContext context, ThemeData theme, bool isSent,
       Color bubbleColor, Color? textColor) {
     return InkWell(
@@ -821,29 +807,30 @@ class _MessageBubbleState extends State<MessageBubble> {
                   DateFormat('HH:mm').format(widget.message.timestamp),
                   style: TextStyle(
                     color: isSent
-                        ? Colors.white.withOpacity(0.7)
+                        ? Colors.white.withAlpha(179)
                         : theme.textTheme.bodySmall?.color,
                     fontSize: 11,
                   ),
                 ),
                 if (widget.message.isEdited == true)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: Text(
-                      TextStrings.messageEdited,
-                      style: TextStyle(
-                        color: isSent
-                            ? Colors.white.withOpacity(0.7)
-                            : theme.textTheme.bodySmall?.color,
-                        fontSize: 11,
-                        fontStyle: FontStyle.italic,
-                      ),
+                  Text(
+                    " (edited)", // Added space inside the string instead of padding
+                    style: TextStyle(
+                      color: isSent
+                          ? Colors.white70
+                          : Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.color
+                              ?.withOpacity(0.7),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                if (isSent && widget.message.status != null)
+                if (isSent)
                   Padding(
                     padding: const EdgeInsets.only(left: 4),
-                    child: _buildStatusIcon(widget.message.status!),
+                    child: _buildWhatsAppStyleStatusIndicator(),
                   ),
               ],
             ),
@@ -851,6 +838,54 @@ class _MessageBubbleState extends State<MessageBubble> {
         ),
       ),
     );
+  }
+
+  // WhatsApp/Messenger style status indicator with better visual cues
+  Widget _buildWhatsAppStyleStatusIndicator() {
+    final bool isSent =
+        widget.message.senderId == widget.message.controller?.currentUserId;
+    if (!isSent) return const SizedBox.shrink();
+
+    // Get status directly from message
+    final status = widget.message.status;
+
+    switch (status) {
+      case MessageStatus.sending:
+        // Clock icon for sending
+        return const Icon(
+          Icons.schedule,
+          size: 14,
+          color: Colors.white70,
+        );
+      case MessageStatus.sent:
+        // Single check for sent
+        return const Icon(
+          Icons.check,
+          size: 14,
+          color: Colors.white70,
+        );
+      case MessageStatus.delivered:
+        // Double check for delivered
+        return const Icon(
+          Icons.done_all,
+          size: 14,
+          color: Colors.white70, // white checks
+        );
+      case MessageStatus.read:
+        // Double blue check for read
+        return const Icon(
+          Icons.done_all,
+          size: 14,
+          color: Colors.lightBlueAccent, // blue checks for read
+        );
+      case MessageStatus.failed:
+        // Error icon with exclamation for failed
+        return const Icon(
+          Icons.error_outline,
+          size: 14,
+          color: Colors.redAccent,
+        );
+    }
   }
 
   // Fixed: Corrected the method to clean message content
@@ -866,39 +901,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
 
     return content;
-  }
-
-  // Fixed: Removed duplicated method and kept just this one
-  Widget _buildStatusIcon(MessageStatus status) {
-    switch (status) {
-      case MessageStatus.sending:
-        return const Icon(
-          Icons.access_time,
-          size: 12,
-          color: Colors.white70,
-        );
-      case MessageStatus.sent:
-        return const Icon(
-          Icons.check,
-          size: 12,
-          color: Colors.white70,
-        );
-      case MessageStatus.delivered:
-        return const Icon(
-          Icons.done_all,
-          size: 12,
-          color: Colors.white70,
-        );
-      case MessageStatus.read:
-        return const Icon(
-          Icons.done_all,
-          size: 12,
-          color: Colors.lightBlueAccent,
-        );
-      case MessageStatus.failed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-    }
   }
 }
 
@@ -933,8 +935,8 @@ class _HoverListTileState extends State<_HoverListTile> {
       child: Container(
         color: _isHovering
             ? (isDarkMode
-                ? ThemeConstants.primaryColor.withOpacity(0.1)
-                : ThemeConstants.primaryColor.withOpacity(0.05))
+                ? ThemeConstants.primaryColor.withAlpha(26)
+                : ThemeConstants.primaryColor.withAlpha(13))
             : Colors.transparent,
         child: ListTile(
           leading: widget.leading,

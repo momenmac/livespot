@@ -4,7 +4,6 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'dart:math' as math;
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
-import 'package:latlong2/latlong.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String title;

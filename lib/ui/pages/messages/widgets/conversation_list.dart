@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:flutter_application_2/ui/widgets/safe_network_image.dart'; // Add this import
-import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Add this import
+import 'package:flutter_application_2/ui/widgets/safe_network_image.dart';
 
 // Simple class to hold action button data
 class ActionItem {
@@ -76,12 +74,73 @@ class ConversationList extends StatelessWidget {
             ),
           ),
 
+        // Filter indicator when filtering
+        if (!controller.isSearchMode && controller.filterMode != FilterMode.all)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                Icon(
+                  _getFilterIcon(controller.filterMode),
+                  size: 16,
+                  color: ThemeConstants.primaryColor,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _getFilterText(controller.filterMode),
+                  style: TextStyle(
+                    color: ThemeConstants.primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => controller.setFilterMode(FilterMode.all),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 0),
+                    padding: const EdgeInsets.all(8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+          ),
+
         // Expanded widget for the list (or empty state)
         Expanded(
           child: _buildConversationListContent(context, theme, isDarkMode),
         ),
       ],
     );
+  }
+
+  // Helper method for filter icon
+  IconData _getFilterIcon(FilterMode mode) {
+    switch (mode) {
+      case FilterMode.all:
+        return Icons.chat;
+      case FilterMode.unread:
+        return Icons.mark_chat_unread;
+      case FilterMode.archived:
+        return Icons.archive;
+      case FilterMode.groups:
+        return Icons.group;
+    }
+  }
+
+  // Helper method for filter text
+  String _getFilterText(FilterMode mode) {
+    switch (mode) {
+      case FilterMode.all:
+        return 'All conversations';
+      case FilterMode.unread:
+        return 'Unread messages only';
+      case FilterMode.archived:
+        return 'Archived conversations';
+      case FilterMode.groups:
+        return 'Group chats only';
+    }
   }
 
   // Helper method to build the appropriate content based on state
@@ -138,14 +197,6 @@ class ConversationList extends StatelessWidget {
           return const SizedBox(height: 32);
         }
         final conversation = controller.conversations[index];
-
-        // Make sure conversation has a reference to controller
-        conversation.controller = controller;
-
-        // You can fetch messages for this conversation here if needed
-        // For example, if you want to show the latest message from Firestore:
-        // (Assuming you have a method to fetch messages for a conversation)
-        // await controller.fetchMessagesForConversation(conversation);
 
         return Dismissible(
           key: Key(conversation.id),
@@ -209,12 +260,14 @@ class ConversationList extends StatelessWidget {
               controller.toggleArchive(conversation);
 
               // Show a snackbar confirmation
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: conversation.isArchived
-                    ? TextStrings.conversationArchived
-                    : TextStrings.conversationUnarchived,
-              );
+              if (context.mounted) {
+                ResponsiveSnackBar.showInfo(
+                  context: context,
+                  message: conversation.isArchived
+                      ? TextStrings.conversationArchived
+                      : TextStrings.conversationUnarchived,
+                );
+              }
 
               // Return false to keep the item in the list
               return false;
@@ -229,12 +282,14 @@ class ConversationList extends StatelessWidget {
               }
 
               // Show a snackbar confirmation
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: conversation.unreadCount > 0
-                    ? TextStrings.markedAsUnread
-                    : TextStrings.markedAsRead,
-              );
+              if (context.mounted) {
+                ResponsiveSnackBar.showInfo(
+                  context: context,
+                  message: conversation.unreadCount > 0
+                      ? TextStrings.markedAsRead
+                      : TextStrings.markedAsUnread,
+                );
+              }
 
               // Return false to keep the item in the list
               return false;
@@ -244,7 +299,7 @@ class ConversationList extends StatelessWidget {
 
           child: _ConversationTile(
             conversation: conversation,
-            isSelected: false,
+            isSelected: controller.selectedConversation?.id == conversation.id,
             controller: controller,
             onTap: () => onConversationSelected(conversation),
             onLongPress: () => _showConversationActions(context, conversation),
@@ -337,17 +392,17 @@ class ConversationList extends StatelessWidget {
 
         return Container(
           decoration: BoxDecoration(
-            color: isDarkMode ? Color(0xFF2D2D2D) : Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            color: isDarkMode ? const Color(0xFF2D2D2D) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          margin: EdgeInsets.only(left: 10, right: 10, top: 10),
+          margin: const EdgeInsets.only(left: 10, right: 10, top: 10),
           child: SafeArea(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Handle bar at top
                 Container(
-                  margin: EdgeInsets.symmetric(vertical: 10),
+                  margin: const EdgeInsets.symmetric(vertical: 10),
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
@@ -484,7 +539,7 @@ class ConversationList extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -551,10 +606,18 @@ class _ConversationTileState extends State<_ConversationTile> {
   // Helper to get the other participant in a conversation (not the current user)
   User _getOtherParticipant() {
     final currentUserId = widget.controller.currentUserId;
-    return widget.conversation.participants.firstWhere(
-      (user) => user.id != currentUserId,
-      orElse: () => widget.conversation.participants.first,
-    );
+    // Safely handle participant retrieval
+    try {
+      return widget.conversation.participants.firstWhere(
+        (user) => user.id != currentUserId,
+        orElse: () => widget.conversation.participants.isNotEmpty
+            ? widget.conversation.participants.first
+            : User(id: '0', name: 'Unknown', avatarUrl: '', isOnline: false),
+      );
+    } catch (e) {
+      // Default user if there's an issue retrieving participant
+      return User(id: '0', name: 'Unknown', avatarUrl: '', isOnline: false);
+    }
   }
 
   // Helper to get a valid avatar URL
@@ -595,47 +658,20 @@ class _ConversationTileState extends State<_ConversationTile> {
     // Get a valid avatar URL
     final avatarUrl = _getValidAvatarUrl(otherParticipant.avatarUrl);
 
-    // --- FIX: Show last message content even if messages list is empty ---
-    final lastMessage = widget.conversation.lastMessage;
+    // Check if this conversation is the selected one
+    final isSelected = widget.isSelected;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: Container(
-        color: Colors.transparent,
+        color: isSelected
+            ? theme.primaryColor.withOpacity(0.1)
+            : Colors.transparent,
         child: Stack(
           children: [
             ListTile(
-              onTap: () {
-                // Set controller on conversation and all its messages before navigating
-                widget.conversation.controller = widget.controller;
-
-                // Set controller on ALL messages in the conversation
-                for (final message in widget.conversation.messages) {
-                  message.controller = widget.controller;
-                }
-
-                // --- FIX: Select the conversation in the controller before navigating ---
-                widget.controller.selectConversation(widget.conversation);
-
-                // Now navigate to the chat detail page
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatDetailPage(
-                      controller: widget.controller,
-                      conversation: widget.conversation,
-                    ),
-                  ),
-                ).then((_) {
-                  // Force refresh when returning
-                  if (widget.controller.selectedConversation?.id ==
-                      widget.conversation.id) {
-                    widget.controller.selectConversation(widget.conversation);
-                  }
-                  widget.controller.notifyListeners();
-                });
-              },
+              onTap: widget.onTap,
               onLongPress: widget.onLongPress,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -671,8 +707,10 @@ class _ConversationTileState extends State<_ConversationTile> {
                 children: [
                   Expanded(
                     child: Text(
-                      // Use other participant's name instead of conversation displayName
-                      otherParticipant.name,
+                      // Use displayName which handles group vs individual chats
+                      widget.conversation.isGroup
+                          ? widget.conversation.groupName ?? 'Group Chat'
+                          : otherParticipant.name,
                       style: TextStyle(
                         fontWeight: widget.conversation.unreadCount > 0
                             ? FontWeight.bold
@@ -686,7 +724,9 @@ class _ConversationTileState extends State<_ConversationTile> {
                     formattedTime,
                     style: TextStyle(
                       fontSize: 12,
-                      color: theme.textTheme.bodySmall?.color,
+                      color: widget.conversation.unreadCount > 0
+                          ? ThemeConstants.primaryColor
+                          : theme.textTheme.bodySmall?.color,
                       fontWeight: widget.conversation.unreadCount > 0
                           ? FontWeight.bold
                           : FontWeight.normal,
@@ -707,8 +747,7 @@ class _ConversationTileState extends State<_ConversationTile> {
                     ),
                   Expanded(
                     child: Text(
-                      _formatLastMessageFromLastMessage(
-                          lastMessage, widget.conversation),
+                      _formatLastMessagePreview(widget.conversation),
                       style: TextStyle(
                         fontWeight: widget.conversation.unreadCount > 0
                             ? FontWeight.bold
@@ -721,11 +760,29 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (widget.conversation.unreadCount > 0 && !_isHovering)
+                    Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ThemeConstants.primaryColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        widget.conversation.unreadCount.toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
 
-            // Fix the hover menu with unread badge
+            // Show options menu when hovering
             if (_isHovering)
               Positioned(
                 top: 28, // More visually centered position
@@ -884,31 +941,35 @@ class _ConversationTileState extends State<_ConversationTile> {
           // Store the state BEFORE toggling so we know what message to show
           final willBeMuted = !conversation.isMuted;
 
-          // TODO: When implementing Firebase, add async handling here
           controller.toggleMute(conversation);
 
-          ResponsiveSnackBar.showInfo(
-            context: context,
-            message: willBeMuted
-                ? TextStrings.conversationMuted
-                : TextStrings.conversationUnmuted,
-          );
+          if (context.mounted) {
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message: willBeMuted
+                  ? TextStrings.conversationMuted
+                  : TextStrings.conversationUnmuted,
+            );
+          }
           break;
 
         case 'read':
-          // TODO: When implementing Firebase, add async handling for marking read/unread
           if (conversation.unreadCount > 0) {
             controller.markConversationAsRead(conversation);
-            ResponsiveSnackBar.showInfo(
-              context: context,
-              message: TextStrings.markedAsRead,
-            );
+            if (context.mounted) {
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: TextStrings.markedAsRead,
+              );
+            }
           } else {
             controller.markConversationAsUnread(conversation);
-            ResponsiveSnackBar.showInfo(
-              context: context,
-              message: TextStrings.markedAsUnread,
-            );
+            if (context.mounted) {
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: TextStrings.markedAsUnread,
+              );
+            }
           }
           break;
 
@@ -916,19 +977,22 @@ class _ConversationTileState extends State<_ConversationTile> {
           // Store the state BEFORE toggling so we know what message to show
           final willBeArchived = !conversation.isArchived;
 
-          // TODO: When implementing Firebase, add async handling here
           controller.toggleArchive(conversation);
 
-          ResponsiveSnackBar.showInfo(
-            context: context,
-            message: willBeArchived
-                ? TextStrings.conversationArchived
-                : TextStrings.conversationUnarchived,
-          );
+          if (context.mounted) {
+            ResponsiveSnackBar.showInfo(
+              context: context,
+              message: willBeArchived
+                  ? TextStrings.conversationArchived
+                  : TextStrings.conversationUnarchived,
+            );
+          }
           break;
 
         case 'delete':
-          _confirmDeleteConversation(context, conversation);
+          if (context.mounted) {
+            _confirmDeleteConversation(context, conversation);
+          }
           break;
       }
     });
@@ -936,7 +1000,6 @@ class _ConversationTileState extends State<_ConversationTile> {
 
   void _confirmDeleteConversation(
       BuildContext context, Conversation conversation) {
-    // TODO: When implementing Firebase, add confirmation that deletion was successful
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -965,6 +1028,7 @@ class _ConversationTileState extends State<_ConversationTile> {
     );
   }
 
+  // Format the timestamp in a user-friendly way
   String _formatMessageTime(DateTime time) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -982,44 +1046,43 @@ class _ConversationTileState extends State<_ConversationTile> {
     }
   }
 
-  String _formatLastMessage(Conversation conversation) {
+  // Format the last message preview in the conversation list
+  String _formatLastMessagePreview(Conversation conversation) {
     final message = conversation.lastMessage;
-    final sender = message.senderId == 'current' ? TextStrings.sentByYou : '';
+    final currentUserId = widget.controller.currentUserId;
 
-    if (message.content.isEmpty) {
-      return conversation.isGroup && message.senderId != 'current'
-          ? '${message.senderName}: ${TextStrings.noMessage}'
-          : TextStrings.noMessage;
-    }
+    // Display who sent the message in a group chat
+    final bool isGroup = conversation.isGroup;
+    final bool sentByMe = message.senderId == currentUserId;
 
-    // Handle voice messages
+    // Handle different message types
+    String content;
+
     if (message.messageType == MessageType.voice) {
-      return conversation.isGroup && message.senderId != 'current'
-          ? '${message.senderName}: ${TextStrings.voiceMessage}'
-          : '$sender${TextStrings.voiceMessage}';
+      content = TextStrings.voiceMessage;
+    } else if (message.messageType == MessageType.image) {
+      content = TextStrings.photo;
+    } else if (message.messageType == MessageType.video) {
+      content = TextStrings.video;
+    } else if (message.messageType == MessageType.file) {
+      content = TextStrings.file;
+    } else {
+      // For text messages
+      content =
+          message.content.isEmpty ? TextStrings.noMessage : message.content;
     }
 
-    return conversation.isGroup && message.senderId != 'current'
-        ? '${message.senderName}: ${message.content}'
-        : '$sender${message.content}';
-  }
-
-  // Show last message content from the lastMessage field (not from messages list)
-  String _formatLastMessageFromLastMessage(
-      Message message, Conversation conversation) {
-    final sender = message.senderId == 'current' ? TextStrings.sentByYou : '';
-    if (message.content.isEmpty) {
-      return conversation.isGroup && message.senderId != 'current'
-          ? '${message.senderName}: ${TextStrings.noMessage}'
-          : TextStrings.noMessage;
+    // Format based on whether it's a group or direct message
+    if (isGroup) {
+      if (sentByMe) {
+        return "You: $content";
+      } else {
+        return "${message.senderName}: $content";
+      }
+    } else {
+      // For direct messages, just show content for received messages
+      // But prefix "You: " for sent messages
+      return sentByMe ? "You: $content" : content;
     }
-    if (message.messageType == MessageType.voice) {
-      return conversation.isGroup && message.senderId != 'current'
-          ? '${message.senderName}: ${TextStrings.voiceMessage}'
-          : '$sender${TextStrings.voiceMessage}';
-    }
-    return conversation.isGroup && message.senderId != 'current'
-        ? '${message.senderName}: ${message.content}'
-        : '$sender${message.content}';
   }
 }

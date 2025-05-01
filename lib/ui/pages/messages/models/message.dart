@@ -1,239 +1,273 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
-import 'package:uuid/uuid.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import for Timestamp
 
-enum MessageType {
-  text,
-  voice,
-  image,
-  video,
-  file,
-}
+enum MessageType { text, image, video, file, location, voice, system }
 
-enum MessageStatus {
-  sending,
-  sent,
-  delivered,
-  read,
-  failed,
-}
+enum MessageStatus { sending, sent, delivered, read, failed }
 
 class Message {
   final String id;
+  final String conversationId;
   final String senderId;
   final String senderName;
   final String content;
   final DateTime timestamp;
+  bool isRead;
+  MessageStatus status;
   final MessageType messageType;
-  late final MessageStatus? status; // Only for outgoing messages
-  bool isRead; // Make mutable for marking as read
-  final bool isSent;
+  final String? mediaUrl;
+  final String? replyToMessageId;
+  final String? replyToContent;
+  final String? replyToSenderName;
+  final int? voiceDuration;
+  final String? forwardedFrom;
+  MessagesController? controller;
   final bool isEdited;
-  final String? mediaUrl; // URL for voice messages, images, etc.
-  final int? voiceDuration; // Duration in seconds for voice messages
-  final String? replyToId; // ID of the message this is replying to
-  final String? replyToSenderName; // Name of the sender of the replied message
-  final String? replyToContent; // Content of the replied message
-  final MessageType? replyToMessageType; // Type of the replied message
-  final String? forwardedFrom; // Name of the original sender if forwarded
-  final DateTime? editedAt; // When the message was last edited
-  final String conversationId; // Add conversationId field
-  MessagesController? controller; // Reference to the controller
+  final MessageType? replyToMessageType;
+
+  // Getters for convenience
+  bool get isForwarded => forwardedFrom != null;
+  bool get isReply => replyToMessageId != null;
+  String? get replyToId => replyToMessageId;
 
   Message({
     required this.id,
+    required this.conversationId,
     required this.senderId,
     required this.senderName,
     required this.content,
     required this.timestamp,
-    required this.conversationId, // Make conversationId required
-    this.messageType = MessageType.text,
-    this.status,
     this.isRead = false,
-    this.isSent = true,
-    this.isEdited = false,
+    this.status = MessageStatus.sending,
+    this.messageType = MessageType.text,
     this.mediaUrl,
-    this.voiceDuration,
-    this.replyToId,
-    this.replyToSenderName,
+    this.replyToMessageId,
     this.replyToContent,
-    this.replyToMessageType,
+    this.replyToSenderName,
+    this.voiceDuration,
     this.forwardedFrom,
-    this.editedAt,
     this.controller,
+    this.isEdited = false,
+    this.replyToMessageType,
   });
 
-  bool get isReply => replyToId != null;
-  bool get isForwarded => forwardedFrom != null;
-  bool get isMedia => messageType != MessageType.text;
-  bool get isVoice => messageType == MessageType.voice;
+  factory Message.fromJson(Map<String, dynamic> json) {
+    // Handle different timestamp formats
+    DateTime timestamp;
+    final timestampData = json['timestamp'];
+    if (timestampData is Timestamp) {
+      timestamp = timestampData.toDate();
+    } else if (timestampData is int) {
+      // Handle Unix timestamp in milliseconds
+      timestamp = DateTime.fromMillisecondsSinceEpoch(timestampData);
+    } else if (timestampData is String) {
+      try {
+        // Try parsing as ISO date string
+        timestamp = DateTime.parse(timestampData);
+      } catch (e) {
+        try {
+          // If parsing fails, try converting string to int (milliseconds)
+          timestamp =
+              DateTime.fromMillisecondsSinceEpoch(int.parse(timestampData));
+        } catch (e) {
+          // If all parsing attempts fail, use current date as fallback
+          print(
+              'Failed to parse timestamp: $timestampData. Using current time.');
+          timestamp = DateTime.now();
+        }
+      }
+    } else {
+      // Default to current time if no valid timestamp
+      print(
+          'Unsupported timestamp format: $timestampData. Using current time.');
+      timestamp = DateTime.now();
+    }
 
-  // Create a copy with potentially different values
-  Message copyWith({
-    String? id,
-    String? senderId,
-    String? senderName,
-    String? content,
-    DateTime? timestamp,
-    MessageType? messageType,
-    MessageStatus? status,
-    bool? isRead,
-    bool? isSent,
-    bool? isEdited,
-    String? mediaUrl,
-    int? voiceDuration,
-    String? replyToId,
-    String? replyToSenderName,
-    String? replyToContent,
-    MessageType? replyToMessageType,
-    String? forwardedFrom,
-    DateTime? editedAt,
-    String? conversationId,
-    MessagesController? controller,
-  }) {
+    // Convert string status to enum
+    MessageStatus messageStatus = MessageStatus.sent;
+    if (json.containsKey('status')) {
+      final statusStr = json['status'] as String? ?? 'sent';
+      switch (statusStr) {
+        case 'sending':
+          messageStatus = MessageStatus.sending;
+          break;
+        case 'sent':
+          messageStatus = MessageStatus.sent;
+          break;
+        case 'delivered':
+          messageStatus = MessageStatus.delivered;
+          break;
+        case 'read':
+          messageStatus = MessageStatus.read;
+          break;
+        case 'failed':
+          messageStatus = MessageStatus.failed;
+          break;
+      }
+    }
+
+    // Convert message type
+    final typeStr = json['messageType'] as String? ?? 'text';
+    MessageType type;
+    switch (typeStr) {
+      case 'image':
+        type = MessageType.image;
+        break;
+      case 'video':
+        type = MessageType.video;
+        break;
+      case 'file':
+        type = MessageType.file;
+        break;
+      case 'location':
+        type = MessageType.location;
+        break;
+      case 'voice':
+        type = MessageType.voice;
+        break;
+      case 'system':
+        type = MessageType.system;
+        break;
+      default:
+        type = MessageType.text;
+    }
+
     return Message(
-      id: id ?? this.id,
-      senderId: senderId ?? this.senderId,
-      senderName: senderName ?? this.senderName,
-      content: content ?? this.content,
-      timestamp: timestamp ?? this.timestamp,
-      messageType: messageType ?? this.messageType,
-      status: status ?? this.status,
-      isRead: isRead ?? this.isRead,
-      isSent: isSent ?? this.isSent,
-      isEdited: isEdited ?? this.isEdited,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
-      voiceDuration: voiceDuration ?? this.voiceDuration,
-      replyToId: replyToId ?? this.replyToId,
-      replyToSenderName: replyToSenderName ?? this.replyToSenderName,
-      replyToContent: replyToContent ?? this.replyToContent,
-      replyToMessageType: replyToMessageType ?? this.replyToMessageType,
-      forwardedFrom: forwardedFrom ?? this.forwardedFrom,
-      editedAt: editedAt ?? this.editedAt,
-      conversationId: conversationId ?? this.conversationId,
-      controller: controller ?? this.controller,
+      id: json['id'],
+      conversationId: json['conversationId'] ?? '',
+      senderId: json['senderId'] ?? '',
+      senderName: json['senderName'] ?? 'Unknown',
+      content: json['content'] ?? '',
+      timestamp: timestamp,
+      isRead: json['isRead'] ?? false,
+      status: messageStatus,
+      messageType: type,
+      mediaUrl: json['mediaUrl'],
+      replyToMessageId: json['replyToMessageId'],
+      replyToContent: json['replyToContent'],
+      replyToSenderName: json['replyToSenderName'],
+      voiceDuration: json['voiceDuration'],
+      forwardedFrom: json['forwardedFrom'],
+      controller: null, // Default value for controller
+      isEdited: json['isEdited'] ?? false,
+      replyToMessageType: json['replyToMessageType'] != null
+          ? MessageType.values.firstWhere(
+              (e) =>
+                  e.toString() == 'MessageType.${json['replyToMessageType']}',
+              orElse: () => MessageType.text)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
+    // Convert enum status to string
+    String statusStr;
+    switch (status) {
+      case MessageStatus.sending:
+        statusStr = 'sending';
+        break;
+      case MessageStatus.sent:
+        statusStr = 'sent';
+        break;
+      case MessageStatus.delivered:
+        statusStr = 'delivered';
+        break;
+      case MessageStatus.read:
+        statusStr = 'read';
+        break;
+      case MessageStatus.failed:
+        statusStr = 'failed';
+        break;
+    }
+
+    // Convert message type to string
+    String messageTypeStr;
+    switch (messageType) {
+      case MessageType.image:
+        messageTypeStr = 'image';
+        break;
+      case MessageType.video:
+        messageTypeStr = 'video';
+        break;
+      case MessageType.file:
+        messageTypeStr = 'file';
+        break;
+      case MessageType.location:
+        messageTypeStr = 'location';
+        break;
+      case MessageType.voice:
+        messageTypeStr = 'voice';
+        break;
+      case MessageType.system:
+        messageTypeStr = 'system';
+        break;
+      default:
+        messageTypeStr = 'text';
+    }
+
     return {
       'id': id,
+      'conversationId': conversationId,
       'senderId': senderId,
       'senderName': senderName,
       'content': content,
-      'timestamp': timestamp.millisecondsSinceEpoch,
-      'messageType': messageType.toString().split('.').last,
-      'status': status?.toString().split('.').last,
+      'timestamp': timestamp,
       'isRead': isRead,
-      'isSent': isSent,
-      'isEdited': isEdited,
+      'status': statusStr,
+      'messageType': messageTypeStr,
       'mediaUrl': mediaUrl,
-      'voiceDuration': voiceDuration,
-      'replyToId': replyToId,
-      'replyToSenderName': replyToSenderName,
+      'replyToMessageId': replyToMessageId,
       'replyToContent': replyToContent,
-      'replyToMessageType': replyToMessageType?.toString().split('.').last,
+      'replyToSenderName': replyToSenderName,
+      'voiceDuration': voiceDuration,
       'forwardedFrom': forwardedFrom,
-      'editedAt': editedAt?.millisecondsSinceEpoch,
-      'conversationId': conversationId,
+      'isEdited': isEdited,
+      'replyToMessageType': replyToMessageType != null
+          ? replyToMessageType.toString().split('.').last
+          : null,
     };
   }
 
-  static Message fromJson(Map<String, dynamic> json) {
-    int timestampMillis;
-    if (json['timestamp'] is int) {
-      timestampMillis = json['timestamp'];
-    } else if (json['timestamp'] is String) {
-      try {
-        timestampMillis =
-            DateTime.parse(json['timestamp']).millisecondsSinceEpoch;
-      } catch (_) {
-        try {
-          timestampMillis = int.parse(json['timestamp']);
-        } catch (_) {
-          timestampMillis = DateTime.now().millisecondsSinceEpoch;
-        }
-      }
-    } else if (json['timestamp'] is Timestamp) {
-      // Now Timestamp is properly imported from cloud_firestore
-      timestampMillis =
-          (json['timestamp'] as Timestamp).toDate().millisecondsSinceEpoch;
-    } else {
-      timestampMillis = DateTime.now().millisecondsSinceEpoch;
-    }
-
-    DateTime? editedAt;
-    if (json['editedAt'] is int) {
-      editedAt = DateTime.fromMillisecondsSinceEpoch(json['editedAt']);
-    } else if (json['editedAt'] is String) {
-      try {
-        editedAt = DateTime.parse(json['editedAt']);
-      } catch (_) {
-        editedAt = null;
-      }
-    } else if (json['editedAt'] is Timestamp) {
-      // Now Timestamp is properly imported from cloud_firestore
-      editedAt = (json['editedAt'] as Timestamp).toDate();
-    }
-
+  // Add a copyWith method to enable creating copies with some fields changed
+  Message copyWith({
+    String? id,
+    String? conversationId,
+    String? senderId,
+    String? senderName,
+    String? content,
+    DateTime? timestamp,
+    bool? isRead,
+    MessageStatus? status,
+    MessageType? messageType,
+    String? mediaUrl,
+    String? replyToMessageId,
+    String? replyToContent,
+    String? replyToSenderName,
+    int? voiceDuration,
+    String? forwardedFrom,
+    MessagesController? controller,
+    bool? isEdited,
+    MessageType? replyToMessageType,
+  }) {
     return Message(
-      id: json['id'] ?? const Uuid().v4(),
-      senderId: json['senderId'] ?? '',
-      senderName: json['senderName'] ?? 'Unknown',
-      content: json['content'] ?? '',
-      timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMillis),
-      messageType: _parseMessageType(json['messageType']),
-      status: json['status'] != null
-          ? _parseMessageStatus(json['status'].toString())
-          : null,
-      isRead: json['isRead'] ?? false,
-      isSent: json['isSent'] ?? true,
-      isEdited: json['isEdited'] ?? false,
-      mediaUrl: json['mediaUrl'],
-      voiceDuration: json['voiceDuration'],
-      replyToId: json['replyToId'],
-      replyToSenderName: json['replyToSenderName'],
-      replyToContent: json['replyToContent'],
-      replyToMessageType: json['replyToMessageType'] != null
-          ? _parseMessageType(json['replyToMessageType'].toString())
-          : null,
-      forwardedFrom: json['forwardedFrom'],
-      editedAt: editedAt,
-      conversationId: json['conversationId'] ?? '',
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      content: content ?? this.content,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+      status: status ?? this.status,
+      messageType: messageType ?? this.messageType,
+      mediaUrl: mediaUrl,
+      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      replyToContent: replyToContent ?? this.replyToContent,
+      replyToSenderName: replyToSenderName ?? this.replyToSenderName,
+      voiceDuration: voiceDuration ?? this.voiceDuration,
+      forwardedFrom: forwardedFrom ?? this.forwardedFrom,
+      controller: controller ?? this.controller,
+      isEdited: isEdited ?? this.isEdited,
+      replyToMessageType: replyToMessageType ?? this.replyToMessageType,
     );
-  }
-
-  static MessageType _parseMessageType(String? type) {
-    switch (type) {
-      case 'text':
-        return MessageType.text;
-      case 'voice':
-        return MessageType.voice;
-      case 'image':
-        return MessageType.image;
-      case 'video':
-        return MessageType.video;
-      case 'file':
-        return MessageType.file;
-      default:
-        return MessageType.text;
-    }
-  }
-
-  static MessageStatus _parseMessageStatus(String status) {
-    switch (status) {
-      case 'sending':
-        return MessageStatus.sending;
-      case 'sent':
-        return MessageStatus.sent;
-      case 'delivered':
-        return MessageStatus.delivered;
-      case 'read':
-        return MessageStatus.read;
-      case 'failed':
-        return MessageStatus.failed;
-      default:
-        return MessageStatus.sending;
-    }
   }
 }

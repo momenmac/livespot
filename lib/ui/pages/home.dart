@@ -6,6 +6,8 @@ import 'camera_page.dart';
 import 'notification/notifications_page.dart';
 import '../profile/profile_page.dart';
 import 'home/components/home_content.dart';
+import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'dart:async';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -18,20 +20,69 @@ class _HomeState extends State<Home> {
   int _selectedIndex = 0;
   bool _showMap = false;
   double? dragStartX;
+  int? _unreadMessageCount;
+  Timer? _unreadCheckTimer;
+
+  // Reference to the MessagesController for unread count
+  // We'll initialize this when creating the MessagesPage
+  MessagesController? _messagesController;
 
   // Create pages list with the callback passed to HomeContent
-  late final List<Widget> _pages = <Widget>[
-    HomeContent(onMapToggle: _toggleMap), // Pass the callback
-    const MessagesPage(),
-    const CameraPage(),
-    const NotificationsPage(),
-    const ProfilePage(),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Create a MessagesController instance that will be shared
+    _messagesController = MessagesController();
+
+    // Initialize pages with the shared controller
+    _pages = <Widget>[
+      HomeContent(onMapToggle: _toggleMap),
+      MessagesPage(controller: _messagesController),
+      const CameraPage(),
+      const NotificationsPage(),
+      const ProfilePage(),
+    ];
+
+    // Initial update of unread counts
+    _updateUnreadCounts();
+
+    // Set up a timer to periodically check for unread messages
+    _unreadCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _updateUnreadCounts();
+    });
+  }
+
+  @override
+  void dispose() {
+    _unreadCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _updateUnreadCounts() async {
+    if (_messagesController != null) {
+      final unreadCount = _messagesController!.getTotalUnreadCount();
+      if (mounted) {
+        setState(() {
+          _unreadMessageCount = unreadCount;
+        });
+      }
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+
+    // If navigating to messages tab, update unread count after a short delay
+    if (index == 1) {
+      Future.delayed(const Duration(seconds: 1), () {
+        _updateUnreadCounts();
+      });
+    }
   }
 
   void _toggleMap() {
@@ -60,6 +111,7 @@ class _HomeState extends State<Home> {
                     currentIndex: _selectedIndex,
                     onTap: _onItemTapped,
                     body: _pages[_selectedIndex],
+                    unreadMessageCount: _unreadMessageCount,
                   ),
                 );
               },
@@ -95,6 +147,7 @@ class _HomeState extends State<Home> {
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
             body: _pages[_selectedIndex],
+            unreadMessageCount: _unreadMessageCount,
           ),
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),

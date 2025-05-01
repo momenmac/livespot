@@ -55,6 +55,9 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
 
   @override
   Widget build(BuildContext context) {
+    // Check if we need to show badge
+    final showBadge = widget.badgeCount != null && widget.badgeCount! > 0;
+
     return IconButton(
       padding: EdgeInsets.zero,
       onPressed: () {
@@ -75,7 +78,7 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
               ),
             ),
           ),
-          if (widget.badgeCount != null && widget.badgeCount! > 0)
+          if (showBadge)
             Positioned(
               right: -4,
               top: -2,
@@ -92,7 +95,9 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
                 ),
                 child: Center(
                   child: Text(
-                    widget.badgeCount.toString(),
+                    widget.badgeCount! > 99
+                        ? "99+"
+                        : widget.badgeCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
@@ -132,6 +137,11 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Only show badge counts when they are actually greater than zero
+    final showMessageBadge =
+        unreadMessageCount != null && unreadMessageCount! > 0;
+    final showNotificationBadge =
+        unreadNotificationCount != null && unreadNotificationCount! > 0;
 
     return AppBar(
       shape: RoundedRectangleBorder(
@@ -183,7 +193,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     : theme.iconTheme.color!,
                 size: 28, // Customize icon size
                 onPressed: () => onTap(1),
-                badgeCount: unreadMessageCount,
+                badgeCount: showMessageBadge ? unreadMessageCount : null,
               ),
             ),
             Container(
@@ -203,7 +213,8 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     : theme.iconTheme.color!,
                 size: 28, // Customize icon size
                 onPressed: () => onTap(3),
-                badgeCount: unreadNotificationCount,
+                badgeCount:
+                    showNotificationBadge ? unreadNotificationCount : null,
               ),
             ),
             Container(
@@ -249,6 +260,11 @@ class CustomNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Only show badge counts when they are actually greater than zero
+    final showMessageBadge =
+        unreadMessageCount != null && unreadMessageCount! > 0;
+    final showNotificationBadge =
+        unreadNotificationCount != null && unreadNotificationCount! > 0;
 
     return BottomAppBar(
       height: 65,
@@ -277,7 +293,7 @@ class CustomNavigationBar extends StatelessWidget {
                   : theme.iconTheme.color!,
               size: 28,
               onPressed: () => onTap(1),
-              badgeCount: unreadMessageCount,
+              badgeCount: showMessageBadge ? unreadMessageCount : null,
             ),
             const SizedBox(width: 40),
             AnimatedIconButton(
@@ -289,7 +305,8 @@ class CustomNavigationBar extends StatelessWidget {
                   : theme.iconTheme.color!,
               size: theme.iconTheme.size ?? 28,
               onPressed: () => onTap(3),
-              badgeCount: unreadNotificationCount,
+              badgeCount:
+                  showNotificationBadge ? unreadNotificationCount : null,
             ),
             AnimatedIconButton(
               selectedIcon: Icons.person,
@@ -328,18 +345,14 @@ class CustomScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLargeScreen = MediaQuery.of(context).size.width > 900;
 
-    // Test values for badges - remove these lines in production
-    final testMessageCount = unreadMessageCount ?? 5;
-    final testNotificationCount = unreadNotificationCount ?? 3;
-
     return Scaffold(
       appBar: isLargeScreen
           ? TopNavigationBar(
               currentIndex: currentIndex,
               onTap: onTap,
               rounded: true,
-              unreadMessageCount: testMessageCount, // Use test value
-              unreadNotificationCount: testNotificationCount, // Use test value
+              unreadMessageCount: unreadMessageCount,
+              unreadNotificationCount: unreadNotificationCount,
             )
           : null,
       bottomNavigationBar: isLargeScreen
@@ -347,8 +360,8 @@ class CustomScaffold extends StatelessWidget {
           : CustomNavigationBar(
               currentIndex: currentIndex,
               onTap: onTap,
-              unreadNotificationCount: testNotificationCount, // Use test value
-              unreadMessageCount: testMessageCount, // Use test value
+              unreadNotificationCount: unreadNotificationCount,
+              unreadMessageCount: unreadMessageCount,
             ),
       floatingActionButton: isLargeScreen
           ? null

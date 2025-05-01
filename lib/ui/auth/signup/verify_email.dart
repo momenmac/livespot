@@ -421,19 +421,18 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
                                   style: Theme.of(context).textTheme.bodyLarge,
                                   textAlign: TextAlign.center,
                                 ),
-                                if (emailToShow != null)
-                                  Text(
-                                    widget.censorEmail
-                                        ? censorEmail(emailToShow)
-                                        : emailToShow,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                    textAlign: TextAlign.center,
-                                  ),
+                                Text(
+                                  widget.censorEmail
+                                      ? censorEmail(emailToShow)
+                                      : emailToShow,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
                                 const SizedBox(height: 37),
                                 VerificationCodeField(
                                   key: _verificationKey,
