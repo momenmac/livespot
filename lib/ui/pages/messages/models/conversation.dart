@@ -8,8 +8,8 @@ class Conversation {
   final List<User> participants;
   final String? groupName;
   final bool isGroup;
-  final bool isArchived;
-  final bool isMuted;
+  bool isArchived; // Changed from final to mutable
+  bool isMuted; // Changed from final to mutable
   int unreadCount;
   final List<Message> messages;
   final Message lastMessage;

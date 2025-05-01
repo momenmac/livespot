@@ -772,70 +772,100 @@ class _MessageBubbleState extends State<MessageBubble> {
     return InkWell(
       onLongPress: widget.onLongPress,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06), // Slightly heavier shadow
-              blurRadius: 3,
-              offset: const Offset(0, 1),
+      child: Stack(
+        children: [
+          // The message bubble itself
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+              border: !isSent && theme.brightness == Brightness.light
+                  ? Border.all(color: Colors.grey.withOpacity(0.2), width: 0.5)
+                  : null,
             ),
-          ],
-          // Add a subtle border to improve definition in light mode
-          border: !isSent && theme.brightness == Brightness.light
-              ? Border.all(color: Colors.grey.withOpacity(0.2), width: 0.5)
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              _cleanMessageContent(widget.message.content),
-              style: TextStyle(
-                color: textColor,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  DateFormat('HH:mm').format(widget.message.timestamp),
+                  _cleanMessageContent(widget.message.content),
                   style: TextStyle(
-                    color: isSent
-                        ? Colors.white.withAlpha(179)
-                        : theme.textTheme.bodySmall?.color,
-                    fontSize: 11,
+                    color: textColor,
+                    fontSize: 16,
                   ),
                 ),
-                if (widget.message.isEdited == true)
-                  Text(
-                    " (edited)", // Added space inside the string instead of padding
-                    style: TextStyle(
-                      color: isSent
-                          ? Colors.white70
-                          : Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.color
-                              ?.withOpacity(0.7),
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      DateFormat('HH:mm').format(widget.message.timestamp),
+                      style: TextStyle(
+                        color: isSent
+                            ? Colors.white.withAlpha(179)
+                            : theme.textTheme.bodySmall?.color,
+                        fontSize: 11,
+                      ),
                     ),
-                  ),
-                if (isSent)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: _buildWhatsAppStyleStatusIndicator(),
-                  ),
+                    if (isSent)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: _buildWhatsAppStyleStatusIndicator(),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          
+          // The edited indicator overlay - completely separate from the message content
+          if (widget.message.isEdited == true)
+            Positioned(
+              top: -12,
+              right: isSent ? 10 : null,
+              left: isSent ? null : 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.edit,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      "EDITED",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -143,6 +143,30 @@ class ConversationList extends StatelessWidget {
     }
   }
 
+  // Helper to get the other participant in a conversation (not the current user)
+  User _getOtherParticipant(Conversation conversation) {
+    final currentUserId = controller.currentUserId;
+    // Safely handle participant retrieval
+    try {
+      return conversation.participants.firstWhere(
+        (user) => user.id != currentUserId,
+        orElse: () => conversation.participants.isNotEmpty
+            ? conversation.participants.first
+            : User(id: '0', name: 'Unknown', avatarUrl: '', isOnline: false),
+      );
+    } catch (e) {
+      // Default user if there's an issue retrieving participant
+      return User(id: '0', name: 'Unknown', avatarUrl: '', isOnline: false);
+    }
+  }
+
+  // Helper to check if the other participant is online
+  bool _isParticipantOnline(Conversation conversation) {
+    if (conversation.isGroup) return false;
+    final otherParticipant = _getOtherParticipant(conversation);
+    return otherParticipant.isOnline;
+  }
+
   // Helper method to build the appropriate content based on state
   Widget _buildConversationListContent(
       BuildContext context, ThemeData theme, bool isDarkMode) {
@@ -432,13 +456,16 @@ class ConversationList extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              conversation.displayName,
+                              // Only show the other participant's name (not your own)
+                              conversation.isGroup
+                                  ? conversation.groupName ?? 'Group Chat'
+                                  : _getOtherParticipant(conversation).name,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (!conversation.isGroup && conversation.isOnline)
+                            if (!conversation.isGroup && _isParticipantOnline(conversation))
                               Text(
                                 TextStrings.online,
                                 style: TextStyle(
@@ -463,45 +490,17 @@ class ConversationList extends StatelessWidget {
                   ),
                 ),
 
-                // Action buttons grid
+                // Action buttons in a single row
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Calculate how many actions to show per row
-                      final double screenWidth = constraints.maxWidth;
-                      final int itemsPerRow = screenWidth > 300 ? 3 : 2;
-
-                      // Create rows of actions
-                      final List<Widget> actionRows = [];
-                      for (int i = 0; i < actions.length; i += itemsPerRow) {
-                        final rowItems = actions.sublist(
-                            i,
-                            i + itemsPerRow > actions.length
-                                ? actions.length
-                                : i + itemsPerRow);
-
-                        actionRows.add(
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: rowItems
-                                  .map((action) => _buildCircularAction(
-                                        icon: action.icon,
-                                        label: action.label,
-                                        color: action.color,
-                                        onTap: action.onTap,
-                                      ))
-                                  .toList(),
-                            ),
-                          ),
-                        );
-                      }
-
-                      return Column(children: actionRows);
-                    },
+                  padding: const EdgeInsets.fromLTRB(8, 20, 8, 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: actions.map((action) => _buildCircularAction(
+                      icon: action.icon,
+                      label: action.label,
+                      color: action.color,
+                      onTap: action.onTap,
+                    )).toList(),
                   ),
                 ),
                 const SizedBox(height: 10),

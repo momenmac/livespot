@@ -386,6 +386,22 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     );
   }
 
+  void _toggleMuteConversation() {
+    setState(() {
+      widget.conversation.isMuted = !widget.conversation.isMuted;
+    });
+    // Update the conversation in the database or controller
+    _controller.updateConversation(widget.conversation);
+  }
+
+  void _toggleArchiveConversation() {
+    setState(() {
+      widget.conversation.isArchived = !widget.conversation.isArchived;
+    });
+    // Update the conversation in the database or controller
+    _controller.updateConversation(widget.conversation);
+  }
+
   // Helper to validate and fix avatar URLs
   String _getValidAvatarUrl(String url, String userName) {
     if (url.isEmpty) return '';
@@ -456,11 +472,48 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'delete') {
-                _confirmDeleteConversation();
+              switch (value) {
+                case 'delete':
+                  _confirmDeleteConversation();
+                  break;
+                case 'mute':
+                  _toggleMuteConversation();
+                  break;
+                case 'archive':
+                  _toggleArchiveConversation();
+                  break;
               }
             },
             itemBuilder: (context) => [
+              // Mute/Unmute option
+              PopupMenuItem(
+                value: 'mute',
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.conversation.isMuted ? Icons.volume_up : Icons.volume_off,
+                      color: ThemeConstants.primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(widget.conversation.isMuted ? 'Unmute' : 'Mute'),
+                  ],
+                ),
+              ),
+              // Archive/Unarchive option
+              PopupMenuItem(
+                value: 'archive',
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.conversation.isArchived ? Icons.unarchive : Icons.archive,
+                      color: ThemeConstants.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(widget.conversation.isArchived ? 'Unarchive' : 'Archive'),
+                  ],
+                ),
+              ),
+              // Delete option
               const PopupMenuItem(
                 value: 'delete',
                 child: Row(
@@ -647,16 +700,15 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                       // Edit mode indicator with a UI similar to reply
                       if (_controller.editingMessage != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.all(8),
                           color: isDarkMode
-                              ? Colors.grey.withOpacity(0.2)
-                              : Colors.grey.withOpacity(0.1),
+                              ? ThemeConstants.darkCardColor.withAlpha(180)
+                              : ThemeConstants.lightCardColor.withAlpha(180),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: ThemeConstants.primaryColor,
                                   shape: BoxShape.circle,
                                 ),
@@ -665,14 +717,33 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  'Edit message',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Edit message',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: ThemeConstants.primaryColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      _controller.editingMessage!.content,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDarkMode
+                                            ? Colors.white70
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.close, size: 18),
+                                icon: const Icon(Icons.close),
                                 onPressed: () {
                                   setState(() {
                                     _messageController.text = '';
@@ -685,51 +756,85 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         ),
                       Row(
                         children: [
-                          // Hide attachment button when editing
-                          if (_controller.editingMessage == null)
-                            IconButton(
-                              icon: const Icon(Icons.attach_file),
-                              onPressed: () => _showAttachmentOptions(context),
-                              padding: const EdgeInsets.all(12),
-                            )
-                          else
-                            const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _messageController,
-                              focusNode: _messageFocusNode,
-                              decoration: InputDecoration(
-                                hintText: _controller.editingMessage != null
-                                    ? 'Edit message...'
-                                    : 'Type a message...',
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              onChanged: (text) {
-                                // Don't show typing indicator when editing
-                                if (_controller.editingMessage == null) {
-                                  _updateTypingStatus(text.isNotEmpty);
-                                }
-                              },
-                              onSubmitted: (_) => _sendMessage(),
-                            ),
-                          ),
+                          // Left icon - attachment in normal mode, edit icon in edit mode
                           IconButton(
                             icon: Icon(
-                              _controller.editingMessage != null
-                                  ? Icons.check
-                                  : Icons.send,
-                              color: _controller.editingMessage != null
-                                  ? ThemeConstants.orange
-                                  : ThemeConstants.primaryColor,
+                              _controller.editingMessage != null 
+                                ? Icons.edit 
+                                : Icons.attach_file,
+                              color: _controller.editingMessage != null 
+                                ? ThemeConstants.primaryColor
+                                : null,
                             ),
-                            onPressed: _sendMessage,
+                            onPressed: _controller.editingMessage != null
+                                ? null  // Disabled when editing
+                                : () => _showAttachmentOptions(context),
                             padding: const EdgeInsets.all(12),
                           ),
+                          // Text input field
+                          Expanded(
+                            child: Container(
+                              decoration: _controller.editingMessage != null
+                                ? BoxDecoration(
+                                    color: ThemeConstants.primaryColor.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: ThemeConstants.primaryColor.withOpacity(0.3),
+                                      width: 1.0,
+                                    ),
+                                  )
+                                : null,
+                              child: TextField(
+                                controller: _messageController,
+                                focusNode: _messageFocusNode,
+                                decoration: InputDecoration(
+                                  hintText: _controller.editingMessage != null
+                                      ? 'Edit message...'
+                                      : 'Type a message...',
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  // No need for filled background since we're using Container for styling
+                                  filled: false,
+                                ),
+                                textCapitalization: TextCapitalization.sentences,
+                                onChanged: (text) {
+                                  // Don't show typing indicator when editing
+                                  if (_controller.editingMessage == null) {
+                                    _updateTypingStatus(text.isNotEmpty);
+                                  }
+                                },
+                                onSubmitted: (_) => _sendMessage(),
+                              ),
+                            ),
+                          ),
+                          // Send/edit button
+                          _controller.editingMessage != null
+                            ? Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                decoration: BoxDecoration(
+                                  color: ThemeConstants.primaryColor,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: _sendMessage,
+                                  padding: const EdgeInsets.all(12),
+                                ),
+                              )
+                            : IconButton(
+                                icon: const Icon(
+                                  Icons.send,
+                                  color: ThemeConstants.primaryColor,
+                                ),
+                                onPressed: _sendMessage,
+                                padding: const EdgeInsets.all(12),
+                              ),
                         ],
                       ),
                     ],
@@ -843,8 +948,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color:
-                              isCurrentUser ? Colors.white70 : Colors.black87,
+                          color: isCurrentUser ? Colors.white70 : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -853,8 +957,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         style: TextStyle(
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
-                          color:
-                              isCurrentUser ? Colors.white70 : Colors.black87,
+                          color: isCurrentUser ? Colors.white70 : Colors.black87,
                         ),
                       ),
                     ],
@@ -916,7 +1019,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ),
                 ),
 
-              // Time and message status row
+              // Time and message status row with edited indicator
               Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -928,7 +1031,27 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                       color: isCurrentUser ? Colors.white70 : Colors.grey,
                     ),
                   ),
+                  
+                  // Edited indicator
+                  if (message.isEdited)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 4),
+                        Text(
+                          "• edited",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                            color: isCurrentUser ? Colors.white70 : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    
                   const SizedBox(width: 4),
+                  
+                  // Message status indicator
                   InkWell(
                     onTap: () => _showMessageStatusInfo(context),
                     child: getStatusIcon(),

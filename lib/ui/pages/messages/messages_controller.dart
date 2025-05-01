@@ -461,6 +461,36 @@ class MessagesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateConversation(Conversation conversation) async {
+    try {
+      // Update conversation in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(conversation.id)
+          .update({
+        'isMuted': conversation.isMuted,
+        'isArchived': conversation.isArchived,
+      });
+      
+      // Update in local list
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index] = conversation;
+      }
+      
+      // Update selected conversation if needed
+      if (_selectedConversation?.id == conversation.id) {
+        _selectedConversation = conversation;
+      }
+      
+      // Reapply filters to update UI
+      _applyFilters();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error updating conversation: $e');
+    }
+  }
+
   void deleteConversation(Conversation conversation) async {
     final batch = _firestore.batch();
     final messagesSnapshot = await _firestore
@@ -840,7 +870,13 @@ class MessagesController extends ChangeNotifier {
 
   void setEditingMessage(Message? message) {
     _editingMessage = message;
-    messageController.text = message?.content ?? '';
+    // Prefill the message controller with the content to edit
+    if (message != null) {
+      messageController.text = message.content;
+      messageController.selection = TextSelection.fromPosition(
+        TextPosition(offset: messageController.text.length),
+      );
+    }
     notifyListeners();
   }
 
@@ -852,24 +888,47 @@ class MessagesController extends ChangeNotifier {
 
   // Add the updateMessage method to handle editing
   Future<void> updateMessage(Message message, String newContent) async {
-    // Get a reference to the message document in Firestore
-    final messageRef = _firestore
-        .collection('conversations')
-        .doc(_selectedConversation!.id)
-        .collection('messages')
-        .doc(message.id);
+    if (_selectedConversation == null) return;
+    
+    try {
+      // Get a reference to the message document in Firestore
+      final messageRef = _firestore
+          .collection('conversations')
+          .doc(_selectedConversation!.id)
+          .collection('messages')
+          .doc(message.id);
 
-    // Update the message in Firestore
-    await messageRef.update({
-      'content': newContent,
-      'isEdited': true, // Mark the message as edited
-    });
+      // Update the message in Firestore
+      await messageRef.update({
+        'content': newContent,
+        'isEdited': true, // Mark the message as edited
+      });
 
-    // Clear the editing state
-    setEditingMessage(null);
+      // Find and update the in-memory message
+      final index = _selectedConversation!.messages
+          .indexWhere((msg) => msg.id == message.id);
+      
+      if (index != -1) {
+        // Create a new message with updated properties
+        _selectedConversation!.messages[index] = _selectedConversation!.messages[index].copyWith(
+          content: newContent,
+          isEdited: true,
+        );
+      }
 
-    // Notify listeners that the message has been updated
-    notifyListeners();
+      // Clear the editing state
+      setEditingMessage(null);
+
+      // Notify listeners that the message has been updated
+      notifyListeners();
+      
+      // Show a debug print to verify this code is running
+      debugPrint("Message updated with isEdited=true: ${message.id}");
+      
+    } catch (e) {
+      debugPrint("Error updating message: $e");
+      rethrow;
+    }
   }
 
   void ensureMessageControllerReferences() {
