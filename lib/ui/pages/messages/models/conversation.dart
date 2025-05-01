@@ -12,19 +12,28 @@ class Conversation {
   bool isMuted; // Changed from final to mutable
   int unreadCount;
   final List<Message> messages;
-  final Message lastMessage;
+  Message _lastMessage;
 
   Conversation({
     required this.id,
     required this.participants,
-    required this.lastMessage,
+    required Message lastMessage,
     this.groupName,
     this.isGroup = false,
     this.isArchived = false,
     this.isMuted = false,
     this.unreadCount = 0,
     List<Message>? messages,
-  }) : messages = messages ?? [];
+  })  : _lastMessage = lastMessage,
+        messages = messages ?? [];
+
+  // Adding setter for lastMessage
+  set lastMessage(Message message) {
+    _lastMessage = message;
+  }
+
+  // We already have a setter for lastMessage, now add a getter
+  Message get lastMessage => _lastMessage;
 
   // Instead of storing the controller, we'll provide a getter that gets it from context when needed
   MessagesController? get controller =>
@@ -57,7 +66,7 @@ class Conversation {
       isMuted: isMuted ?? this.isMuted,
       unreadCount: unreadCount ?? this.unreadCount,
       messages: messages ?? this.messages,
-      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessage: lastMessage ?? this._lastMessage,
     );
   }
 
@@ -99,13 +108,13 @@ class Conversation {
     return {
       'id': id,
       'participants': participants.map((p) => p.id).toList(),
-      'lastMessage': lastMessage.toJson(),
+      'lastMessage': _lastMessage.toJson(),
       'unreadCount': unreadCount,
       'isGroup': isGroup,
       'groupName': groupName,
       'isMuted': isMuted,
       'isArchived': isArchived,
-      'updatedAt': lastMessage.timestamp.millisecondsSinceEpoch,
+      'updatedAt': _lastMessage.timestamp.millisecondsSinceEpoch,
     };
   }
 

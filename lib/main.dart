@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'package:flutter_application_2/services/auth/session_monitor.dart';
 import 'package:flutter_application_2/routes/route_guard.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
@@ -11,7 +12,6 @@ import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
-import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';

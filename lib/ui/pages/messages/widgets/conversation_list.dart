@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
@@ -623,18 +624,23 @@ class _ConversationTileState extends State<_ConversationTile> {
   String _getValidAvatarUrl(String url) {
     if (url.isEmpty) return "";
 
-    // If URL starts with file:/// - convert to proper HTTP URL
-    if (url.startsWith('file:///media/')) {
-      return 'http://localhost:8000${url.substring(7)}';
+    // If URL starts with file:///
+    if (url.startsWith('file:///')) {
+      // Convert file:/// to server URL using ApiUrls
+      final path = url.substring(7); // Remove file:///
+      return '${ApiUrls.baseUrl}$path';
     }
 
     // Handle URLs that are just paths without domain
     if (url.startsWith('/media/')) {
-      return 'http://localhost:8000$url';
+      return '${ApiUrls.baseUrl}$url';
     }
 
-    // Already a valid URL (starts with http:// or https://)
+    // Already a valid HTTP/HTTPS URL but contains localhost, replace with proper server URL
     if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (url.contains('localhost')) {
+        return url.replaceFirst('http://localhost:8000', ApiUrls.baseUrl);
+      }
       return url;
     }
 

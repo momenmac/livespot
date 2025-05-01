@@ -4,190 +4,118 @@ import 'dart:developer' as developer;
 
 /// A simplified navigation service that prioritizes reliability over complexity
 class NavigationService {
-  // Singleton pattern
+  // Singleton instance
   static final NavigationService _instance = NavigationService._internal();
   factory NavigationService() => _instance;
   NavigationService._internal();
 
-  // Navigation key for app-wide navigation
+  // Variables to track navigation state
+  String? _currentRoute;
+  String? _currentModalRoute;
+  String? _cachedRoute;
+  String? _activeChatId; // Track the active chat conversation
+
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  // Navigator state accessor
-  NavigatorState? get navigator => navigatorKey.currentState;
-
-  // Simple route tracking
-  String? _currentRoute;
-
-  // Store last navigation time for basic throttling
-  DateTime? _lastNavigationTime;
-
-  // No more navigating flag - we'll use a simpler approach
-
-  // Getter for the current route name - keep it simple
-  String? get currentRoute {
-    final observerRoute = AppRouteObserver.currentRouteName;
-    String? modalRouteName;
-
-    try {
-      final currentContext = navigatorKey.currentContext;
-      if (currentContext != null) {
-        modalRouteName = ModalRoute.of(currentContext)?.settings.name;
-      }
-    } catch (e) {
-      // Silently handle error
-    }
-
-    developer.log(
-      'Current route: observer=$observerRoute, modal=$modalRouteName, cached=$_currentRoute',
-      name: 'NavigationService',
-    );
-
-    return modalRouteName ?? observerRoute ?? _currentRoute;
+  // Method to check if a chat is active by ID
+  bool isChatActive(String conversationId) {
+    return _activeChatId == conversationId;
   }
 
-  // Method to allow route observer to update the current route
-  void setCurrentRoute(String route) {
+  // Method to set active chat ID
+  void setActiveChatId(String? chatId) {
+    debugPrint("[NavigationService] Active chat ID changed: $_activeChatId -> $chatId");
+    _activeChatId = chatId;
+  }
+
+  // Get active chat ID
+  String? get activeChatId => _activeChatId;
+
+  // Set the current route from the route observer
+  void setRoute(String route) {
+    debugPrint("[NavigationService] Route set to: $route");
     _currentRoute = route;
-    developer.log('Route set to: $route', name: 'NavigationService');
+  }
+  
+  // Alias for setRoute to support legacy code
+  void setCurrentRoute(String route) {
+    setRoute(route);
   }
 
-  // Simple direct navigation methods
-
-  // Navigate to a new route (push)
-  Future<T?> navigateTo<T>(String routeName, {Object? arguments}) async {
-    if (_shouldThrottle()) {
-      developer.log('Navigation throttled for $routeName',
-          name: 'NavigationService');
-      return null;
-    }
-
-    developer.log('Navigating to $routeName', name: 'NavigationService');
-
-    try {
-      return await navigator?.pushNamed(routeName, arguments: arguments) as T?;
-    } catch (e) {
-      developer.log('Navigation error: $e', name: 'NavigationService');
-      return null;
-    } finally {
-      _updateNavigationTime();
-    }
+  // Set the current modal route (for bottom sheets, dialogs)
+  void setModalRoute(String? route) {
+    _currentModalRoute = route;
+    debugPrint("[NavigationService] Modal route set to: $route");
   }
 
-  // Replace current route
-  Future<T?> replaceTo<T>(String routeName, {Object? arguments}) async {
-    if (_shouldThrottle()) {
-      developer.log('Navigation throttled for $routeName',
-          name: 'NavigationService');
-      return null;
-    }
-
-    developer.log('Replacing route with $routeName', name: 'NavigationService');
-
-    try {
-      return await navigator?.pushReplacementNamed(routeName,
-          arguments: arguments) as T?;
-    } catch (e) {
-      developer.log('Navigation error: $e', name: 'NavigationService');
-      return null;
-    } finally {
-      _updateNavigationTime();
-    }
+  // Remember a route for later
+  void cacheRoute(String route) {
+    _cachedRoute = route;
   }
 
-  // Replace all routes
-  Future<T?> replaceAllWith<T>(String routeName, {Object? arguments}) async {
-    if (_shouldThrottle()) {
-      developer.log('Navigation throttled for $routeName',
-          name: 'NavigationService');
-      return null;
-    }
-
-    developer.log('Replacing all routes with $routeName',
-        name: 'NavigationService');
-
-    try {
-      return await navigator?.pushNamedAndRemoveUntil(
-        routeName,
-        (route) => false,
-        arguments: arguments,
-      ) as T?;
-    } catch (e) {
-      developer.log('Navigation error: $e', name: 'NavigationService');
-      return null;
-    } finally {
-      _updateNavigationTime();
-    }
+  // Get the current route
+  String? get currentRoute {
+    final result = _currentModalRoute ?? _currentRoute ?? _cachedRoute;
+    debugPrint("[NavigationService] Current route: observer=$_currentRoute, modal=$_currentModalRoute, cached=$_cachedRoute");
+    return result;
   }
 
-  // Replace until home
-  Future<T?> replaceUntilHome<T>(String routeName, {Object? arguments}) async {
-    if (_shouldThrottle()) {
-      developer.log('Navigation throttled for $routeName',
-          name: 'NavigationService');
-      return null;
-    }
-
-    developer.log('Replacing routes until home with $routeName',
-        name: 'NavigationService');
-
-    try {
-      return await navigator?.pushNamedAndRemoveUntil(
-        routeName,
-        (route) => route.isFirst,
-        arguments: arguments,
-      ) as T?;
-    } catch (e) {
-      developer.log('Navigation error: $e', name: 'NavigationService');
-      return null;
-    } finally {
-      _updateNavigationTime();
-    }
+  // Push a new route onto the navigation stack
+  Future<dynamic> navigateTo(String routeName, {Object? arguments}) {
+    debugPrint("[NavigationService] Navigating to: $routeName");
+    return navigatorKey.currentState!.pushNamed(routeName, arguments: arguments);
   }
 
-  // Go back (pop) - simplified and robust
-  void goBack<T>([T? result]) {
-    developer.log('Going back', name: 'NavigationService');
-
-    try {
-      // Direct navigation without flags
-      navigator?.pop(result);
-      developer.log('Back navigation executed', name: 'NavigationService');
-    } catch (e) {
-      developer.log('Back navigation error: $e', name: 'NavigationService');
-    }
+  // Replace the current route with a new one
+  Future<dynamic> replaceTo(String routeName, {Object? arguments}) {
+    debugPrint("[NavigationService] Replacing with: $routeName");
+    return navigatorKey.currentState!.pushReplacementNamed(
+      routeName,
+      arguments: arguments,
+    );
   }
 
-  // Pop until home
-  void popUntilHome() {
-    developer.log('Popping until home', name: 'NavigationService');
-
-    try {
-      navigator?.popUntil((route) => route.isFirst);
-    } catch (e) {
-      developer.log('Pop until home error: $e', name: 'NavigationService');
-    }
+  // Replace the entire stack with a single new route
+  Future<dynamic> replaceAllWith(String routeName, {Object? arguments}) {
+    debugPrint("[NavigationService] Replacing all routes with $routeName");
+    return navigatorKey.currentState!.pushNamedAndRemoveUntil(
+      routeName,
+      (_) => false, // Remove all previous routes
+      arguments: arguments,
+    );
+  }
+  
+  // Navigate to a route, removing all routes until home
+  Future<dynamic> replaceUntilHome(String routeName, {Object? arguments}) {
+    debugPrint("[NavigationService] Replacing until home with: $routeName");
+    return navigatorKey.currentState!.pushNamedAndRemoveUntil(
+      routeName,
+      (route) => route.settings.name == '/home', // Keep routes until home
+      arguments: arguments,
+    );
   }
 
-  // Helper methods
-
-  // Simple throttling check - prevent navigation faster than 300ms
-  bool _shouldThrottle() {
-    if (_lastNavigationTime == null) return false;
-
-    final now = DateTime.now();
-    final diff = now.difference(_lastNavigationTime!);
-    return diff.inMilliseconds < 300;
-  }
-
-  // Update navigation time
-  void _updateNavigationTime() {
-    _lastNavigationTime = DateTime.now();
-  }
-
-  // Reset all internal state - can be used as emergency fix
+  // Reset navigation stack to initial route
   void reset() {
-    developer.log('Navigation service reset', name: 'NavigationService');
-    _lastNavigationTime = null;
-    // We keep _currentRoute as it may be needed
+    debugPrint("[NavigationService] Resetting navigation stack");
+    navigatorKey.currentState!.popUntil((route) => route.isFirst);
+    _currentRoute = '/';
+    _currentModalRoute = null;
+    _cachedRoute = null;
+    _activeChatId = null;
+  }
+
+  // Pop the current route
+  void goBack() {
+    debugPrint("[NavigationService] Going back");
+    if (navigatorKey.currentState!.canPop()) {
+      navigatorKey.currentState!.pop();
+    }
+  }
+
+  // Pop until a specific route
+  void popUntil(String routeName) {
+    debugPrint("[NavigationService] Popping until $routeName");
+    navigatorKey.currentState!.popUntil(ModalRoute.withName(routeName));
   }
 }

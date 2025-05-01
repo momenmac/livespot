@@ -1,9 +1,11 @@
 import 'dart:core';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math';  // Add this import for min function
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
@@ -111,23 +113,148 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
-  void _initFirebaseListeners() async {
-    final users = await _fetchAllUsers();
-    final conversationsStream = _firestore
-        .collection('conversations')
-        .where('participants', arrayContains: currentUserId)
-        .snapshots();
+  void _initFirebaseListeners() {
+    try {
+      // Clear any existing subscriptions to avoid duplicates
+      _cancelSubscriptions();
 
-    final subscription = conversationsStream.listen((snapshot) async {
-      _conversations = await Future.wait(
-        snapshot.docs
-            .map((doc) async => Conversation.fromFirestore(doc.data(), users)),
-      );
-      _applyFilters();
-      notifyListeners();
-    });
+      // Listen for conversation updates using snapshots for real-time updates
+      final userConversations = _firestore
+          .collection('conversations')
+          .where('participants', arrayContains: currentUserId);
+          
+      final conversationSubscription = userConversations.snapshots().listen((snapshot) {
+        bool needsUpdate = false;
+        bool unreadCountChanged = false;
+        int previousTotalUnread = getTotalUnreadCount();
+        
+        // Process all changes - added, modified or removed conversations
+        for (final change in snapshot.docChanges) {
+          final conversationData = change.doc.data() as Map<String, dynamic>;
+          final String conversationId = change.doc.id;
+          
+          // For both added and modified conversations
+          if (change.type == DocumentChangeType.added || 
+              change.type == DocumentChangeType.modified) {
+            
+            // Try to find existing conversation first
+            final existingIndex = _conversations.indexWhere((c) => c.id == conversationId);
+            
+            // Get the last message data
+            final lastMessageData = conversationData['lastMessage'];
+            
+            if (existingIndex != -1) {
+              // Update existing conversation
+              final oldUnreadCount = _conversations[existingIndex].unreadCount;
+              final newUnreadCount = conversationData['unreadCount'] ?? 0;
+              
+              // Check if the last message is actually different before updating
+              final hasNewMessage = lastMessageData != null && 
+                  (_conversations[existingIndex].lastMessage.id != lastMessageData['id']);
+              
+              // Update all fields that might have changed
+              _conversations[existingIndex].unreadCount = newUnreadCount;
+              _conversations[existingIndex].isMuted = conversationData['isMuted'] ?? false;
+              _conversations[existingIndex].isArchived = conversationData['isArchived'] ?? false;
+              
+              // Update the lastMessage if provided and different from current one
+              if (hasNewMessage) {
+                final Message lastMsg = Message.fromJson({
+                  ...lastMessageData as Map<String, dynamic>,
+                  'id': lastMessageData['id'] ?? 'temp-${DateTime.now().millisecondsSinceEpoch}',
+                });
+                _conversations[existingIndex].lastMessage = lastMsg;
+                
+                // Only log when there's truly an update to the message
+                debugPrint('[ConvListener] Updated lastMessage: "${lastMsg.content.substring(0, min(20, lastMsg.content.length))}" for conv ${conversationId}');
+                needsUpdate = true;
+              }
+              
+              // Check if unread count changed
+              if (oldUnreadCount != newUnreadCount) {
+                debugPrint('[ConvListener] Unread count changed: $oldUnreadCount -> $newUnreadCount for conv $conversationId');
+                unreadCountChanged = true;
+                needsUpdate = true;
+              }
+              
+              // If this conversation is the selected one, update its reference too
+              if (_selectedConversation?.id == conversationId) {
+                _selectedConversation = _conversations[existingIndex];
+              }
+            } else {
+              // New conversation - fetch all users first for full info
+              _fetchAllUsers().then((users) async {
+                final newConversation = await Conversation.fromFirestore(conversationData, users);
+                _conversations.add(newConversation);
+                debugPrint('[ConvListener] Added new conversation: ${newConversation.id}');
+                
+                if (newConversation.unreadCount > 0) {
+                  unreadCountChanged = true;
+                }
+                
+                // Re-apply filters and notify
+                _applyFilters();
+                notifyListeners();
+                
+                // Also notify MessageEventBus if unread count changed
+                if (unreadCountChanged) {
+                  final newTotalUnread = getTotalUnreadCount();
+                  MessageEventBus().notifyUnreadCountChanged(newTotalUnread);
+                }
+              });
+            }
+          }
+          else if (change.type == DocumentChangeType.removed) {
+            // Remove deleted conversation
+            final index = _conversations.indexWhere((c) => c.id == conversationId);
+            if (index != -1) {
+              final removedConv = _conversations.removeAt(index);
+              debugPrint('[ConvListener] Removed conversation: $conversationId');
+              
+              // If this was the selected conversation, clear it
+              if (_selectedConversation?.id == conversationId) {
+                _selectedConversation = null;
+              }
+              
+              // Check if removing this affects unread count
+              if (removedConv.unreadCount > 0) {
+                unreadCountChanged = true;
+              }
+              
+              needsUpdate = true;
+            }
+          }
+        }
+        
+        // Apply changes if needed - only if we actually have changes to apply
+        if (needsUpdate) {
+          debugPrint('[ConvListener] Applying filter and updating UI');
+          _applyFilters();
+          notifyListeners();
+          
+          // Check if total unread count changed
+          if (unreadCountChanged) {
+            final newTotalUnread = getTotalUnreadCount();
+            if (previousTotalUnread != newTotalUnread) {
+              debugPrint('[ConvListener] Total unread changed: $previousTotalUnread -> $newTotalUnread');
+              MessageEventBus().notifyUnreadCountChanged(newTotalUnread);
+            }
+          }
+        }
+      });
+      
+      _subscriptions.add(conversationSubscription);
+    } catch (e) {
+      debugPrint('Error setting up Firebase listeners: $e');
+    }
+  }
 
-    _subscriptions.add(subscription);
+  // Helper method to cancel all subscriptions
+  void _cancelSubscriptions() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
   }
 
   Future<void> loadConversations() async {
@@ -446,19 +573,63 @@ class MessagesController extends ChangeNotifier {
   }
 
   void toggleMute(Conversation conversation) async {
-    await _firestore
-        .collection('conversations')
-        .doc(conversation.id)
-        .update({'isMuted': !conversation.isMuted});
-    notifyListeners();
+    try {
+      // Determine the new muted state - opposite of current
+      final newMutedState = !conversation.isMuted;
+      
+      // Update in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(conversation.id)
+          .update({'isMuted': newMutedState});
+      
+      // Update local conversation object directly
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index].isMuted = newMutedState;
+      }
+      
+      // Update selected conversation if needed
+      if (_selectedConversation?.id == conversation.id) {
+        _selectedConversation!.isMuted = newMutedState;
+      }
+      
+      // Reapply filters to update UI
+      _applyFilters();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error toggling mute: $e');
+    }
   }
 
   void toggleArchive(Conversation conversation) async {
-    await _firestore
-        .collection('conversations')
-        .doc(conversation.id)
-        .update({'isArchived': !conversation.isArchived});
-    notifyListeners();
+    try {
+      // Determine the new archived state - opposite of current
+      final newArchivedState = !conversation.isArchived;
+      
+      // Update in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(conversation.id)
+          .update({'isArchived': newArchivedState});
+      
+      // Update local conversation object directly
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index].isArchived = newArchivedState;
+      }
+      
+      // Update selected conversation if needed
+      if (_selectedConversation?.id == conversation.id) {
+        _selectedConversation!.isArchived = newArchivedState;
+      }
+      
+      // Reapply filters to update UI
+      _applyFilters();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error toggling archive: $e');
+    }
   }
 
   Future<void> updateConversation(Conversation conversation) async {
@@ -543,98 +714,81 @@ class MessagesController extends ChangeNotifier {
   }
 
   Future<void> markConversationAsRead(Conversation conversation) async {
-    if (conversation.unreadCount > 0) {
-      try {
-        // Update Firestore conversation document to reset unread count
-        await _firestore
-            .collection('conversations')
-            .doc(conversation.id)
-            .update({'unreadCount': 0});
-
-        // Mark all messages as read in this conversation
-        final batch = _firestore.batch();
-
-        // Changed approach: Instead of using a compound query (which requires an index),
-        // get all unread messages first, then filter in memory
-        final messages = await _firestore
-            .collection('conversations')
-            .doc(conversation.id)
-            .collection('messages')
-            .where('isRead', isEqualTo: false)
-            .get();
-
-        // Filter messages from other users in memory
-        for (final _doc in messages.docs) {
-          final data = _doc.data();
-          final senderId = data['senderId'] as String?;
-
-          // Only update messages from other users
-          if (senderId != null && senderId != currentUserId) {
-            batch.update(_doc.reference, {'isRead': true});
-          }
-        }
-
-        // Also update messages from current user to 'read' status if they're delivered
-        final currentUserMessages = await _firestore
-            .collection('conversations')
-            .doc(conversation.id)
-            .collection('messages')
-            .where('senderId', isEqualTo: currentUserId)
-            .get();
-
-        for (final doc in currentUserMessages.docs) {
-          final data = doc.data();
-          final status = data['status'] as String?;
-
-          if (status == 'sent' || status == 'delivered') {
-            batch.update(doc.reference, {'status': 'read'});
-          }
-        }
-
-        await batch.commit();
-
-        // Update locally
-        final updatedIndex =
-            _conversations.indexWhere((c) => c.id == conversation.id);
-        if (updatedIndex != -1) {
-          // Update the local conversation object
-          conversation.unreadCount = 0;
-          _conversations[updatedIndex] = conversation;
-
-          // If this is the currently selected conversation, update it too
-          if (_selectedConversation?.id == conversation.id) {
-            for (final message in _selectedConversation!.messages) {
-              // Mark messages from other users as read
-              if (message.senderId != currentUserId) {
-                message.isRead = true;
-              }
-              // Update status of user's own messages
-              else if (message.status == MessageStatus.sent ||
-                  message.status == MessageStatus.delivered) {
-                message.status = MessageStatus.read;
-              }
-            }
-            _selectedConversation = _conversations[updatedIndex];
-          }
-        }
-
-        // Recalculate filtered conversations to ensure badge counts update
-        _applyFilters();
-
-        // Notify UI of changes to update badges
-        notifyListeners();
-      } catch (e) {
-        print('Error marking conversation as read: $e');
+    try {
+      debugPrint('Marking conversation ${conversation.id} as read');
+      
+      // First, update the conversation document to reset unread count
+      await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(conversation.id)
+          .update({
+        'unreadCount': 0,
+      });
+      
+      // Then mark all messages as read
+      final batch = FirebaseFirestore.instance.batch();
+      
+      // Query for unread messages not sent by the current user
+      final unreadMessages = await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(conversation.id)
+          .collection('messages')
+          .where('isRead', isEqualTo: false)
+          .where('senderId', isNotEqualTo: currentUserId)
+          .get();
+      
+      // Mark each message as read using a batch operation for efficiency
+      for (final doc in unreadMessages.docs) {
+        batch.update(doc.reference, {'isRead': true});
       }
+      
+      // Commit the batch
+      await batch.commit();
+      
+      // Update the local conversation object
+      conversation.unreadCount = 0;
+      
+      // Notify listeners to update the UI
+      notifyListeners();
+      
+      // Also notify the message event bus about the change
+      MessageEventBus().notifyUnreadCountChanged(getTotalUnreadCount());
+      
+      debugPrint('Successfully marked conversation as read');
+    } catch (e) {
+      debugPrint('Error marking conversation as read: $e');
+      rethrow;
     }
   }
 
   void markConversationAsUnread(Conversation conversation) async {
-    await _firestore
-        .collection('conversations')
-        .doc(conversation.id)
-        .update({'unreadCount': 1});
-    notifyListeners();
+    try {
+      // Update conversation in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(conversation.id)
+          .update({'unreadCount': 1});
+      
+      // Update in local memory
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index].unreadCount = 1;
+      }
+      
+      // Recalculate filtered conversations
+      _applyFilters();
+      
+      // Notify UI of changes
+      notifyListeners();
+      
+      // *** NEW: Notify the MessageEventBus of the unread count change ***
+      final totalUnreadCount = getTotalUnreadCount();
+      MessageEventBus().notifyUnreadCountChanged(totalUnreadCount);
+      MessageEventBus().notifyConversationChanged(conversation.id);
+      
+    } catch (e) {
+      print('Error marking conversation as unread: $e');
+    }
   }
 
   void sendVoiceMessage(int durationSeconds) async {
@@ -775,6 +929,7 @@ class MessagesController extends ChangeNotifier {
     _applyFilters();
   }
 
+  // Modified to prevent auto-marking messages as read when selecting conversation
   void selectConversation(Conversation conversation) {
     if (_isDisposed) return; // Don't do anything if disposed
 
@@ -793,26 +948,9 @@ class MessagesController extends ChangeNotifier {
       _selectedConversation = conversation;
     }
 
-    if (_selectedConversation!.unreadCount > 0) {
-      final updatedMessages = _selectedConversation!.messages.map((message) {
-        return message.copyWith(isRead: true);
-      }).toList();
-
-      final updatedConversation = _selectedConversation!.copyWith(
-        messages: updatedMessages,
-        unreadCount: 0,
-      );
-
-      final updatedIndex =
-          _conversations.indexWhere((c) => c.id == updatedConversation.id);
-      if (updatedIndex != -1) {
-        _conversations[updatedIndex] = updatedConversation;
-        _selectedConversation = updatedConversation;
-      }
-
-      _applyFilters();
-    }
-
+    // Important: DON'T automatically mark messages as read here
+    // We want the badge to persist until user explicitly reads messages
+    
     // Remove controller references - they're not needed anymore
     final updatedMessages = _selectedConversation!.messages.toList();
 

@@ -83,6 +83,11 @@ class RouteGuard {
       final bool isAuthenticated = await RouteGuard.isAuthenticated();
       final NavigationService nav = NavigationService();
       final sessionManager = SessionManager();
+      
+      // Exit early if already at the route we're checking
+      if (nav.currentRoute == routeName) {
+        return;
+      }
 
       if (isPublicRoute(routeName)) {
         return;
@@ -112,11 +117,17 @@ class RouteGuard {
       } else if (isAuthRoute(routeName) && isAuthenticated) {
         print(
             '🔒 Authenticated user trying to access $routeName, redirecting to home');
-        nav.replaceTo(AppRoutes.home);
+        // Avoid redirecting if already at home
+        if (nav.currentRoute != AppRoutes.home) {
+          nav.replaceTo(AppRoutes.home);
+        }
       } else if (isAuthenticated) {
         // NEW: Check email verification status
         if (sessionManager.isEmailVerified) {
-          nav.replaceTo(AppRoutes.home);
+          // Only navigate if not already at home
+          if (routeName != AppRoutes.home && nav.currentRoute != AppRoutes.home) {
+            nav.replaceTo(AppRoutes.home);
+          }
         } else {
           // Only redirect if not already on /verify-email
           if (nav.currentRoute != AppRoutes.verifyEmail) {

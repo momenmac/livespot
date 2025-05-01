@@ -29,6 +29,7 @@ class AppRoutes {
   static const String map = '/map';
   static const String messages = '/messages';
   static const String networkTest = '/network-test';
+  static const String chatDetail = '/chat-detail';
 
   // Route map with builders that accept arguments
   static final routes = <String, Widget Function(dynamic args)>{
@@ -55,5 +56,6 @@ class AppRoutes {
     map: (args) => const MapPage(),
     messages: (args) => const MessagesPage(),
     networkTest: (args) => const NetworkTestPage(),
+    chatDetail: (args) => const Placeholder(), // Placeholder for chat detail page
   };
 }

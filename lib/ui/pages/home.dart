@@ -7,6 +7,7 @@ import 'notification/notifications_page.dart';
 import '../profile/profile_page.dart';
 import 'home/components/home_content.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
 import 'dart:async';
 
 class Home extends StatefulWidget {
@@ -22,6 +23,7 @@ class _HomeState extends State<Home> {
   double? dragStartX;
   int? _unreadMessageCount;
   Timer? _unreadCheckTimer;
+  StreamSubscription? _unreadCountSubscription;
 
   // Reference to the MessagesController for unread count
   // We'll initialize this when creating the MessagesPage
@@ -48,27 +50,47 @@ class _HomeState extends State<Home> {
 
     // Initial update of unread counts
     _updateUnreadCounts();
+    
+    // Load messages data immediately
+    _messagesController!.loadConversations().then((_) {
+      _updateUnreadCounts();
+    });
 
     // Set up a timer to periodically check for unread messages
     _unreadCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _updateUnreadCounts();
+    });
+    
+    // Subscribe to unread count changes via MessageEventBus for real-time updates
+    _unreadCountSubscription = MessageEventBus().unreadCountStream.listen((count) {
+      if (mounted) {
+        setState(() {
+          _unreadMessageCount = count;
+        });
+      }
     });
   }
 
   @override
   void dispose() {
     _unreadCheckTimer?.cancel();
+    _unreadCountSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> _updateUnreadCounts() async {
     if (_messagesController != null) {
       final unreadCount = _messagesController!.getTotalUnreadCount();
+      
+      // Update the badge through normal state update
       if (mounted) {
         setState(() {
           _unreadMessageCount = unreadCount;
         });
       }
+      
+      // Also notify the MessageEventBus so other parts of the app can stay updated
+      MessageEventBus().notifyUnreadCountChanged(unreadCount);
     }
   }
 

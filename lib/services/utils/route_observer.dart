@@ -128,7 +128,15 @@ class AppRouteObserver extends NavigatorObserver {
           return '/login';
         } else if (pageWidget.toString().contains('GetStartedScreen')) {
           return '/';
+        } else if (pageWidget.toString().contains('ChatDetailPage')) {
+          return '/chat-detail';
         }
+      } else if (route is PageRouteBuilder) {
+        // Handle PageRouteBuilder, which is used for transitions
+        return NavigationService().currentRoute;
+      } else if (route is DialogRoute) {
+        // For dialog routes, keep the current route since dialogs overlay existing routes
+        return NavigationService().currentRoute;
       }
 
       return null;

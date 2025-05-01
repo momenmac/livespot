@@ -222,9 +222,7 @@ class Message {
       'voiceDuration': voiceDuration,
       'forwardedFrom': forwardedFrom,
       'isEdited': isEdited,
-      'replyToMessageType': replyToMessageType != null
-          ? replyToMessageType.toString().split('.').last
-          : null,
+      'replyToMessageType': replyToMessageType?.toString().split('.').last,
     };
   }
 
