@@ -466,7 +466,8 @@ class ConversationList extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (!conversation.isGroup && _isParticipantOnline(conversation))
+                            if (!conversation.isGroup &&
+                                _isParticipantOnline(conversation))
                               Text(
                                 TextStrings.online,
                                 style: TextStyle(
@@ -496,12 +497,14 @@ class ConversationList extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(8, 20, 8, 20),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: actions.map((action) => _buildCircularAction(
-                      icon: action.icon,
-                      label: action.label,
-                      color: action.color,
-                      onTap: action.onTap,
-                    )).toList(),
+                    children: actions
+                        .map((action) => _buildCircularAction(
+                              icon: action.icon,
+                              label: action.label,
+                              color: action.color,
+                              onTap: action.onTap,
+                            ))
+                        .toList(),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -765,7 +768,8 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (widget.conversation.unreadCount > 0 && !_isHovering)
+                  // Improved unread count badge that's more visible
+                  if (widget.conversation.unreadCount > 0)
                     Container(
                       margin: const EdgeInsets.only(left: 6),
                       padding: const EdgeInsets.symmetric(
@@ -773,6 +777,14 @@ class _ConversationTileState extends State<_ConversationTile> {
                       decoration: BoxDecoration(
                         color: ThemeConstants.primaryColor,
                         borderRadius: BorderRadius.circular(10),
+                        // Add subtle shadow for better visibility
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
                       child: Text(
                         widget.conversation.unreadCount.toString(),

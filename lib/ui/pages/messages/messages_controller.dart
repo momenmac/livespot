@@ -1,7 +1,7 @@
 import 'dart:core';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:math';  // Add this import for min function
+import 'dart:math'; // Add this import for min function
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
@@ -113,6 +113,7 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
+  // Fix the Firebase listener to handle per-user read status
   void _initFirebaseListeners() {
     try {
       // Clear any existing subscriptions to avoid duplicates
@@ -122,61 +123,106 @@ class MessagesController extends ChangeNotifier {
       final userConversations = _firestore
           .collection('conversations')
           .where('participants', arrayContains: currentUserId);
-          
-      final conversationSubscription = userConversations.snapshots().listen((snapshot) {
+
+      final conversationSubscription =
+          userConversations.snapshots().listen((snapshot) async {
         bool needsUpdate = false;
         bool unreadCountChanged = false;
         int previousTotalUnread = getTotalUnreadCount();
-        
+
         // Process all changes - added, modified or removed conversations
         for (final change in snapshot.docChanges) {
           final conversationData = change.doc.data() as Map<String, dynamic>;
           final String conversationId = change.doc.id;
-          
+
           // For both added and modified conversations
-          if (change.type == DocumentChangeType.added || 
+          if (change.type == DocumentChangeType.added ||
               change.type == DocumentChangeType.modified) {
-            
             // Try to find existing conversation first
-            final existingIndex = _conversations.indexWhere((c) => c.id == conversationId);
-            
+            final existingIndex =
+                _conversations.indexWhere((c) => c.id == conversationId);
+
             // Get the last message data
             final lastMessageData = conversationData['lastMessage'];
-            
+
             if (existingIndex != -1) {
               // Update existing conversation
               final oldUnreadCount = _conversations[existingIndex].unreadCount;
-              final newUnreadCount = conversationData['unreadCount'] ?? 0;
-              
-              // Check if the last message is actually different before updating
-              final hasNewMessage = lastMessageData != null && 
-                  (_conversations[existingIndex].lastMessage.id != lastMessageData['id']);
-              
-              // Update all fields that might have changed
-              _conversations[existingIndex].unreadCount = newUnreadCount;
-              _conversations[existingIndex].isMuted = conversationData['isMuted'] ?? false;
-              _conversations[existingIndex].isArchived = conversationData['isArchived'] ?? false;
-              
+
+              // Update basic fields
+              _conversations[existingIndex].isMuted =
+                  conversationData['isMuted'] ?? false;
+              _conversations[existingIndex].isArchived =
+                  conversationData['isArchived'] ?? false;
+
               // Update the lastMessage if provided and different from current one
-              if (hasNewMessage) {
-                final Message lastMsg = Message.fromJson({
-                  ...lastMessageData as Map<String, dynamic>,
-                  'id': lastMessageData['id'] ?? 'temp-${DateTime.now().millisecondsSinceEpoch}',
-                });
-                _conversations[existingIndex].lastMessage = lastMsg;
-                
-                // Only log when there's truly an update to the message
-                debugPrint('[ConvListener] Updated lastMessage: "${lastMsg.content.substring(0, min(20, lastMsg.content.length))}" for conv ${conversationId}');
-                needsUpdate = true;
+              bool hasNewMessage = false;
+              if (lastMessageData != null) {
+                final String lastMessageId = lastMessageData['id'] ?? '';
+                final String currentLastMessageId =
+                    _conversations[existingIndex].lastMessage.id;
+
+                hasNewMessage = lastMessageId.isNotEmpty &&
+                    lastMessageId != currentLastMessageId;
+
+                if (hasNewMessage) {
+                  final Message lastMsg = Message.fromJson({
+                    ...lastMessageData as Map<String, dynamic>,
+                    'id': lastMessageData['id'] ??
+                        'temp-${DateTime.now().millisecondsSinceEpoch}',
+                  });
+                  _conversations[existingIndex].lastMessage = lastMsg;
+
+                  // Has new message - check read status for current user
+                  try {
+                    // Check if we need to mark this as unread for the current user
+                    final bool isFromCurrentUser =
+                        lastMsg.senderId == currentUserId;
+
+                    if (!isFromCurrentUser) {
+                      // Check the read status in Firestore
+                      final readStatusDoc = await _firestore
+                          .collection('conversations')
+                          .doc(conversationId)
+                          .collection('readStatus')
+                          .doc(currentUserId)
+                          .get();
+
+                      if (readStatusDoc.exists) {
+                        final bool isRead =
+                            readStatusDoc.data()?['isRead'] ?? true;
+                        if (!isRead) {
+                          // This should be unread for the current user
+                          _conversations[existingIndex].unreadCount = 1;
+                        }
+                      } else {
+                        // No read status record yet, so mark as unread by default
+                        _conversations[existingIndex].unreadCount = 1;
+                      }
+                    } else {
+                      // Messages from current user are always read to them
+                      _conversations[existingIndex].unreadCount = 0;
+                    }
+                  } catch (e) {
+                    debugPrint('Error checking read status: $e');
+                  }
+
+                  // Only log when there's truly an update to the message
+                  debugPrint(
+                      '[ConvListener] Updated lastMessage: "${lastMsg.content.substring(0, min(20, lastMsg.content.length))}" for conv ${conversationId}');
+                  needsUpdate = true;
+                }
               }
-              
+
               // Check if unread count changed
+              final newUnreadCount = _conversations[existingIndex].unreadCount;
               if (oldUnreadCount != newUnreadCount) {
-                debugPrint('[ConvListener] Unread count changed: $oldUnreadCount -> $newUnreadCount for conv $conversationId');
+                debugPrint(
+                    '[ConvListener] Unread count changed: $oldUnreadCount -> $newUnreadCount for conv $conversationId');
                 unreadCountChanged = true;
                 needsUpdate = true;
               }
-              
+
               // If this conversation is the selected one, update its reference too
               if (_selectedConversation?.id == conversationId) {
                 _selectedConversation = _conversations[existingIndex];
@@ -184,18 +230,58 @@ class MessagesController extends ChangeNotifier {
             } else {
               // New conversation - fetch all users first for full info
               _fetchAllUsers().then((users) async {
-                final newConversation = await Conversation.fromFirestore(conversationData, users);
+                final newConversation =
+                    await Conversation.fromFirestore(conversationData, users);
+
+                // Check read status for new conversation
+                try {
+                  // Get the last message sender
+                  final String lastMessageSenderId =
+                      newConversation.lastMessage.senderId;
+
+                  // If last message is not from current user, check read status
+                  if (lastMessageSenderId != currentUserId) {
+                    final readStatusDoc = await _firestore
+                        .collection('conversations')
+                        .doc(conversationId)
+                        .collection('readStatus')
+                        .doc(currentUserId)
+                        .get();
+
+                    if (readStatusDoc.exists) {
+                      final bool isRead =
+                          readStatusDoc.data()?['isRead'] ?? true;
+                      if (!isRead) {
+                        // Mark as unread for this user
+                        newConversation.unreadCount = 1;
+                      } else {
+                        newConversation.unreadCount = 0;
+                      }
+                    } else {
+                      // No read status yet, so mark as unread
+                      newConversation.unreadCount = 1;
+                    }
+                  } else {
+                    // Message from current user is always read to them
+                    newConversation.unreadCount = 0;
+                  }
+                } catch (e) {
+                  debugPrint(
+                      'Error checking read status for new conversation: $e');
+                }
+
                 _conversations.add(newConversation);
-                debugPrint('[ConvListener] Added new conversation: ${newConversation.id}');
-                
+                debugPrint(
+                    '[ConvListener] Added new conversation: ${newConversation.id}');
+
                 if (newConversation.unreadCount > 0) {
                   unreadCountChanged = true;
                 }
-                
+
                 // Re-apply filters and notify
                 _applyFilters();
                 notifyListeners();
-                
+
                 // Also notify MessageEventBus if unread count changed
                 if (unreadCountChanged) {
                   final newTotalUnread = getTotalUnreadCount();
@@ -203,46 +289,48 @@ class MessagesController extends ChangeNotifier {
                 }
               });
             }
-          }
-          else if (change.type == DocumentChangeType.removed) {
+          } else if (change.type == DocumentChangeType.removed) {
             // Remove deleted conversation
-            final index = _conversations.indexWhere((c) => c.id == conversationId);
+            final index =
+                _conversations.indexWhere((c) => c.id == conversationId);
             if (index != -1) {
               final removedConv = _conversations.removeAt(index);
-              debugPrint('[ConvListener] Removed conversation: $conversationId');
-              
+              debugPrint(
+                  '[ConvListener] Removed conversation: $conversationId');
+
               // If this was the selected conversation, clear it
               if (_selectedConversation?.id == conversationId) {
                 _selectedConversation = null;
               }
-              
+
               // Check if removing this affects unread count
               if (removedConv.unreadCount > 0) {
                 unreadCountChanged = true;
               }
-              
+
               needsUpdate = true;
             }
           }
         }
-        
+
         // Apply changes if needed - only if we actually have changes to apply
         if (needsUpdate) {
           debugPrint('[ConvListener] Applying filter and updating UI');
           _applyFilters();
           notifyListeners();
-          
+
           // Check if total unread count changed
           if (unreadCountChanged) {
             final newTotalUnread = getTotalUnreadCount();
             if (previousTotalUnread != newTotalUnread) {
-              debugPrint('[ConvListener] Total unread changed: $previousTotalUnread -> $newTotalUnread');
+              debugPrint(
+                  '[ConvListener] Total unread changed: $previousTotalUnread -> $newTotalUnread');
               MessageEventBus().notifyUnreadCountChanged(newTotalUnread);
             }
           }
         }
       });
-      
+
       _subscriptions.add(conversationSubscription);
     } catch (e) {
       debugPrint('Error setting up Firebase listeners: $e');
@@ -257,6 +345,7 @@ class MessagesController extends ChangeNotifier {
     _subscriptions.clear();
   }
 
+  // Load conversations with proper handling of per-user read status
   Future<void> loadConversations() async {
     try {
       final users = await _fetchAllUsers();
@@ -265,15 +354,75 @@ class MessagesController extends ChangeNotifier {
           .where('participants', arrayContains: currentUserId)
           .get();
 
-      _conversations = await Future.wait(
-        snapshot.docs
-            .map((doc) async => Conversation.fromFirestore(doc.data(), users)),
+      // Create a list to hold the conversations
+      List<Conversation> conversationsData = await Future.wait(
+        snapshot.docs.map((doc) async {
+          // First create basic conversation with server data
+          final conversation = Conversation.fromFirestore(doc.data(), users);
+
+          // Then check per-user read status
+          try {
+            // 1. Get the last message timestamp for this conversation
+            final lastMessageTimestamp = conversation.lastMessage.timestamp;
+
+            // 2. Check the read status document for current user
+            final readStatusDoc = await _firestore
+                .collection('conversations')
+                .doc(conversation.id)
+                .collection('readStatus')
+                .doc(currentUserId)
+                .get();
+
+            if (readStatusDoc.exists) {
+              // Get the isRead status
+              final bool isRead = readStatusDoc.data()?['isRead'] ?? true;
+
+              // Get the last time this user read the conversation
+              final lastReadTimestamp =
+                  readStatusDoc.data()?['lastReadTimestamp'];
+              Timestamp? lastReadTimestampObj;
+
+              if (lastReadTimestamp != null) {
+                if (lastReadTimestamp is Timestamp) {
+                  lastReadTimestampObj = lastReadTimestamp;
+                }
+              }
+
+              // Logic: A conversation is unread if explicitly marked as unread OR
+              // if the last message is newer than the last read timestamp
+              if (!isRead ||
+                  (lastReadTimestampObj != null &&
+                      lastMessageTimestamp
+                          .isAfter(lastReadTimestampObj.toDate()))) {
+                // Mark this conversation as having unread messages for this user
+                conversation.unreadCount = 1;
+              } else {
+                // Otherwise mark as read
+                conversation.unreadCount = 0;
+              }
+            } else if (conversation.lastMessage.senderId != currentUserId) {
+              // If there's no read status yet and the last message is not from current user,
+              // consider it unread
+              conversation.unreadCount = 1;
+            } else {
+              // Current user's own messages are always read
+              conversation.unreadCount = 0;
+            }
+          } catch (e) {
+            debugPrint(
+                'Error processing read status for conversation ${conversation.id}: $e');
+          }
+
+          return conversation;
+        }),
       );
+
+      _conversations = conversationsData;
       _applyFilters();
       notifyListeners();
       return;
     } catch (e) {
-      print('Error loading conversations: $e');
+      debugPrint('Error loading conversations: $e');
       _conversations = _generateMockConversations();
       _applyFilters();
     }
@@ -309,6 +458,7 @@ class MessagesController extends ChangeNotifier {
       replyToMessageId: replyTo?.id,
       replyToSenderName: replyTo?.senderName,
       replyToContent: replyTo?.content,
+      isRead: true, // Messages from current user are always read by them
       status: MessageStatus.sending, // Start with sending status
     );
 
@@ -341,7 +491,7 @@ class MessagesController extends ChangeNotifier {
 
       debugPrint('[sendMessage] Updating conversation lastMessage');
 
-      // Update conversation last message
+      // Update conversation last message and mark as unread for other participants
       await _firestore
           .collection('conversations')
           .doc(_selectedConversation!.id)
@@ -352,6 +502,35 @@ class MessagesController extends ChangeNotifier {
           .then((_) => debugPrint('[sendMessage] Conversation updated'))
           .catchError((e) =>
               debugPrint('[sendMessage] Error updating conversation: $e'));
+
+      // Mark conversation as unread for all participants except the sender
+      for (final participant in _selectedConversation!.participants) {
+        if (participant.id != currentUserId) {
+          // Set as unread for other participants
+          await _firestore
+              .collection('conversations')
+              .doc(_selectedConversation!.id)
+              .collection('readStatus')
+              .doc(participant.id)
+              .set({
+            'userId': participant.id,
+            'isRead': false,
+            'lastReadTimestamp': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Explicitly mark as read for the sender
+          await _firestore
+              .collection('conversations')
+              .doc(_selectedConversation!.id)
+              .collection('readStatus')
+              .doc(currentUserId)
+              .set({
+            'userId': currentUserId,
+            'isRead': true,
+            'lastReadTimestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      }
 
       // Stop showing typing indicator
       _stopTypingIndicator();
@@ -374,30 +553,171 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
-  // Update the status of a message
+  // Update the status of a message with better error handling and synchronization
   void _updateMessageStatus(String messageId, MessageStatus newStatus) {
     if (_selectedConversation == null) return;
 
     try {
+      debugPrint('[updateMessageStatus] Updating message $messageId to $newStatus');
       // Find and update message in memory
       final index =
           _selectedConversation!.messages.indexWhere((m) => m.id == messageId);
       if (index != -1) {
-        _selectedConversation!.messages[index].status = newStatus;
-
-        // Also update in Firestore
-        _firestore
-            .collection('conversations')
-            .doc(_selectedConversation!.id)
-            .collection('messages')
-            .doc(messageId)
-            .update({'status': newStatus.toString().split('.').last});
-
-        notifyListeners();
+        // Only update if new status is different or an advancement in status
+        final currentStatus = _selectedConversation!.messages[index].status;
+        final shouldUpdate = newStatus != currentStatus && 
+                            (currentStatus == MessageStatus.sending || 
+                             (currentStatus == MessageStatus.sent && newStatus != MessageStatus.sending) ||
+                             (currentStatus == MessageStatus.delivered && newStatus == MessageStatus.read));
+        
+        if (shouldUpdate) {
+          _selectedConversation!.messages[index].status = newStatus;
+          
+          // Update in Firestore with a structured approach
+          final messageRef = _firestore
+              .collection('conversations')
+              .doc(_selectedConversation!.id)
+              .collection('messages')
+              .doc(messageId);
+              
+          // Get current message data first to validate before updating
+          messageRef.get().then((doc) {
+            if (doc.exists) {
+              // Continue with update only if message exists
+              messageRef.update({'status': newStatus.toString().split('.').last})
+                .then((_) {
+                  debugPrint('[updateMessageStatus] Successfully updated status in Firestore');
+                  
+                  // If this is read status, also ensure isRead is set to true
+                  if (newStatus == MessageStatus.read) {
+                    messageRef.update({'isRead': true});
+                    _selectedConversation!.messages[index].isRead = true;
+                  }
+                  
+                  notifyListeners(); // Notify after successful Firestore update
+                })
+                .catchError((e) {
+                  debugPrint('[updateMessageStatus] Error updating status: $e');
+                  notifyListeners(); // Still update UI even if Firestore update fails
+                });
+            } else {
+              debugPrint('[updateMessageStatus] Message document does not exist');
+            }
+          }).catchError((e) {
+            debugPrint('[updateMessageStatus] Error reading message: $e');
+          });
+        } else {
+          debugPrint('[updateMessageStatus] Status update not needed or would be a regression');
+        }
+      } else {
+        debugPrint('[updateMessageStatus] Message not found in conversation: $messageId');
       }
     } catch (e) {
       debugPrint('[updateMessageStatus] Error: $e');
+      // Make sure UI is updated even in case of error
+      notifyListeners();
     }
+  }
+  
+  // Check if all participants (except the current user) have read a message
+  Future<bool> checkReadReceiptsForMessage(Message message) async {
+    if (message.senderId != currentUserId) return false; // Only check read receipts for messages sent by current user
+    if (_selectedConversation == null) return false;
+    
+    try {
+      // First check if the message is already marked as read
+      if (message.status == MessageStatus.read) return true;
+      
+      // Get read statuses for all other participants
+      final otherParticipants = _selectedConversation!.participants
+          .where((p) => p.id != currentUserId)
+          .toList();
+          
+      // If there are no other participants, return false
+      if (otherParticipants.isEmpty) return false;
+      
+      // Check read status for each participant
+      bool allRead = true;
+      for (final participant in otherParticipants) {
+        final readStatusDoc = await _firestore
+            .collection('conversations')
+            .doc(_selectedConversation!.id)
+            .collection('readStatus')
+            .doc(participant.id)
+            .get();
+            
+        if (readStatusDoc.exists) {
+          final isRead = readStatusDoc.data()?['isRead'] ?? false;
+          final lastReadTimestamp = readStatusDoc.data()?['lastReadTimestamp'];
+          
+          if (!isRead) {
+            debugPrint('[ReadReceipt] User ${participant.id} has not read conversation');
+            allRead = false;
+            break;
+          }
+          
+          // Check if the lastReadTimestamp is after the message timestamp
+          if (lastReadTimestamp != null) {
+            final lastRead = (lastReadTimestamp as Timestamp).toDate();
+            if (lastRead.isBefore(message.timestamp)) {
+              debugPrint('[ReadReceipt] User ${participant.id} read status is before message timestamp');
+              allRead = false;
+              break;
+            }
+          } else {
+            // No timestamp means they haven't read the message
+            debugPrint('[ReadReceipt] User ${participant.id} has no read timestamp');
+            allRead = false;
+            break;
+          }
+        } else {
+          // No read status means they haven't read the message
+          debugPrint('[ReadReceipt] User ${participant.id} has no read status document');
+          allRead = false;
+          break;
+        }
+      }
+      
+      if (allRead) {
+        debugPrint('[ReadReceipt] Message ${message.id} has been read by all participants');
+      }
+      return allRead;
+    } catch (e) {
+      debugPrint('[checkReadReceiptsForMessage] Error: $e');
+      return false;
+    }
+  }
+  
+  // Explicitly check and update read receipts for all messages in the conversation
+  Future<void> updateReadReceiptsForAllMessages() async {
+    if (_selectedConversation == null) return;
+    
+    try {
+      // Only process user's own messages
+      final ownMessages = _selectedConversation!.messages
+          .where((msg) => 
+              msg.senderId == currentUserId && 
+              msg.status != MessageStatus.read &&
+              msg.status != MessageStatus.failed)
+          .toList();
+          
+      for (final message in ownMessages) {
+        final bool isReadByAll = await checkReadReceiptsForMessage(message);
+        if (isReadByAll && message.status != MessageStatus.read) {
+          _updateMessageStatus(message.id, MessageStatus.read);
+        } else if (message.status == MessageStatus.sending) {
+          // Ensure messages aren't stuck in sending state
+          _updateMessageStatus(message.id, MessageStatus.sent);
+        }
+      }
+    } catch (e) {
+      debugPrint('[updateReadReceiptsForAllMessages] Error: $e');
+    }
+  }
+
+  // Public method to update message status that can be called from outside
+  void updateMessageStatus(String messageId, MessageStatus newStatus) {
+    _updateMessageStatus(messageId, newStatus);
   }
 
   // Update the read status of all messages from a sender
@@ -552,11 +872,71 @@ class MessagesController extends ChangeNotifier {
 
   // Method to get the total unread messages count across all conversations
   int getTotalUnreadCount() {
+    // Reset the count just to be safe
     int total = 0;
+    
+    // Iterate through all conversations and sum up their unread counts
     for (final conversation in _conversations) {
-      total += conversation.unreadCount;
+      // Skip counting if the message is from the current user
+      if (conversation.lastMessage.senderId != currentUserId) {
+        total += conversation.unreadCount;
+      } else {
+        // If the last message is from the current user, the conversation should not be unread for them
+        // If it's showing as unread, fix it
+        if (conversation.unreadCount > 0) {
+          debugPrint('[UnreadFix] Correcting unread count for conversation ${conversation.id}');
+          conversation.unreadCount = 0;
+        }
+      }
     }
+    
+    debugPrint('[UnreadCount] Current total unread count: $total');
     return total;
+  }
+
+  // Add a method to validate unread status for all conversations
+  Future<void> validateUnreadCounts() async {
+    debugPrint('[UnreadValidation] Starting validation of all conversation unread counts');
+    
+    for (final conversation in _conversations) {
+      // The current user's sent messages should never count as unread to them
+      if (conversation.lastMessage.senderId == currentUserId && 
+          conversation.unreadCount > 0) {
+        
+        debugPrint('[UnreadValidation] Fixing conversation ${conversation.id}: lastMessage from current user but showing unread');
+        
+        // Fix in-memory count
+        conversation.unreadCount = 0;
+        
+        // Also update the read status in Firestore
+        try {
+          await _firestore
+              .collection('conversations')
+              .doc(conversation.id)
+              .collection('readStatus')
+              .doc(currentUserId)
+              .set({
+            'userId': currentUserId,
+            'isRead': true,
+            'lastReadTimestamp': FieldValue.serverTimestamp(),
+          });
+          
+          debugPrint('[UnreadValidation] Updated read status for conversation ${conversation.id}');
+        } catch (e) {
+          debugPrint('[UnreadValidation] Error updating read status: $e');
+        }
+      }
+    }
+    
+    // Apply filters and notify listeners of any changes
+    _applyFilters();
+    notifyListeners();
+    
+    // Update the global unread count for UI
+    final newTotalUnread = getTotalUnreadCount();
+    MessageEventBus().notifyUnreadCountChanged(newTotalUnread);
+    
+    debugPrint('[UnreadValidation] Validation complete. Total unread: $newTotalUnread');
   }
 
   void deleteMessage(Message message) async {
@@ -576,24 +956,24 @@ class MessagesController extends ChangeNotifier {
     try {
       // Determine the new muted state - opposite of current
       final newMutedState = !conversation.isMuted;
-      
+
       // Update in Firestore
       await _firestore
           .collection('conversations')
           .doc(conversation.id)
           .update({'isMuted': newMutedState});
-      
+
       // Update local conversation object directly
       final index = _conversations.indexWhere((c) => c.id == conversation.id);
       if (index != -1) {
         _conversations[index].isMuted = newMutedState;
       }
-      
+
       // Update selected conversation if needed
       if (_selectedConversation?.id == conversation.id) {
         _selectedConversation!.isMuted = newMutedState;
       }
-      
+
       // Reapply filters to update UI
       _applyFilters();
       notifyListeners();
@@ -606,24 +986,24 @@ class MessagesController extends ChangeNotifier {
     try {
       // Determine the new archived state - opposite of current
       final newArchivedState = !conversation.isArchived;
-      
+
       // Update in Firestore
       await _firestore
           .collection('conversations')
           .doc(conversation.id)
           .update({'isArchived': newArchivedState});
-      
+
       // Update local conversation object directly
       final index = _conversations.indexWhere((c) => c.id == conversation.id);
       if (index != -1) {
         _conversations[index].isArchived = newArchivedState;
       }
-      
+
       // Update selected conversation if needed
       if (_selectedConversation?.id == conversation.id) {
         _selectedConversation!.isArchived = newArchivedState;
       }
-      
+
       // Reapply filters to update UI
       _applyFilters();
       notifyListeners();
@@ -635,25 +1015,22 @@ class MessagesController extends ChangeNotifier {
   Future<void> updateConversation(Conversation conversation) async {
     try {
       // Update conversation in Firestore
-      await _firestore
-          .collection('conversations')
-          .doc(conversation.id)
-          .update({
+      await _firestore.collection('conversations').doc(conversation.id).update({
         'isMuted': conversation.isMuted,
         'isArchived': conversation.isArchived,
       });
-      
+
       // Update in local list
       final index = _conversations.indexWhere((c) => c.id == conversation.id);
       if (index != -1) {
         _conversations[index] = conversation;
       }
-      
+
       // Update selected conversation if needed
       if (_selectedConversation?.id == conversation.id) {
         _selectedConversation = conversation;
       }
-      
+
       // Reapply filters to update UI
       _applyFilters();
       notifyListeners();
@@ -715,46 +1092,77 @@ class MessagesController extends ChangeNotifier {
 
   Future<void> markConversationAsRead(Conversation conversation) async {
     try {
-      debugPrint('Marking conversation ${conversation.id} as read');
-      
-      // First, update the conversation document to reset unread count
-      await FirebaseFirestore.instance
+      debugPrint(
+          'Marking conversation ${conversation.id} as read for user ${currentUserId}');
+
+      // 1. Update read status for the current user in Firestore
+      await _firestore
           .collection('conversations')
           .doc(conversation.id)
-          .update({
-        'unreadCount': 0,
+          .collection('readStatus')
+          .doc(currentUserId)
+          .set({
+        'userId': currentUserId,
+        'isRead': true,
+        'lastReadTimestamp': FieldValue.serverTimestamp(),
       });
-      
-      // Then mark all messages as read
-      final batch = FirebaseFirestore.instance.batch();
-      
-      // Query for unread messages not sent by the current user
-      final unreadMessages = await FirebaseFirestore.instance
+
+      // 2. Mark all messages in this conversation as read with a batch update
+      final unreadMessagesQuery = await _firestore
           .collection('conversations')
           .doc(conversation.id)
           .collection('messages')
           .where('isRead', isEqualTo: false)
-          .where('senderId', isNotEqualTo: currentUserId)
           .get();
       
-      // Mark each message as read using a batch operation for efficiency
-      for (final doc in unreadMessages.docs) {
-        batch.update(doc.reference, {'isRead': true});
+      if (unreadMessagesQuery.docs.isNotEmpty) {
+        final batch = _firestore.batch();
+        int updateCount = 0;
+        
+        for (final messageDoc in unreadMessagesQuery.docs) {
+          final messageData = messageDoc.data();
+          final senderId = messageData['senderId'] as String;
+          
+          batch.update(messageDoc.reference, {'isRead': true});
+          updateCount++;
+          
+          // If this is someone else's message and we are marking it as read,
+          // update the status to "read" for sender's visibility
+          if (senderId != currentUserId) {
+            batch.update(messageDoc.reference, {'status': 'read'});
+          }
+        }
+        
+        if (updateCount > 0) {
+          await batch.commit();
+        }
       }
-      
-      // Commit the batch
-      await batch.commit();
-      
-      // Update the local conversation object
+
+      // 3. Update local conversation object
       conversation.unreadCount = 0;
       
-      // Notify listeners to update the UI
+      // 4. Also update any messages in memory if this is the selected conversation
+      if (_selectedConversation?.id == conversation.id) {
+        for (final message in _selectedConversation!.messages) {
+          message.isRead = true;
+          // Update status to read for messages from others
+          if (message.senderId != currentUserId && message.status != MessageStatus.read) {
+            message.status = MessageStatus.read;
+          }
+        }
+        _selectedConversation = conversation;
+      }
+
+      // 5. Notify listeners to update the UI
       notifyListeners();
-      
-      // Also notify the message event bus about the change
-      MessageEventBus().notifyUnreadCountChanged(getTotalUnreadCount());
-      
-      debugPrint('Successfully marked conversation as read');
+
+      // 6. Explicitly notify the MessageEventBus about the change with the updated total count
+      final updatedTotalUnreadCount = getTotalUnreadCount();
+      MessageEventBus().notifyUnreadCountChanged(updatedTotalUnreadCount);
+      MessageEventBus().notifyConversationChanged(conversation.id);
+
+      debugPrint(
+          'Successfully marked conversation as read for user ${currentUserId}. Updated badge count: $updatedTotalUnreadCount');
     } catch (e) {
       debugPrint('Error marking conversation as read: $e');
       rethrow;
@@ -763,31 +1171,40 @@ class MessagesController extends ChangeNotifier {
 
   void markConversationAsUnread(Conversation conversation) async {
     try {
-      // Update conversation in Firestore
+      debugPrint(
+          'Marking conversation ${conversation.id} as unread for user ${currentUserId}');
+
+      // Create/update a document in readStatus subcollection for this user
       await _firestore
           .collection('conversations')
           .doc(conversation.id)
-          .update({'unreadCount': 1});
-      
-      // Update in local memory
-      final index = _conversations.indexWhere((c) => c.id == conversation.id);
-      if (index != -1) {
-        _conversations[index].unreadCount = 1;
-      }
-      
+          .collection('readStatus')
+          .doc(currentUserId)
+          .set({
+        'userId': currentUserId,
+        'isRead': false,
+        'lastReadTimestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update the local conversation object for UI purposes only
+      conversation.unreadCount = 1;
+
       // Recalculate filtered conversations
       _applyFilters();
-      
+
       // Notify UI of changes
       notifyListeners();
-      
-      // *** NEW: Notify the MessageEventBus of the unread count change ***
+
+      // Notify the MessageEventBus of the unread count change
       final totalUnreadCount = getTotalUnreadCount();
       MessageEventBus().notifyUnreadCountChanged(totalUnreadCount);
       MessageEventBus().notifyConversationChanged(conversation.id);
-      
+
+      debugPrint(
+          'Successfully marked conversation as unread for user ${currentUserId}');
     } catch (e) {
-      print('Error marking conversation as unread: $e');
+      debugPrint('Error marking conversation as unread: $e');
+      rethrow;
     }
   }
 
@@ -929,7 +1346,7 @@ class MessagesController extends ChangeNotifier {
     _applyFilters();
   }
 
-  // Modified to prevent auto-marking messages as read when selecting conversation
+  // Modified to properly handle read receipts when selecting conversation
   void selectConversation(Conversation conversation) {
     if (_isDisposed) return; // Don't do anything if disposed
 
@@ -948,22 +1365,11 @@ class MessagesController extends ChangeNotifier {
       _selectedConversation = conversation;
     }
 
-    // Important: DON'T automatically mark messages as read here
-    // We want the badge to persist until user explicitly reads messages
-    
-    // Remove controller references - they're not needed anymore
-    final updatedMessages = _selectedConversation!.messages.toList();
+    // We don't auto-mark as read here because ChatDetailPage will take care of that
+    // This allows the badge to persist until explicitly read in the chat
 
-    final updatedConversation = _selectedConversation!.copyWith(
-      messages: updatedMessages,
-    );
-
-    final updatedIndex =
-        _conversations.indexWhere((c) => c.id == updatedConversation.id);
-    if (updatedIndex != -1) {
-      _conversations[updatedIndex] = updatedConversation;
-      _selectedConversation = updatedConversation;
-    }
+    // Set up timer to periodically check for read receipts once conversation is selected
+    _setupReadReceiptChecking();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed && messageScrollController.hasClients) {
@@ -978,6 +1384,20 @@ class MessagesController extends ChangeNotifier {
     _subscribeToTypingIndicators();
 
     notifyListeners();
+  }
+
+  // Set up periodic checking of read receipts
+  Timer? _readReceiptTimer;
+  void _setupReadReceiptChecking() {
+    // Cancel any existing timer
+    _readReceiptTimer?.cancel();
+    
+    // Start a new periodic timer
+    _readReceiptTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_selectedConversation != null && !_isDisposed) {
+        updateReadReceiptsForAllMessages();
+      }
+    });
   }
 
   void clearSelection() {
@@ -1027,7 +1447,7 @@ class MessagesController extends ChangeNotifier {
   // Add the updateMessage method to handle editing
   Future<void> updateMessage(Message message, String newContent) async {
     if (_selectedConversation == null) return;
-    
+
     try {
       // Get a reference to the message document in Firestore
       final messageRef = _firestore
@@ -1045,10 +1465,11 @@ class MessagesController extends ChangeNotifier {
       // Find and update the in-memory message
       final index = _selectedConversation!.messages
           .indexWhere((msg) => msg.id == message.id);
-      
+
       if (index != -1) {
         // Create a new message with updated properties
-        _selectedConversation!.messages[index] = _selectedConversation!.messages[index].copyWith(
+        _selectedConversation!.messages[index] =
+            _selectedConversation!.messages[index].copyWith(
           content: newContent,
           isEdited: true,
         );
@@ -1059,10 +1480,9 @@ class MessagesController extends ChangeNotifier {
 
       // Notify listeners that the message has been updated
       notifyListeners();
-      
+
       // Show a debug print to verify this code is running
       debugPrint("Message updated with isEdited=true: ${message.id}");
-      
     } catch (e) {
       debugPrint("Error updating message: $e");
       rethrow;
@@ -1174,6 +1594,38 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
+  // Check if a message has been read by all participants
+  bool isMessageReadByAll(Message message) {
+    // If this isn't from the current user, we don't care about read receipts
+    if (message.senderId != currentUserId) return false;
+    
+    if (_selectedConversation == null) return false;
+    
+    // First check message status - if it's already marked as read, return true
+    if (message.status == MessageStatus.read) return true;
+    
+    // For one-on-one conversations, if the message is delivered and the other person has read something,
+    // we can infer this message has been read
+    if (_selectedConversation!.participants.length == 2 && 
+        message.status == MessageStatus.delivered) {
+      // Find the last message from other participant
+      final otherParticipantId = _selectedConversation!.participants
+          .firstWhere((user) => user.id != currentUserId)
+          .id;
+          
+      // If the other user has sent a message after this one, we can assume they've read this message
+      final newerMessages = _selectedConversation!.messages
+          .where((msg) => 
+            msg.senderId == otherParticipantId && 
+            msg.timestamp.isAfter(message.timestamp))
+          .toList();
+      
+      return newerMessages.isNotEmpty;
+    }
+    
+    return false;
+  }
+
   @override
   void notifyListeners() {
     if (!_isDisposed) {
@@ -1187,6 +1639,7 @@ class MessagesController extends ChangeNotifier {
 
     // Cancel timers
     _typingTimer?.cancel();
+    _readReceiptTimer?.cancel();
 
     // Clean up controllers
     try {

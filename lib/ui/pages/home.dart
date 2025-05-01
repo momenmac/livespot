@@ -50,19 +50,28 @@ class _HomeState extends State<Home> {
 
     // Initial update of unread counts
     _updateUnreadCounts();
-    
-    // Load messages data immediately
+
+    // Load messages data immediately and validate unread counts
     _messagesController!.loadConversations().then((_) {
-      _updateUnreadCounts();
+      // First validate all unread counts to fix any inconsistencies
+      _messagesController!.validateUnreadCounts().then((_) {
+        _updateUnreadCounts();
+      });
     });
 
     // Set up a timer to periodically check for unread messages
     _unreadCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _updateUnreadCounts();
+
+      // Periodically validate unread counts to fix any issues
+      if (_messagesController != null) {
+        _messagesController!.validateUnreadCounts();
+      }
     });
-    
+
     // Subscribe to unread count changes via MessageEventBus for real-time updates
-    _unreadCountSubscription = MessageEventBus().unreadCountStream.listen((count) {
+    _unreadCountSubscription =
+        MessageEventBus().unreadCountStream.listen((count) {
       if (mounted) {
         setState(() {
           _unreadMessageCount = count;
@@ -81,16 +90,19 @@ class _HomeState extends State<Home> {
   Future<void> _updateUnreadCounts() async {
     if (_messagesController != null) {
       final unreadCount = _messagesController!.getTotalUnreadCount();
-      
+
       // Update the badge through normal state update
       if (mounted) {
         setState(() {
           _unreadMessageCount = unreadCount;
         });
       }
-      
+
       // Also notify the MessageEventBus so other parts of the app can stay updated
       MessageEventBus().notifyUnreadCountChanged(unreadCount);
+
+      // Debug print for verification
+      print('🔢 Home: Updated unread count to $unreadCount');
     }
   }
 
@@ -100,9 +112,14 @@ class _HomeState extends State<Home> {
     });
 
     // If navigating to messages tab, update unread count after a short delay
+    // Also validate unread counts to fix any inconsistencies
     if (index == 1) {
-      Future.delayed(const Duration(seconds: 1), () {
-        _updateUnreadCounts();
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (_messagesController != null) {
+          _messagesController!.validateUnreadCounts().then((_) {
+            _updateUnreadCounts();
+          });
+        }
       });
     }
   }

@@ -83,7 +83,7 @@ class RouteGuard {
       final bool isAuthenticated = await RouteGuard.isAuthenticated();
       final NavigationService nav = NavigationService();
       final sessionManager = SessionManager();
-      
+
       // Exit early if already at the route we're checking
       if (nav.currentRoute == routeName) {
         return;
@@ -125,7 +125,8 @@ class RouteGuard {
         // NEW: Check email verification status
         if (sessionManager.isEmailVerified) {
           // Only navigate if not already at home
-          if (routeName != AppRoutes.home && nav.currentRoute != AppRoutes.home) {
+          if (routeName != AppRoutes.home &&
+              nav.currentRoute != AppRoutes.home) {
             nav.replaceTo(AppRoutes.home);
           }
         } else {

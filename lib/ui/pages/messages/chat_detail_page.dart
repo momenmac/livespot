@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'dart:async';
@@ -28,7 +29,7 @@ class ChatDetailPage extends StatefulWidget {
 class _ChatDetailPageState extends State<ChatDetailPage>
     with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  late final ScrollController _scrollController;
   final FocusNode _messageFocusNode = FocusNode();
 
   // Keep our own reference to the controller that we'll manage
@@ -38,6 +39,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   Message? _replyToMessage;
   Timer? _typingTimer;
   Timer? _scrollDebounceTimer;
+  Timer? _readReceiptTimer; // Timer for periodic read receipt checks
   bool isTyping = false;
 
   // Animation controllers for typing indicator
@@ -50,31 +52,83 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   @override
   void initState() {
     super.initState();
-    // Create a new controller instance if provided controller is disposed
-    // This ensures we don't use a disposed controller
-    if (widget.controller.disposed) {
-      _controller = MessagesController();
-      _controller.selectConversation(widget.conversation);
-    } else {
-      _controller = widget.controller;
-    }
+    _controller = widget.controller;
+    _scrollController = ScrollController();
 
-    // Initialize typing indicator animations
-    _initTypingAnimations();
-
-    _setupMessagesStream();
+    // Set up listeners and load messages
+    _setupMessageListener();
     _listenForTyping();
+    
+    // Improved approach for handling read status with proper timing
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Mark all messages as read when chat is opened
+      _markAllUnreadMessagesAsRead();
 
-    // Add listener to scroll controller to detect when scrolling finishes
-    _scrollController.addListener(() {
-      // Update visibility of scroll-to-bottom button
-      if (_scrollController.hasClients) {
-        _showScrollToBottomButton.value = _scrollController.offset <
-            _scrollController.position.maxScrollExtent - 100;
-      }
+      // Also run a check for read receipts after a short delay to let UI settle
+      await Future.delayed(const Duration(milliseconds: 500), () {
+        // Explicitly check if other participants have read user's messages
+        _updateReadReceipts();
+      });
     });
   }
 
+  // More comprehensive handling of message read status
+  void _markAllUnreadMessagesAsRead() async {
+    try {
+      if (widget.conversation.unreadCount > 0) {
+        debugPrint('[ChatDetail] Marking conversation as read on open');
+        // Mark the whole conversation as read, which handles backend updates
+        await _controller.markConversationAsRead(widget.conversation);
+        
+        // Get updated total unread count and notify the message event bus
+        final totalUnreadCount = _controller.getTotalUnreadCount();
+        MessageEventBus().notifyUnreadCountChanged(totalUnreadCount);
+        debugPrint('[ChatDetail] Updated navigation badge to $totalUnreadCount');
+      }
+      
+      // Force update read status for all messages from this sender
+      for (final participant in widget.conversation.participants) {
+        if (participant.id != _controller.currentUserId) {
+          debugPrint('[ChatDetail] Marking all messages from ${participant.id} as read');
+          await _controller.markMessagesFromSenderAsRead(participant.id);
+        }
+      }
+
+      // Update UI state
+      setState(() {});
+      
+      // Force an extra update of the unread count after a delay
+      // This ensures that the badge gets updated even if there were async delays
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          final updatedCount = _controller.getTotalUnreadCount();
+          MessageEventBus().notifyUnreadCountChanged(updatedCount);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error marking messages as read: $e');
+    }
+  }
+  
+  // Check and update read receipts for all messages from current user
+  void _updateReadReceipts() async {
+    try {
+      debugPrint('[ChatDetail] Updating read receipts for conversation ${widget.conversation.id}');
+      
+      // Use our new method to update read receipts for all messages
+      await _controller.updateReadReceiptsForAllMessages();
+      
+      // Set a timer to periodically check read receipts in case of changes
+      _readReceiptTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (mounted) {
+          _controller.updateReadReceiptsForAllMessages();
+        }
+      });
+    } catch (e) {
+      debugPrint('Error updating read receipts: $e');
+    }
+  }
+  
   void _initTypingAnimations() {
     // Clean up any existing controllers first
     _disposeTypingAnimations();
@@ -123,6 +177,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     _typingTimer?.cancel();
     _scrollDebounceTimer?.cancel();
     _showScrollToBottomButton.dispose();
+    _readReceiptTimer?.cancel(); // Cancel the read receipt timer when disposing
     super.dispose();
   }
 
@@ -135,7 +190,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     });
   }
 
-  void _setupMessagesStream() {
+  void _setupMessageListener() {
     _messagesStream = FirebaseFirestore.instance
         .collection('conversations')
         .doc(widget.conversation.id)
@@ -409,18 +464,21 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     if (url.isEmpty) return '';
 
     // If URL starts with file:/// - convert to proper HTTP URL
-    if (url.startsWith('file:///media/')) {
-      // Replace file:/// with the actual server base URL
-      return 'http://localhost:8000${url.substring(7)}';
+    if (url.startsWith('file:///')) {
+      // Replace file:/// with the actual server base URL from ApiUrls
+      return '${ApiUrls.baseUrl}${url.substring(7)}';
     }
 
     // Handle URLs that are just paths without domain
     if (url.startsWith('/media/')) {
-      return 'http://localhost:8000$url';
+      return '${ApiUrls.baseUrl}$url';
     }
 
     // Already a valid URL (starts with http:// or https://)
     if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (url.contains('localhost')) {
+        return url.replaceFirst('http://localhost:8000', ApiUrls.baseUrl);
+      }
       return url;
     }
 
@@ -493,7 +551,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                 child: Row(
                   children: [
                     Icon(
-                      widget.conversation.isMuted ? Icons.volume_up : Icons.volume_off,
+                      widget.conversation.isMuted
+                          ? Icons.volume_up
+                          : Icons.volume_off,
                       color: ThemeConstants.primaryColor,
                     ),
                     const SizedBox(width: 8),
@@ -507,11 +567,15 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                 child: Row(
                   children: [
                     Icon(
-                      widget.conversation.isArchived ? Icons.unarchive : Icons.archive,
+                      widget.conversation.isArchived
+                          ? Icons.unarchive
+                          : Icons.archive,
                       color: ThemeConstants.orange,
                     ),
                     const SizedBox(width: 8),
-                    Text(widget.conversation.isArchived ? 'Unarchive' : 'Archive'),
+                    Text(widget.conversation.isArchived
+                        ? 'Unarchive'
+                        : 'Archive'),
                   ],
                 ),
               ),
@@ -575,14 +639,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           // --- Group messages by date ---
                           final List<Widget> messageWidgets = [];
                           DateTime? lastDate;
-
-                          // Mark all messages in this conversation as read when the chat is opened
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (widget.conversation.unreadCount > 0) {
-                              _controller
-                                  .markConversationAsRead(widget.conversation);
-                            }
-                          });
 
                           for (int i = 0; i < messages.length; i++) {
                             final message = messages[i];
@@ -761,15 +817,15 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           // Left icon - attachment in normal mode, edit icon in edit mode
                           IconButton(
                             icon: Icon(
-                              _controller.editingMessage != null 
-                                ? Icons.edit 
-                                : Icons.attach_file,
-                              color: _controller.editingMessage != null 
-                                ? ThemeConstants.primaryColor
-                                : null,
+                              _controller.editingMessage != null
+                                  ? Icons.edit
+                                  : Icons.attach_file,
+                              color: _controller.editingMessage != null
+                                  ? ThemeConstants.primaryColor
+                                  : null,
                             ),
                             onPressed: _controller.editingMessage != null
-                                ? null  // Disabled when editing
+                                ? null // Disabled when editing
                                 : () => _showAttachmentOptions(context),
                             padding: const EdgeInsets.all(12),
                           ),
@@ -777,15 +833,17 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           Expanded(
                             child: Container(
                               decoration: _controller.editingMessage != null
-                                ? BoxDecoration(
-                                    color: ThemeConstants.primaryColor.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: ThemeConstants.primaryColor.withOpacity(0.3),
-                                      width: 1.0,
-                                    ),
-                                  )
-                                : null,
+                                  ? BoxDecoration(
+                                      color: ThemeConstants.primaryColor
+                                          .withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: ThemeConstants.primaryColor
+                                            .withOpacity(0.3),
+                                        width: 1.0,
+                                      ),
+                                    )
+                                  : null,
                               child: TextField(
                                 controller: _messageController,
                                 focusNode: _messageFocusNode,
@@ -801,7 +859,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                                   // No need for filled background since we're using Container for styling
                                   filled: false,
                                 ),
-                                textCapitalization: TextCapitalization.sentences,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
                                 onChanged: (text) {
                                   // Don't show typing indicator when editing
                                   if (_controller.editingMessage == null) {
@@ -814,29 +873,29 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           ),
                           // Send/edit button
                           _controller.editingMessage != null
-                            ? Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                decoration: BoxDecoration(
-                                  color: ThemeConstants.primaryColor,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: IconButton(
+                              ? Container(
+                                  margin: const EdgeInsets.only(left: 8),
+                                  decoration: BoxDecoration(
+                                    color: ThemeConstants.primaryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                    ),
+                                    onPressed: _sendMessage,
+                                    padding: const EdgeInsets.all(12),
+                                  ),
+                                )
+                              : IconButton(
                                   icon: const Icon(
-                                    Icons.check,
-                                    color: Colors.white,
+                                    Icons.send,
+                                    color: ThemeConstants.primaryColor,
                                   ),
                                   onPressed: _sendMessage,
                                   padding: const EdgeInsets.all(12),
                                 ),
-                              )
-                            : IconButton(
-                                icon: const Icon(
-                                  Icons.send,
-                                  color: ThemeConstants.primaryColor,
-                                ),
-                                onPressed: _sendMessage,
-                                padding: const EdgeInsets.all(12),
-                              ),
                         ],
                       ),
                     ],
@@ -877,10 +936,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     String? fixedMediaUrl;
     if (message.messageType == MessageType.image && message.mediaUrl != null) {
       if (message.mediaUrl!.startsWith('file:///')) {
-        fixedMediaUrl =
-            'http://localhost:8000${message.mediaUrl!.substring(7)}';
+        fixedMediaUrl = '${ApiUrls.baseUrl}${message.mediaUrl!.substring(7)}';
       } else if (message.mediaUrl!.startsWith('/media/')) {
-        fixedMediaUrl = 'http://localhost:8000${message.mediaUrl!}';
+        fixedMediaUrl = '${ApiUrls.baseUrl}${message.mediaUrl!}';
       } else {
         fixedMediaUrl = message.mediaUrl;
       }
@@ -950,7 +1008,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isCurrentUser ? Colors.white70 : Colors.black87,
+                          color:
+                              isCurrentUser ? Colors.white70 : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -959,7 +1018,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         style: TextStyle(
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
-                          color: isCurrentUser ? Colors.white70 : Colors.black87,
+                          color:
+                              isCurrentUser ? Colors.white70 : Colors.black87,
                         ),
                       ),
                     ],
@@ -1033,7 +1093,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                       color: isCurrentUser ? Colors.white70 : Colors.grey,
                     ),
                   ),
-                  
+
                   // Edited indicator
                   if (message.isEdited)
                     Row(
@@ -1050,9 +1110,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         ),
                       ],
                     ),
-                    
+
                   const SizedBox(width: 4),
-                  
+
                   // Message status indicator
                   InkWell(
                     onTap: () => _showMessageStatusInfo(context),

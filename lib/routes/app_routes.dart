@@ -56,6 +56,7 @@ class AppRoutes {
     map: (args) => const MapPage(),
     messages: (args) => const MessagesPage(),
     networkTest: (args) => const NetworkTestPage(),
-    chatDetail: (args) => const Placeholder(), // Placeholder for chat detail page
+    chatDetail: (args) =>
+        const Placeholder(), // Placeholder for chat detail page
   };
 }

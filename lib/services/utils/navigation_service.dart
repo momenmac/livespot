@@ -24,7 +24,8 @@ class NavigationService {
 
   // Method to set active chat ID
   void setActiveChatId(String? chatId) {
-    debugPrint("[NavigationService] Active chat ID changed: $_activeChatId -> $chatId");
+    debugPrint(
+        "[NavigationService] Active chat ID changed: $_activeChatId -> $chatId");
     _activeChatId = chatId;
   }
 
@@ -36,7 +37,7 @@ class NavigationService {
     debugPrint("[NavigationService] Route set to: $route");
     _currentRoute = route;
   }
-  
+
   // Alias for setRoute to support legacy code
   void setCurrentRoute(String route) {
     setRoute(route);
@@ -56,14 +57,16 @@ class NavigationService {
   // Get the current route
   String? get currentRoute {
     final result = _currentModalRoute ?? _currentRoute ?? _cachedRoute;
-    debugPrint("[NavigationService] Current route: observer=$_currentRoute, modal=$_currentModalRoute, cached=$_cachedRoute");
+    debugPrint(
+        "[NavigationService] Current route: observer=$_currentRoute, modal=$_currentModalRoute, cached=$_cachedRoute");
     return result;
   }
 
   // Push a new route onto the navigation stack
   Future<dynamic> navigateTo(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Navigating to: $routeName");
-    return navigatorKey.currentState!.pushNamed(routeName, arguments: arguments);
+    return navigatorKey.currentState!
+        .pushNamed(routeName, arguments: arguments);
   }
 
   // Replace the current route with a new one
@@ -84,7 +87,7 @@ class NavigationService {
       arguments: arguments,
     );
   }
-  
+
   // Navigate to a route, removing all routes until home
   Future<dynamic> replaceUntilHome(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing until home with: $routeName");
