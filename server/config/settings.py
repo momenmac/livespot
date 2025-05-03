@@ -33,6 +33,9 @@ DEBUG = True
 # Update ALLOWED_HOSTS to include the Android emulator's special IP
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.12', '192.168.1.x']
 
+# Base URL for serving uploaded media files - needed for web file upload
+BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
+
 
 # Application definition
 
@@ -44,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "accounts",
+    'media_api',  # Add our new media app
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',

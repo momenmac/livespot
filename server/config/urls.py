@@ -23,6 +23,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
+    path('media-api/', include('media_api.urls')),  # Add our new media API endpoints
 ]
 
 # Serve media files in development

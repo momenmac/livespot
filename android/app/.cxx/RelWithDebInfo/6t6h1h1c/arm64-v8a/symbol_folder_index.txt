@@ -1,0 +1,1 @@
+/Users/momen_mac/Desktop/flutter_application/build/app/intermediates/cxx/RelWithDebInfo/6t6h1h1c/obj/arm64-v8a

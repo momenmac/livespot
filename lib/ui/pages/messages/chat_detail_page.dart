@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
-import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart'; // Add this import for date formatting

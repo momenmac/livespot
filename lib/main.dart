@@ -16,7 +16,7 @@ import 'package:flutter_application_2/services/utils/route_observer.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'package:flutter_application_2/services/messaging/message_event_bus.dart'; // Add this import for message event bus
+// Add this import for message event bus
 
 // Use conditional import for Platform
 import 'dart:io'

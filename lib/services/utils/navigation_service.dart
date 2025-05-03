@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'route_observer.dart';
-import 'dart:developer' as developer;
 
 /// A simplified navigation service that prioritizes reliability over complexity
 class NavigationService {

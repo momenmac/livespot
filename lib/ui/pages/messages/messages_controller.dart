@@ -192,7 +192,7 @@ class MessagesController extends ChangeNotifier {
 
                   // Detailed logging for debugging
                   final preview = lastMsg.content.length > 20
-                      ? lastMsg.content.substring(0, 20) + "..."
+                      ? "${lastMsg.content.substring(0, 20)}..."
                       : lastMsg.content;
 
                   debugPrint('[ConvListener] Updated lastMessage: "$preview" '
@@ -219,7 +219,7 @@ class MessagesController extends ChangeNotifier {
               // New conversation - fetch all users first for full info
               _fetchAllUsers().then((users) async {
                 final newConversation =
-                    await Conversation.fromFirestore(conversationData, users);
+                    Conversation.fromFirestore(conversationData, users);
 
                 // Check read status for new conversation
                 try {
@@ -615,8 +615,9 @@ class MessagesController extends ChangeNotifier {
 
   // Check if all participants (except the current user) have read a message
   Future<bool> checkReadReceiptsForMessage(Message message) async {
-    if (message.senderId != currentUserId)
+    if (message.senderId != currentUserId) {
       return false; // Only check read receipts for messages sent by current user
+    }
     if (_selectedConversation == null) return false;
 
     try {
@@ -1097,7 +1098,7 @@ class MessagesController extends ChangeNotifier {
   Future<void> markConversationAsRead(Conversation conversation) async {
     try {
       debugPrint(
-          '[READ] Marking conversation ${conversation.id} as read for user ${currentUserId}');
+          '[READ] Marking conversation ${conversation.id} as read for user $currentUserId');
 
       // 1. First ensure we have a valid user ID before proceeding
       if (currentUserId.isEmpty) {
@@ -1228,7 +1229,7 @@ class MessagesController extends ChangeNotifier {
   Future<void> markConversationAsUnread(Conversation conversation) async {
     try {
       debugPrint(
-          '[UNREAD] Marking conversation ${conversation.id} as unread for user ${currentUserId}');
+          '[UNREAD] Marking conversation ${conversation.id} as unread for user $currentUserId');
 
       // 1. First ensure we have a valid user ID before proceeding
       if (currentUserId.isEmpty) {
@@ -1300,7 +1301,7 @@ class MessagesController extends ChangeNotifier {
       });
 
       debugPrint(
-          '[UNREAD] ✅ Successfully marked conversation as unread for user ${currentUserId}. Updated badge count: $totalUnreadCount');
+          '[UNREAD] ✅ Successfully marked conversation as unread for user $currentUserId. Updated badge count: $totalUnreadCount');
     } catch (e) {
       debugPrint('[UNREAD] ❌ Error marking conversation as unread: $e');
       // Final attempt to update local state even if all else fails

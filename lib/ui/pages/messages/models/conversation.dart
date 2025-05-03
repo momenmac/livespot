@@ -66,7 +66,7 @@ class Conversation {
       isMuted: isMuted ?? this.isMuted,
       unreadCount: unreadCount ?? this.unreadCount,
       messages: messages ?? this.messages,
-      lastMessage: lastMessage ?? this._lastMessage,
+      lastMessage: lastMessage ?? _lastMessage,
     );
   }
 
