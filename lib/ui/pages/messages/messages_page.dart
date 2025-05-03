@@ -217,7 +217,15 @@ class _MessagesPageState extends State<MessagesPage>
                           conversation: conversation,
                         ),
                       ),
-                    );
+                    ).then((_) {
+                      // Refresh conversations when returning from chat detail
+                      if (mounted) {
+                        developer.log(
+                            'Returned from chat detail - refreshing conversations',
+                            name: 'MessagesPage');
+                        _loadMessages(); // Reload conversations to update unread status
+                      }
+                    });
                   },
                 ),
               ),

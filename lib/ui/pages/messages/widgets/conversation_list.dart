@@ -768,15 +768,15 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Improved unread count badge that's more visible
+                  // Replace numeric badge with simple blue circle indicator for unread messages
                   if (widget.conversation.unreadCount > 0)
                     Container(
                       margin: const EdgeInsets.only(left: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      width: 10,
+                      height: 10,
                       decoration: BoxDecoration(
                         color: ThemeConstants.primaryColor,
-                        borderRadius: BorderRadius.circular(10),
+                        shape: BoxShape.circle,
                         // Add subtle shadow for better visibility
                         boxShadow: [
                           BoxShadow(
@@ -785,14 +785,6 @@ class _ConversationTileState extends State<_ConversationTile> {
                             offset: const Offset(0, 1),
                           ),
                         ],
-                      ),
-                      child: Text(
-                        widget.conversation.unreadCount.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
                       ),
                     ),
                 ],
@@ -807,23 +799,23 @@ class _ConversationTileState extends State<_ConversationTile> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Always show the unread badge here if it exists
+                    // Replace numeric badge with blue dot in hover state too
                     if (widget.conversation.unreadCount > 0)
                       Container(
-                        margin: const EdgeInsets.only(right: 8), // More spacing
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(right: 8),
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           color: ThemeConstants.primaryColor,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          widget.conversation.unreadCount.toString(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          shape: BoxShape.circle,
+                          // Add subtle shadow for better visibility
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 2,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
                       ),
                     _buildOptionsButton(context),

@@ -58,7 +58,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     // Set up listeners and load messages
     _setupMessageListener();
     _listenForTyping();
-    
+
     // Improved approach for handling read status with proper timing
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Mark all messages as read when chat is opened
@@ -79,24 +79,26 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         debugPrint('[ChatDetail] Marking conversation as read on open');
         // Mark the whole conversation as read, which handles backend updates
         await _controller.markConversationAsRead(widget.conversation);
-        
+
         // Get updated total unread count and notify the message event bus
         final totalUnreadCount = _controller.getTotalUnreadCount();
         MessageEventBus().notifyUnreadCountChanged(totalUnreadCount);
-        debugPrint('[ChatDetail] Updated navigation badge to $totalUnreadCount');
+        debugPrint(
+            '[ChatDetail] Updated navigation badge to $totalUnreadCount');
       }
-      
+
       // Force update read status for all messages from this sender
       for (final participant in widget.conversation.participants) {
         if (participant.id != _controller.currentUserId) {
-          debugPrint('[ChatDetail] Marking all messages from ${participant.id} as read');
+          debugPrint(
+              '[ChatDetail] Marking all messages from ${participant.id} as read');
           await _controller.markMessagesFromSenderAsRead(participant.id);
         }
       }
 
       // Update UI state
       setState(() {});
-      
+
       // Force an extra update of the unread count after a delay
       // This ensures that the badge gets updated even if there were async delays
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -109,15 +111,16 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       debugPrint('Error marking messages as read: $e');
     }
   }
-  
+
   // Check and update read receipts for all messages from current user
   void _updateReadReceipts() async {
     try {
-      debugPrint('[ChatDetail] Updating read receipts for conversation ${widget.conversation.id}');
-      
+      debugPrint(
+          '[ChatDetail] Updating read receipts for conversation ${widget.conversation.id}');
+
       // Use our new method to update read receipts for all messages
       await _controller.updateReadReceiptsForAllMessages();
-      
+
       // Set a timer to periodically check read receipts in case of changes
       _readReceiptTimer = Timer.periodic(const Duration(seconds: 5), (_) {
         if (mounted) {
@@ -128,7 +131,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       debugPrint('Error updating read receipts: $e');
     }
   }
-  
+
   void _initTypingAnimations() {
     // Clean up any existing controllers first
     _disposeTypingAnimations();
@@ -201,14 +204,81 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         .snapshots();
 
     // Add listener to scroll to bottom when new messages come in
-    _messagesStream.listen((_) {
+    _messagesStream.listen((snapshot) {
       // Use a slight delay to ensure messages are rendered
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted && _scrollController.hasClients) {
           _scrollToBottom(animated: true);
         }
       });
+
+      // Mark new incoming messages as read automatically
+      _markNewMessagesAsRead(snapshot);
     });
+  }
+
+  // Handle new incoming messages while chat is open
+  void _markNewMessagesAsRead(QuerySnapshot snapshot) {
+    if (!mounted) return;
+
+    // First, check if there are any changes at all
+    final bool hasChanges = snapshot.docChanges.isNotEmpty;
+
+    // Get all messages in the snapshot that are:
+    // 1. Not from the current user
+    // 2. Not already marked as read
+    List<DocumentSnapshot> unreadMessages = [];
+
+    // Process both existing and new messages to ensure nothing is missed
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) continue;
+
+      final String senderId = data['senderId'] as String? ?? '';
+      final bool isRead = data['isRead'] as bool? ?? false;
+
+      // Skip messages from current user or already read messages
+      if (senderId == _controller.currentUserId || isRead) continue;
+
+      unreadMessages.add(doc);
+    }
+
+    // If we found any unread messages that aren't from the current user
+    if (unreadMessages.isNotEmpty) {
+      debugPrint(
+          '[ChatDetail] Found ${unreadMessages.length} unread messages to mark as read');
+
+      // Mark individual messages as read
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in unreadMessages) {
+        final messageRef = FirebaseFirestore.instance
+            .collection('conversations')
+            .doc(widget.conversation.id)
+            .collection('messages')
+            .doc(doc.id);
+
+        batch.update(messageRef, {'isRead': true});
+      }
+
+      // Commit all updates in a single batch
+      batch.commit().then((_) {
+        debugPrint(
+            '[ChatDetail] Successfully marked ${unreadMessages.length} messages as read');
+
+        // Update read status for the conversation
+        _controller.markConversationAsRead(widget.conversation);
+
+        // Notify other UI components of the change in unread status
+        final totalUnreadCount = _controller.getTotalUnreadCount();
+        MessageEventBus().notifyUnreadCountChanged(totalUnreadCount);
+      }).catchError((error) {
+        debugPrint('[ChatDetail] Error marking messages as read: $error');
+      });
+    } else if (hasChanges) {
+      // Even if there were no unread messages but there were changes,
+      // make sure the conversation is marked as read - this handles edge cases
+      _controller.markConversationAsRead(widget.conversation);
+    }
   }
 
   void _listenForTyping() {
