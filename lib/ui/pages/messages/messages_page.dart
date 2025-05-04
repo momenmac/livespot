@@ -190,46 +190,53 @@ class _MessagesPageState extends State<MessagesPage>
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          // Show recommended rooms section at the top with conversation list below
-          return Column(
-            children: [
-              // Recommended rooms section (taking up just the space it needs)
-              const RecommendedRoomsSection(),
-
-              // Conversation list (expanding to fill remaining space)
-              Expanded(
-                child: ConversationList(
-                  controller: _controller,
-                  onConversationSelected: (conversation) {
-                    // Create a new controller instance for ChatDetailPage
-                    // This prevents using a potentially disposed controller
-                    final detailController = MessagesController();
-
-                    // Copy the selected conversation to the new controller
-                    detailController.selectConversation(conversation);
-
-                    // Navigate to chat detail page when a conversation is selected
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ChatDetailPage(
-                          controller: detailController,
-                          conversation: conversation,
-                        ),
-                      ),
-                    ).then((_) {
-                      // Refresh conversations when returning from chat detail
-                      if (mounted) {
-                        developer.log(
-                            'Returned from chat detail - refreshing conversations',
-                            name: 'MessagesPage');
-                        _loadMessages(); // Reload conversations to update unread status
-                      }
-                    });
-                  },
+          // Modified layout to fix scrolling issues
+          return SafeArea(
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // Recommended rooms section as sliver
+                const SliverToBoxAdapter(
+                  child: RecommendedRoomsSection(),
                 ),
-              ),
-            ],
+
+                // Conversation list as expandable sliver
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  fillOverscroll: true,
+                  child: ConversationList(
+                    controller: _controller,
+                    onConversationSelected: (conversation) {
+                      // Create a new controller instance for ChatDetailPage
+                      // This prevents using a potentially disposed controller
+                      final detailController = MessagesController();
+
+                      // Copy the selected conversation to the new controller
+                      detailController.selectConversation(conversation);
+
+                      // Navigate to chat detail page when a conversation is selected
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatDetailPage(
+                            controller: detailController,
+                            conversation: conversation,
+                          ),
+                        ),
+                      ).then((_) {
+                        // Refresh conversations when returning from chat detail
+                        if (mounted) {
+                          developer.log(
+                              'Returned from chat detail - refreshing conversations',
+                              name: 'MessagesPage');
+                          _loadMessages(); // Reload conversations to update unread status
+                        }
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

@@ -31,7 +31,7 @@ SECRET_KEY = "django-insecure-h=_g7*7--tj2kxm^o^5lskc&e(&l=4ca_pkr04k!dh+nyi*)co
 DEBUG = True
 
 # Update ALLOWED_HOSTS to include the Android emulator's special IP
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.12', '192.168.1.x']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.9', '192.168.1.x']
 
 # Base URL for serving uploaded media files - needed for web file upload
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
@@ -56,10 +56,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",  # Remove session middleware
+    "django.contrib.sessions.middleware.SessionMiddleware",  # Restored for admin interface
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",  # Keep for admin interface
+    # "django.middleware.csrf.CsrfViewMiddleware",  # Kept disabled for API endpoints
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

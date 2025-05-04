@@ -8,15 +8,17 @@ import 'package:intl/intl.dart';
 class VoiceMessageBubble extends StatefulWidget {
   final Message message;
   final bool isSent;
-  final VoidCallback? onLongPress;
-  final Function(Message)? onReply;
+  final Function(Message)?
+      onLongPress; // Changed from VoidCallback? to Function(Message)?
+  final Function(Message)?
+      onSwipeReply; // Changed from onReply to onSwipeReply to match MessageBubble
 
   const VoiceMessageBubble({
     super.key,
     required this.message,
     required this.isSent,
     this.onLongPress,
-    this.onReply,
+    this.onSwipeReply, // Updated parameter name
   });
 
   @override
@@ -201,7 +203,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onLongPress: widget.onLongPress,
+          onLongPress: widget.onLongPress != null
+              ? () => widget.onLongPress!(
+                  widget.message) // Pass the message to the callback
+              : null,
           borderRadius: BorderRadius.circular(24),
           child: Ink(
             decoration: BoxDecoration(

@@ -12,10 +12,34 @@ buildscript {
     }
 }
 
+// Define a property for the image_gallery_saver namespace fix
+ext {
+    imageGallerySaverNamespace = "com.example.imagegallerysaver"
+}
+
 allprojects {
     repositories {
         google()
         mavenCentral()
+    }
+    
+    // More aggressive fix for image_gallery_saver plugin - applied at project creation time
+    if (project.name == 'image_gallery_saver') {
+        // Apply these configurations as early as possible
+        project.plugins.withId('com.android.library') {
+            println "🛠️ Applying early namespace fix to image_gallery_saver plugin..."
+            
+            // This block is executed immediately when the Android plugin is applied
+            android.namespace = rootProject.ext.imageGallerySaverNamespace
+            
+            // Force namespace to be set before the project is configured
+            project.beforeEvaluate {
+                if (project.extensions.findByName('android')) {
+                    project.android.namespace = rootProject.ext.imageGallerySaverNamespace
+                    println "✅ Early namespace fix applied to image_gallery_saver"
+                }
+            }
+        }
     }
 }
 

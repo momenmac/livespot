@@ -182,16 +182,22 @@ class _MessageBubbleState extends State<MessageBubble> {
         return VoiceMessageBubble(
           message: widget.message,
           isSent: isSent,
-          onLongPress: widget.onLongPress,
-          onReply: widget.onSwipeReply,
+          onLongPress: widget.onLongPress != null
+              ? (_) => widget
+                  .onLongPress!() // Convert VoidCallback to Function(Message)
+              : null,
+          onSwipeReply:
+              widget.onSwipeReply, // Use onSwipeReply instead of onReply
         );
 
       case MessageType.image:
         return ImageMessageBubble(
           message: widget.message,
           isSent: isSent,
-          onLongPress: widget.onLongPress,
-          onReply: widget.onSwipeReply,
+          onLongPress: widget.onLongPress != null
+              ? (_) => widget
+                  .onLongPress!() // Convert VoidCallback to Function(Message)
+              : null,
         );
 
       case MessageType.text:
@@ -824,7 +830,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ],
             ),
           ),
-          
+
           // The edited indicator overlay - completely separate from the message content
           if (widget.message.isEdited == true)
             Positioned(

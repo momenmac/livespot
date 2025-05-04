@@ -1,11 +1,52 @@
 // Load patches
 apply from: "${rootProject.projectDir}/patches.gradle"
 
-gradle.beforeProject { project ->
-    if (project.name == 'image_gallery_saver') {
-        project.beforeEvaluate {
-            project.apply from: "${rootProject.projectDir}/patches.gradle"
-            project.ext.applyImageGallerySaverPatch(project)
+// Apply patches to specific problematic plugins
+gradle.beforeSettings { settings ->
+    // Configure plugin patching before settings evaluation
+    settings.gradle.beforeProject { project ->
+        // Handle plugin initialization as early as possible
+        if (project.name == 'image_gallery_saver') {
+            println "📦 Applying patches to image_gallery_saver plugin (initialization phase)..."
+            
+            // Add property to ensure our patch runs during plugin initialization
+            project.ext.preInitPatchApplied = false
+            
+            // Hook into plugin application directly
+            project.plugins.whenPluginAdded { plugin ->
+                if (plugin.class.name.contains('AndroidBasePlugin') && !project.ext.preInitPatchApplied) {
+                    project.ext.preInitPatchApplied = true
+                    println "🔄 Android plugin detected for image_gallery_saver - applying namespace fix immediately"
+                    applyImageGallerySaverPatch(project)
+                }
+            }
+        }
+    }
+}
+
+// Additional fallback hooks at different lifecycle points to ensure our fix gets applied
+gradle.settingsEvaluated { settings ->
+    settings.gradle.allprojects { project ->
+        // If project already exists at this phase, check it
+        if (project.name == 'image_gallery_saver') {
+            project.beforeEvaluate {
+                println "📦 Applying patches to image_gallery_saver plugin (beforeEvaluate phase)..."
+                applyImageGallerySaverPatch(project)
+            }
+        }
+    }
+}
+
+// Final fallback that will catch the plugin no matter when it's created
+// Fixed to use the gradle object directly instead of trying to access rootProject.subprojects
+gradle.projectsLoaded { gradle ->
+    // This is the correct approach for the projectsLoaded hook
+    gradle.rootProject.afterEvaluate { rootProject ->
+        rootProject.allprojects { project ->
+            if (project.name == 'image_gallery_saver') {
+                println "📦 Applying patches to image_gallery_saver plugin (projectsLoaded phase)..."
+                applyImageGallerySaverPatch(project)
+            }
         }
     }
 }

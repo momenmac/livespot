@@ -1,0 +1,63 @@
+// This file contains patch functions for fixing plugin issues
+// Each function is named after the plugin being patched
+
+ext.applyImageGallerySaverPatch = { project ->
+    // Flag to track if patch has been applied already
+    if (project.ext.has('imageGallerySaverPatchApplied')) {
+        println "⚠️ Patch for ${project.name} was already applied, skipping..."
+        return
+    }
+    project.ext.imageGallerySaverPatchApplied = true
+    
+    // This ensures the namespace is set at plugin initialization, not during evaluation
+    project.plugins.withId('com.android.library') {
+        println "🛠️ Applying namespace fix to ${project.name} during plugin initialization..."
+        
+        // This block executes immediately when the Android plugin is applied
+        android.namespace = "com.example.imagegallerysaver"
+    }
+    
+    // Backup approach if the plugin application hook doesn't work
+    project.beforeEvaluate {
+        if (project.extensions.findByName('android')) {
+            project.android.namespace = "com.example.imagegallerysaver"
+            println "✅ Applied namespace fix to ${project.name} in beforeEvaluate"
+        }
+    }
+    
+    // Add a task to modify the AndroidManifest.xml file by removing the package attribute
+    // Only register the task if it doesn't already exist
+    if (!project.tasks.findByName('patchImageGallerySaverManifest')) {
+        project.tasks.register('patchImageGallerySaverManifest') {
+            doFirst {
+                println "🔄 Running manifest patch task for ${project.name}"
+                def manifestFile = file("${project.projectDir}/src/main/AndroidManifest.xml")
+                if (manifestFile.exists()) {
+                    def manifest = manifestFile.text
+                    if (manifest.contains('package=')) {
+                        def updatedManifest = manifest.replaceAll('package\\s*=\\s*"[^"]*"', '')
+                        manifestFile.text = updatedManifest
+                        println "🔧 Removed package attribute from AndroidManifest.xml for ${project.name}"
+                    } else {
+                        println "✅ No package attribute found in AndroidManifest.xml for ${project.name}"
+                    }
+                } else {
+                    println "⚠️ Could not find AndroidManifest.xml for ${project.name}"
+                }
+            }
+        }
+        
+        // Make our patch run before any manifest processing
+        project.afterEvaluate {
+            project.tasks.findAll { 
+                it.name.startsWith('process') && it.name.endsWith('Manifest') 
+            }.each { manifestTask ->
+                manifestTask.dependsOn 'patchImageGallerySaverManifest'
+            }
+        }
+    } else {
+        println "🔄 patchImageGallerySaverManifest task already exists for ${project.name}, skipping registration"
+    }
+}
+
+// Add additional plugin patches here as needed

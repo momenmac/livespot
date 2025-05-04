@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from firebase_admin import credentials, initialize_app, storage, firestore
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import MediaFile
 from .serializers import MediaFileSerializer, MediaFileUploadSerializer, MediaFileResponseSerializer
@@ -105,6 +106,7 @@ class MediaFileViewSet(viewsets.ModelViewSet):
         return media_file
 
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -128,6 +130,7 @@ def upload_media(request):
         media_file.save()
         
         # Upload to Firebase Storage
+        firebase_url = None
         try:
             bucket = get_firebase_storage()
             if bucket:
@@ -168,13 +171,116 @@ def upload_media(request):
         except Exception as e:
             logger.error(f"Firebase upload error: {e}")
             # Continue even if Firebase upload fails
+        
+        # Return the media file data with Firebase URL if available
+        serializer = MediaFileResponseSerializer(media_file)
+        response_data = serializer.data
+        
+        # IMPORTANT: Always use Firebase URL in response if available
+        # This prevents "localhost" URLs from being sent to clients
+        if firebase_url:
+            response_data['url'] = firebase_url
+            response_data['firebase_url'] = firebase_url
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"Media upload error: {e}")
+        return Response(
+            {'error': f'File upload failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def direct_upload(request):
+    """Upload a media file via JSON data (base64-encoded)"""
+    try:
+        data = request.data
+        file_data = data.get('file_data')
+        file_name = data.get('file_name', 'uploaded_file.jpg')
+        content_type = data.get('content_type', 'image')
+        
+        if not file_data:
+            return Response({'error': 'No file data provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        import base64
+        from django.core.files.base import ContentFile
+        
+        # Decode base64 data
+        try:
+            if ',' in file_data:  # Handle data URIs
+                file_data = file_data.split(',', 1)[1]
+                
+            binary_data = base64.b64decode(file_data)
+        except Exception as e:
+            logger.error(f"Base64 decode error: {e}")
+            return Response({'error': 'Invalid file data format'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create a file from binary data
+        file_content = ContentFile(binary_data, name=file_name)
+        
+        # Create a new MediaFile instance
+        media_file = MediaFile(
+            user=request.user,
+            file=file_content,
+            content_type=content_type,
+            original_filename=file_name,
+            file_size=len(binary_data)
+        )
+        media_file.save()
+        
+        # Upload to Firebase Storage
+        try:
+            bucket = get_firebase_storage()
+            if bucket:
+                # Get file path
+                file_path = media_file.file.path
+                
+                # Determine content type for blob
+                import mimetypes
+                mime_type, _ = mimetypes.guess_type(file_path)
+                if not mime_type:
+                    if content_type == 'image':
+                        mime_type = 'image/jpeg'
+                    elif content_type == 'video':
+                        mime_type = 'video/mp4'
+                    elif content_type == 'audio':
+                        mime_type = 'audio/mpeg'
+                    else:
+                        mime_type = 'application/octet-stream'
+                
+                # Create a unique Firebase path
+                firebase_path = f"attachments/{content_type}/{media_file.id}.{file_name.split('.')[-1]}"
+                
+                # Upload file to Firebase
+                blob = bucket.blob(firebase_path)
+                blob.upload_from_filename(
+                    file_path, 
+                    content_type=mime_type
+                )
+                
+                # Make the blob publicly accessible
+                blob.make_public()
+                
+                # Update MediaFile with Firebase URL
+                firebase_url = blob.public_url
+                media_file.firebase_url = firebase_url
+                media_file.save()
+                
+                logger.info(f"File uploaded to Firebase: {firebase_url}")
+        except Exception as e:
+            logger.error(f"Firebase upload error: {e}")
+            # Continue even if Firebase upload fails
             
         # Return the media file data
         serializer = MediaFileResponseSerializer(media_file)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"Media upload error: {e}")
+        logger.error(f"Direct upload error: {e}")
         return Response(
             {'error': f'File upload failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

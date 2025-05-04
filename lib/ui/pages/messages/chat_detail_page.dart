@@ -10,6 +10,8 @@ import 'models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_application_2/ui/pages/messages/image_preview_page.dart'; // Import for image preview
+import 'package:flutter_application_2/services/permissions/permission_service.dart'; // Import the permission service
 
 class ChatDetailPage extends StatefulWidget {
   final MessagesController controller;
@@ -204,12 +206,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 
     // Add listener to scroll to bottom when new messages come in
     _messagesStream.listen((snapshot) {
-      // Use a slight delay to ensure messages are rendered
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted && _scrollController.hasClients) {
-          _scrollToBottom(animated: true);
-        }
-      });
+      _handleNewMessages();
 
       // Mark new incoming messages as read automatically
       _markNewMessagesAsRead(snapshot);
@@ -301,31 +298,81 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     });
   }
 
-  // More reliable and smoother scroll mechanism
-  void _scrollToBottom({bool animated = true}) {
-    // Cancel any previous timer to avoid multiple scrolls
-    _scrollDebounceTimer?.cancel();
+  // Optimized smooth scrolling that prevents jumping
+  void _scrollToBottom({bool animated = true, bool force = false}) {
+    // Skip if not mounted or controller not attached to positions
+    if (!mounted || !_scrollController.hasClients) return;
 
-    // Use a simple post-frame callback instead of a timer for more reliability
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _scrollController.positions.isEmpty) return;
+    try {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentOffset = _scrollController.offset;
+      final viewportDimension = _scrollController.position.viewportDimension;
 
-      try {
-        final maxScroll = _scrollController.position.maxScrollExtent;
+      // Only scroll if we're not already at the bottom (with small tolerance)
+      // or if force=true is passed to override this check
+      final shouldScroll = force || (maxScroll - currentOffset) > 10.0;
 
+      if (shouldScroll) {
         if (animated) {
+          // Use smooth easing curve for more natural feeling
           _scrollController.animateTo(
             maxScroll,
             duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutQuart,
+            curve: Curves.easeOutQuart, // Even smoother animation curve
           );
         } else {
-          // Immediate jump to bottom
+          // Jump immediately but only if really needed
           _scrollController.jumpTo(maxScroll);
         }
-      } catch (e) {
-        // Handle any errors during scrolling
-        debugPrint('Error scrolling to bottom: $e');
+      }
+
+      // Always update button visibility when we scroll
+      _updateScrollToBottomButtonVisibility();
+    } catch (e) {
+      debugPrint('Error in smooth scrolling: $e');
+      // Error handling
+    }
+  }
+
+  // Update the visibility of the scroll-to-bottom button based on scroll position
+  void _updateScrollToBottomButtonVisibility() {
+    if (!mounted || !_scrollController.hasClients) return;
+
+    try {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentOffset = _scrollController.offset;
+
+      // Show button if we're not at the bottom (with tolerance)
+      final isAtBottom = (maxScroll - currentOffset) < 150.0;
+      _showScrollToBottomButton.value = !isAtBottom;
+    } catch (e) {
+      debugPrint('Error updating scroll button visibility: $e');
+    }
+  }
+
+  // Handle when new messages arrive
+  void _handleNewMessages() {
+    if (!mounted) return;
+
+    // Use a debounced approach to avoid multiple rapid scrolls
+    _scrollDebounceTimer?.cancel();
+    _scrollDebounceTimer = Timer(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+
+      // Determine if we should scroll based on current position
+      final isCloseToBottom = !_scrollController.hasClients ||
+          (_scrollController.hasClients &&
+              _scrollController.position.pixels >
+                  (_scrollController.position.maxScrollExtent - 150));
+
+      // Only scroll if we're already near the bottom
+      if (isCloseToBottom) {
+        _scrollToBottom(animated: true);
+      } else {
+        // If we're not near the bottom, show the scroll-to-bottom button
+        if (mounted && !_showScrollToBottomButton.value) {
+          _showScrollToBottomButton.value = true;
+        }
       }
     });
   }
@@ -413,8 +460,12 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
+    // Use our permission service to handle permissions properly
+    final PermissionService permissionService = PermissionService();
+    final pickedFile = await permissionService.pickImage(
+      context: context,
+      source: source,
+    );
 
     if (pickedFile != null) {
       try {
@@ -1004,11 +1055,25 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     // Fix media URL if needed (for images)
     String? fixedMediaUrl;
     if (message.messageType == MessageType.image && message.mediaUrl != null) {
-      if (message.mediaUrl!.startsWith('file:///')) {
-        fixedMediaUrl = '${ApiUrls.baseUrl}${message.mediaUrl!.substring(7)}';
-      } else if (message.mediaUrl!.startsWith('/media/')) {
-        fixedMediaUrl = '${ApiUrls.baseUrl}${message.mediaUrl!}';
+      // Process image URL using the same method as in image_message_bubble.dart
+      if (message.mediaUrl!.contains('firebasestorage.googleapis.com') ||
+          message.mediaUrl!.contains('storage.googleapis.com')) {
+        // Firebase Storage URLs remain intact
+        fixedMediaUrl = message.mediaUrl;
+      } else if (message.mediaUrl!.contains('localhost') ||
+          message.mediaUrl!.contains('127.0.0.1') ||
+          message.mediaUrl!.contains('192.168.')) {
+        // Extract path from localhost or IP-based URL
+        Uri uri = Uri.parse(message.mediaUrl!);
+        String path = uri.path;
+        // Ensure no leading slash for concatenation
+        path = path.startsWith('/') ? path.substring(1) : path;
+        fixedMediaUrl = '${ApiUrls.baseUrl}/$path';
+      } else if (message.mediaUrl!.startsWith('/')) {
+        // Handle relative paths
+        fixedMediaUrl = '${ApiUrls.baseUrl}/${message.mediaUrl!.substring(1)}';
       } else {
+        // Use the UrlUtils for any other cases
         fixedMediaUrl = message.mediaUrl;
       }
     }
@@ -1055,7 +1120,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                     : ThemeConstants.lightCardColor.withAlpha(204),
             borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.all(12),
+          padding: message.messageType == MessageType.image
+              ? const EdgeInsets.all(4) // Less padding for images
+              : const EdgeInsets.all(12),
           margin: const EdgeInsets.only(bottom: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1105,89 +1172,153 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                 )
               else if (message.messageType == MessageType.image &&
                   fixedMediaUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    fixedMediaUrl,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return SizedBox(
-                        width: 200,
-                        height: 200,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
+                GestureDetector(
+                  onTap: () {
+                    // When image is tapped, navigate to ImagePreviewPage
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ImagePreviewPage(
+                          imageUrl: fixedMediaUrl!,
+                          caption: message.content.isNotEmpty
+                              ? message.content
+                              : null,
+                          imageId: message.id,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                MediaQuery.of(context).size.height * 0.35,
+                          ),
+                          child: Hero(
+                            tag:
+                                'image-preview-${message.id}-${fixedMediaUrl!.hashCode}',
+                            child: Image.network(
+                              fixedMediaUrl,
+                              fit: BoxFit.contain,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return SizedBox(
+                                  width:
+                                      MediaQuery.of(context).size.width * 0.6,
+                                  height: 150,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
+                                      color: isCurrentUser
+                                          ? Colors.white
+                                          : ThemeConstants.primaryColor,
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                debugPrint('Error loading image: $error');
+                                return Container(
+                                  width: 200,
+                                  height: 150,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.broken_image,
+                                          color: Colors.grey[600]),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Image could not be loaded',
+                                        style:
+                                            TextStyle(color: Colors.grey[600]),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      debugPrint('Error loading image: $error');
-                      return Container(
-                        width: 200,
-                        height: 150,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, color: Colors.grey[600]),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Image could not be loaded',
-                              style: TextStyle(color: Colors.grey[600]),
-                              textAlign: TextAlign.center,
+                      ),
+
+                      // Add caption if present
+                      if (message.content.isNotEmpty)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(left: 8, right: 8, top: 6),
+                          child: Text(
+                            message.content,
+                            style: TextStyle(
+                              color: isCurrentUser ? Colors.white : null,
+                              fontSize: 13,
                             ),
-                          ],
+                          ),
                         ),
-                      );
-                    },
+                    ],
                   ),
                 ),
 
               // Time and message status row with edited indicator
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    DateFormat('HH:mm').format(message.timestamp),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isCurrentUser ? Colors.white70 : Colors.grey,
+              Padding(
+                padding: message.messageType == MessageType.image
+                    ? const EdgeInsets.only(
+                        left: 8, right: 8, top: 4, bottom: 4)
+                    : const EdgeInsets.only(top: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      DateFormat('HH:mm').format(message.timestamp),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isCurrentUser ? Colors.white70 : Colors.grey,
+                      ),
                     ),
-                  ),
 
-                  // Edited indicator
-                  if (message.isEdited)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(width: 4),
-                        Text(
-                          "• edited",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontStyle: FontStyle.italic,
-                            color: isCurrentUser ? Colors.white70 : Colors.grey,
+                    // Edited indicator
+                    if (message.isEdited)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(width: 4),
+                          Text(
+                            "• edited",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color:
+                                  isCurrentUser ? Colors.white70 : Colors.grey,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+
+                    const SizedBox(width: 4),
+
+                    // Message status indicator
+                    InkWell(
+                      onTap: () => _showMessageStatusInfo(context),
+                      child: getStatusIcon(),
                     ),
-
-                  const SizedBox(width: 4),
-
-                  // Message status indicator
-                  InkWell(
-                    onTap: () => _showMessageStatusInfo(context),
-                    child: getStatusIcon(),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

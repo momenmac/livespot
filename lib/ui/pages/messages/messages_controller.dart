@@ -1,10 +1,11 @@
 import 'dart:core';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:math'; // Add this import for min function
+// Add this import for min function
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
@@ -15,6 +16,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_application_2/services/api/attachments/attachments_api.dart'
+    as import_api;
 
 enum FilterMode {
   all,
@@ -103,7 +106,8 @@ class MessagesController extends ChangeNotifier {
   }
 
   Future<List<User>> _fetchAllUsers() async {
-    final url = Uri.parse('http://192.168.1.12:8000/accounts/all-users/');
+    final apiBaseUrl = ApiUrls.baseUrl;
+    final url = Uri.parse('$apiBaseUrl/accounts/all-users/');
     final response = await http.get(url);
     if (response.statusCode == 200) {
       final List<dynamic> userList = jsonDecode(response.body);
@@ -1377,7 +1381,130 @@ class MessagesController extends ChangeNotifier {
   }
 
   Future<void> sendImageMessage(XFile imageFile, {String caption = ''}) async {
-    notifyListeners();
+    if (_selectedConversation == null) return;
+
+    try {
+      // Show sending state immediately
+      final String messageId = const Uuid().v4();
+      final DateTime timestamp = DateTime.now();
+      final String displayCaption = caption.isEmpty ? 'Image' : caption;
+
+      // Create temporary message to show loading state
+      final message = Message(
+        id: messageId,
+        senderId: currentUserId,
+        senderName: accountProvider.currentUser?.firstName ?? 'You',
+        content: displayCaption,
+        timestamp: timestamp,
+        messageType: MessageType.image,
+        conversationId: _selectedConversation!.id,
+        status: MessageStatus.sending,
+        isRead: true, // Message from current user is always read by them
+      );
+
+      // Update UI immediately with sending state
+      _selectedConversation!.messages.insert(0, message);
+      notifyListeners();
+
+      // Import the AttachmentsApi only when needed
+      // ignore: unused_local_variable
+      final attachmentsApi = await _getAttachmentsApi();
+
+      // Upload the image to server
+      final firebaseUrl =
+          await attachmentsApi.uploadFile(imageFile, contentType: 'image');
+
+      if (firebaseUrl == null) {
+        debugPrint('[sendImageMessage] Failed to upload image');
+        _updateMessageStatus(messageId, MessageStatus.failed);
+        return;
+      }
+
+      // Update the message with the uploaded URL
+      final updatedMessage = message.copyWith(
+        mediaUrl: firebaseUrl,
+        status: MessageStatus.sent,
+      );
+
+      // Update in memory
+      final index =
+          _selectedConversation!.messages.indexWhere((m) => m.id == messageId);
+      if (index != -1) {
+        _selectedConversation!.messages[index] = updatedMessage;
+      }
+
+      // Save to Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(_selectedConversation!.id)
+          .collection('messages')
+          .doc(messageId)
+          .set(updatedMessage.toJson())
+          .then((_) {
+        debugPrint('[sendImageMessage] Message written to Firestore');
+      }).catchError((e) {
+        debugPrint('[sendImageMessage] Error writing message: $e');
+        _updateMessageStatus(messageId, MessageStatus.failed);
+        return;
+      });
+
+      // Update conversation last message
+      await _firestore
+          .collection('conversations')
+          .doc(_selectedConversation!.id)
+          .update({
+        'lastMessage': updatedMessage.toJson(),
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Mark conversation as unread for all participants except sender
+      for (final participant in _selectedConversation!.participants) {
+        if (participant.id != currentUserId) {
+          await _firestore
+              .collection('conversations')
+              .doc(_selectedConversation!.id)
+              .collection('readStatus')
+              .doc(participant.id)
+              .set({
+            'userId': participant.id,
+            'isRead': false,
+            'lastReadTimestamp': FieldValue.serverTimestamp(),
+          });
+        } else {
+          await _firestore
+              .collection('conversations')
+              .doc(_selectedConversation!.id)
+              .collection('readStatus')
+              .doc(currentUserId)
+              .set({
+            'userId': currentUserId,
+            'isRead': true,
+            'lastReadTimestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      notifyListeners();
+
+      // Simulate message being delivered after a short delay
+      Future.delayed(const Duration(seconds: 1), () {
+        _updateMessageStatus(messageId, MessageStatus.delivered);
+      });
+    } catch (e) {
+      debugPrint('[sendImageMessage] Error: $e');
+    }
+  }
+
+  // Helper method to load the AttachmentsApi lazily
+  Future<dynamic> _getAttachmentsApi() async {
+    // Using dynamic to avoid import cycle issues
+    try {
+      // Instead of using dynamic import, create the instance directly
+      return await Future.value(await import_api.AttachmentsApi());
+    } catch (e) {
+      debugPrint('[_getAttachmentsApi] Error loading API: $e');
+      rethrow;
+    }
   }
 
   Future<void> copyToClipboard(String text, BuildContext context) async {
