@@ -7,23 +7,48 @@ class JwtToken {
   final String accessToken;
   final String refreshToken;
   DateTime? lastValidationTime;
+  final int expiration; // Added expiration property
 
   JwtToken({
     required this.accessToken,
     required this.refreshToken,
+    required this.expiration, // Add required parameter for expiration
   });
 
   factory JwtToken.fromJson(Map<String, dynamic> json) {
+    // Extract expiration from access token if not provided directly
+    final int expiry =
+        json['expiration'] ?? getExpirationFromToken(json['access']);
+
     return JwtToken(
       accessToken: json['access'],
       refreshToken: json['refresh'],
+      expiration: expiry,
     );
+  }
+
+  // Add static method to extract expiration from token
+  static int getExpirationFromToken(String token) {
+    try {
+      final decodedToken = _decodeJWT(token);
+      final expiryTimestamp = decodedToken['exp'];
+      if (expiryTimestamp == null) {
+        // Default to 1 hour from now if no expiration found
+        return (DateTime.now().millisecondsSinceEpoch / 1000).floor() + 3600;
+      }
+      return expiryTimestamp;
+    } catch (e) {
+      print('Error extracting expiration from token: $e');
+      // Default to 1 hour from now if error
+      return (DateTime.now().millisecondsSinceEpoch / 1000).floor() + 3600;
+    }
   }
 
   Map<String, dynamic> toJson() {
     return {
       'access': accessToken,
       'refresh': refreshToken,
+      'expiration': expiration, // Add expiration to JSON
       'last_validation_time': lastValidationTime?.toIso8601String(),
     };
   }

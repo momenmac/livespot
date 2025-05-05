@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
-import 'package:flutter_application_2/services/api/account/account_provider.dart'; // Import AccountProvider
+import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/ui/profile/settings/account_settings_page.dart';
-import 'package:flutter_application_2/ui/pages/map/map_page.dart'; // Import MapPage
-import 'package:flutter_application_2/ui/profile/profile_search_page.dart'; // Import ProfileSearchPage
+import 'package:flutter_application_2/ui/pages/map/map_page.dart';
+import 'package:flutter_application_2/ui/profile/profile_search_page.dart';
 import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
-import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart'; // Add this import
-import 'package:provider/provider.dart'; // Import Provider
-import 'dart:developer' as developer; // Import developer for logging
-import 'package:flutter/services.dart'; // Add this import for clipboard functionality
-import 'package:google_sign_in/google_sign_in.dart'; // Import GoogleSignIn
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart'; // Add import for ResponsiveSnackBar
+import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart';
+import 'package:provider/provider.dart';
+import 'dart:developer' as developer;
+import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/models/user_profile.dart';
+import 'package:flutter_application_2/providers/user_profile_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,115 +29,28 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final bool _isFollowing = false;
   DateTime? _selectedDate;
   bool _showDiscoverPeople = true;
-
-  // Mock user data - in a real app, this would come from a backend
-  final Map<String, dynamic> _userData = {
-    'name': 'Alex Johnson',
-    'username': 'alex_johnson',
-    'profileImage': 'https://picsum.photos/seed/profile/200',
-    'bio':
-        'Community news reporter | Passionate about local stories | Weather enthusiast',
-    'location': 'Boston, MA',
-    'honesty': 94,
-    'followers': 842,
-    'following': 156,
-    'joinDate': 'March 2022',
-    'posts': 78,
-    'comments': 213,
-    'saved': 45,
-    'upvoted': 124,
-    'activityStatus': 'Online', // Added activity status
-  };
-
-  // Add mock profiles data
-  final List<Map<String, dynamic>> _mockProfiles = [
-    {
-      'name': 'Momen',
-      'username': 'momen_dev',
-      'profileImage': 'https://picsum.photos/seed/momen/200',
-      'bio': 'Flutter Developer | Tech Enthusiast',
-      'location': 'Dubai, UAE',
-      'honesty': 92,
-      'followers': 520,
-      'following': 230,
-      'joinDate': 'January 2023',
-      'posts': 45,
-      'comments': 156,
-      'saved': 28,
-      'upvoted': 89,
-    },
-    {
-      'name': 'Nopo',
-      'username': 'nopo_tech',
-      'profileImage': 'https://picsum.photos/seed/nopo/200',
-      'bio': 'Software Engineer | Open Source Contributor',
-      'location': 'Tokyo, Japan',
-      'honesty': 88,
-      'followers': 342,
-      'following': 145,
-      'joinDate': 'March 2023',
-      'posts': 32,
-      'comments': 98,
-      'saved': 15,
-      'upvoted': 67,
-    },
-    {
-      'name': 'Sarah Chen',
-      'username': 'sarah_code',
-      'profileImage': 'https://picsum.photos/seed/sarah/200',
-      'bio': 'Full Stack Developer | AI Enthusiast',
-      'location': 'San Francisco, USA',
-      'honesty': 95,
-      'followers': 623,
-      'following': 289,
-      'joinDate': 'December 2022',
-      'posts': 56,
-      'comments': 234,
-      'saved': 42,
-      'upvoted': 178,
-    },
-    {
-      'name': 'Carlos Rodriguez',
-      'username': 'carlos_tech',
-      'profileImage': 'https://picsum.photos/seed/carlos/200',
-      'bio': 'Mobile Developer | UI/UX Designer',
-      'location': 'Barcelona, Spain',
-      'honesty': 90,
-      'followers': 415,
-      'following': 201,
-      'joinDate': 'February 2023',
-      'posts': 38,
-      'comments': 145,
-      'saved': 31,
-      'upvoted': 92,
-    },
-    {
-      'name': 'Emma Watson',
-      'username': 'emma_dev',
-      'profileImage': 'https://picsum.photos/seed/emma/200',
-      'bio': 'Frontend Developer | React & Flutter',
-      'location': 'London, UK',
-      'honesty': 93,
-      'followers': 489,
-      'following': 267,
-      'joinDate': 'April 2023',
-      'posts': 41,
-      'comments': 167,
-      'saved': 35,
-      'upvoted': 104,
-    },
-  ];
-
-  final List<Map<String, dynamic>> _searchResults = [];
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController =
-        TabController(length: 3, vsync: this); // Changed from 4 to 3 tabs
+    _tabController = TabController(length: 3, vsync: this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeProfileData();
+    });
+  }
+
+  void _initializeProfileData() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    if (profileProvider.currentUserProfile == null &&
+        !profileProvider.isLoading) {
+      profileProvider.fetchCurrentUserProfile();
+    }
+    _isInitialized = true;
   }
 
   @override
@@ -146,51 +63,96 @@ class _ProfilePageState extends State<ProfilePage>
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            _buildAppBar(),
-            SliverToBoxAdapter(
-              child: _buildUserInfoSection(),
-            ),
-            SliverToBoxAdapter(
+    return Consumer<UserProfileProvider>(
+      builder: (context, profileProvider, child) {
+        final isLoading = profileProvider.isLoading;
+        final profile = profileProvider.currentUserProfile;
+
+        if (isLoading && profile == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (profile == null && profileProvider.error != null) {
+          return Scaffold(
+            body: Center(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (_showDiscoverPeople) const SuggestedPeopleSection(),
+                  const Text(
+                    'Failed to load profile',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => profileProvider.fetchCurrentUserProfile(),
+                    child: const Text('Retry'),
+                  ),
                 ],
               ),
             ),
-            SliverPersistentHeader(
-              delegate: _SliverAppBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  labelColor: ThemeConstants.primaryColor,
-                  unselectedLabelColor: ThemeConstants.grey,
-                  indicatorColor: ThemeConstants.primaryColor,
-                  indicatorWeight: 3,
-                  tabs: const [
-                    Tab(text: 'Posts', icon: Icon(Icons.article_outlined)),
-                    Tab(text: 'Saved', icon: Icon(Icons.bookmark_border)),
-                    Tab(text: 'Upvoted', icon: Icon(Icons.thumb_up_outlined)),
-                  ],
-                ),
-                isDarkMode,
+          );
+        }
+
+        return Scaffold(
+          body: RefreshIndicator(
+            onRefresh: () async {
+              // This will force refresh the profile data from the server
+              // Use refreshCurrentUserProfile instead to prevent data clearing
+              await profileProvider.refreshCurrentUserProfile();
+            },
+            child: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  _buildAppBar(),
+                  SliverToBoxAdapter(
+                    child: _buildUserInfoSection(profile),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_showDiscoverPeople) const SuggestedPeopleSection(),
+                      ],
+                    ),
+                  ),
+                  SliverPersistentHeader(
+                    delegate: _SliverAppBarDelegate(
+                      TabBar(
+                        controller: _tabController,
+                        labelColor: ThemeConstants.primaryColor,
+                        unselectedLabelColor: ThemeConstants.grey,
+                        indicatorColor: ThemeConstants.primaryColor,
+                        indicatorWeight: 3,
+                        tabs: const [
+                          Tab(
+                              text: 'Posts',
+                              icon: Icon(Icons.article_outlined)),
+                          Tab(text: 'Saved', icon: Icon(Icons.bookmark_border)),
+                          Tab(
+                              text: 'Upvoted',
+                              icon: Icon(Icons.thumb_up_outlined)),
+                        ],
+                      ),
+                      isDarkMode,
+                    ),
+                    pinned: true,
+                  ),
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPostsTab(profile),
+                  _buildSavedTab(profile),
+                  _buildUpvotedTab(profile),
+                ],
               ),
-              pinned: true,
             ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildPostsTab(),
-            _buildSavedTab(),
-            _buildUpvotedTab(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -225,30 +187,20 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _showSearchDialog() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ProfileSearchPage(
-          mockProfiles: _mockProfiles,
+          profileProvider: profileProvider,
         ),
       ),
     );
   }
 
-  void _showUserProfile(Map<String, dynamic> profile) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OtherUserProfilePage(
-          userData: profile,
-        ),
-      ),
-    );
-  }
-
-  // Date picker functionality
   Future<void> _pickDate() async {
-    // Instead of using the default date picker, show our custom date picker
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -259,7 +211,6 @@ class _ProfilePageState extends State<ProfilePage>
             setState(() {
               _selectedDate = date;
             });
-            // Filter content based on selected date
             _filterContentByDate(date);
           },
           selectedDate: _selectedDate ?? DateTime.now(),
@@ -269,10 +220,6 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _filterContentByDate(DateTime date) {
-    // Implementation to filter posts/saved/upvoted by date
-    // This would typically query your data source with the date filter
-
-    // For demonstration, just show a snackbar with the selected date
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -282,9 +229,11 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildUserInfoSection() {
-    // Add a safe check for activity status
-    final activityStatus = _userData['activityStatus'] ?? 'Online';
+  Widget _buildUserInfoSection(UserProfile? profile) {
+    if (profile == null) return const SizedBox.shrink();
+
+    final activityStatus = profile.activityStatusStr;
+    final isVerified = profile.isVerified;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
@@ -295,7 +244,6 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Image with Activity Status
               Stack(
                 children: [
                   Container(
@@ -309,20 +257,22 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                     ),
                     child: ClipOval(
-                      child: Image.network(
-                        _userData['profileImage'],
+                      child: CachedNetworkImage(
+                        imageUrl: profile.profilePictureUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: ThemeConstants.greyLight,
-                            child: const Icon(Icons.person,
-                                size: 50, color: ThemeConstants.grey),
-                          );
-                        },
+                        placeholder: (context, url) => Container(
+                          color: ThemeConstants.greyLight,
+                          child: const Icon(Icons.person,
+                              size: 50, color: ThemeConstants.grey),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: ThemeConstants.greyLight,
+                          child: const Icon(Icons.person,
+                              size: 50, color: ThemeConstants.grey),
+                        ),
                       ),
                     ),
                   ),
-                  // Activity Status Indicator
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -330,8 +280,7 @@ class _ProfilePageState extends State<ProfilePage>
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                        color:
-                            _getStatusColor(activityStatus), // Use safe value
+                        color: _getStatusColor(activityStatus),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Theme.of(context).scaffoldBackgroundColor,
@@ -343,80 +292,73 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ),
               const SizedBox(width: 16),
-              // User details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Name
                     Text(
-                      _userData['name'],
+                      profile.fullName,
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    // Username
                     Text(
-                      '@${_userData['username']}',
+                      '@${profile.username}',
                       style: TextStyle(
                         fontSize: 16,
                         color: ThemeConstants.grey,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // Verification Badge instead of honesty rating
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: ThemeConstants.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.verified,
-                            size: 14,
-                            color: ThemeConstants.primaryColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'VERIFIED',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                    if (isVerified)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: ThemeConstants.primaryColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified,
+                              size: 14,
                               color: ThemeConstants.primaryColor,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              'VERIFIED',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: ThemeConstants.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Bio
-          if (_userData['bio'].isNotEmpty)
+          if (profile.bio.isNotEmpty)
             Text(
-              _userData['bio'],
+              profile.bio,
               style: const TextStyle(fontSize: 15),
             ),
-
           const SizedBox(height: 12),
-
-          // Location and Join Date
           Row(
             children: [
               Icon(Icons.location_on, size: 16, color: ThemeConstants.grey),
               const SizedBox(width: 4),
               Text(
-                _userData['location'],
+                profile.location.isNotEmpty
+                    ? profile.location
+                    : 'No location set',
                 style: TextStyle(
                   fontSize: 14,
                   color: ThemeConstants.grey,
@@ -426,7 +368,7 @@ class _ProfilePageState extends State<ProfilePage>
               Icon(Icons.calendar_today, size: 14, color: ThemeConstants.grey),
               const SizedBox(width: 4),
               Text(
-                'Joined ${_userData['joinDate']}',
+                'Joined ${profile.joinDateFormatted}',
                 style: TextStyle(
                   fontSize: 14,
                   color: ThemeConstants.grey,
@@ -434,19 +376,15 @@ class _ProfilePageState extends State<ProfilePage>
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Replace the old stats and follow button row with new layout
           Row(
             children: [
-              // Followers count
               InkWell(
                 onTap: () => _showFollowersList(),
                 child: Column(
                   children: [
                     Text(
-                      _userData['followers'].toString(),
+                      profile.followersCount.toString(),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -463,16 +401,13 @@ class _ProfilePageState extends State<ProfilePage>
                   ],
                 ),
               ),
-
               const SizedBox(width: 24),
-
-              // Following count
               InkWell(
                 onTap: () => _showFollowingList(),
                 child: Column(
                   children: [
                     Text(
-                      _userData['following'].toString(),
+                      profile.followingCount.toString(),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -488,14 +423,9 @@ class _ProfilePageState extends State<ProfilePage>
                   ],
                 ),
               ),
-
               const Spacer(),
-
-              // Honesty Rating moved here
-              _buildHonestyRating(_userData['honesty']),
-
+              _buildHonestyRating(profile.honestyScore),
               const SizedBox(width: 16),
-
               IconButton(
                 icon: Icon(
                   Icons.person_outline,
@@ -512,10 +442,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // New buttons row
           Row(
             children: [
               Expanded(
@@ -555,10 +482,14 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // Add new method for share dialog
   void _showShareProfileDialog() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    final profile = profileProvider.currentUserProfile;
+    if (profile == null) return;
+
     final String profileLink =
-        'https://yourapp.com/profile/${_userData['username']}';
+        'https://yourapp.com/profile/${profile.username}';
 
     showDialog(
       context: context,
@@ -619,15 +550,16 @@ class _ProfilePageState extends State<ProfilePage>
     Color color;
     if (rating >= 80) {
       color = ThemeConstants.green;
-    } else if (rating >= 60)
+    } else if (rating >= 60) {
       color = ThemeConstants.orange;
-    else
+    } else {
       color = ThemeConstants.red;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withAlpha(51), // 0.2 opacity is approximately alpha 51
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -652,7 +584,6 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // Helper method to determine status color
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Online':
@@ -667,50 +598,51 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  // Tab content methods
-  Widget _buildPostsTab() {
+  Widget _buildPostsTab(UserProfile? profile) {
+    if (profile == null) return const SizedBox.shrink();
     return _buildEmptyStateWithCount(
       icon: Icons.article_outlined,
       message: 'Your Posts',
-      count: _userData['posts'],
+      count: profile.postsCount,
     );
   }
 
-  Widget _buildSavedTab() {
+  Widget _buildSavedTab(UserProfile? profile) {
+    if (profile == null) return const SizedBox.shrink();
     return _buildEmptyStateWithCount(
       icon: Icons.bookmark_border,
       message: 'Saved Posts',
-      count: _userData['saved'],
+      count: profile.savedPostsCount,
     );
   }
 
-  Widget _buildUpvotedTab() {
+  Widget _buildUpvotedTab(UserProfile? profile) {
+    if (profile == null) return const SizedBox.shrink();
     return _buildEmptyStateWithCount(
       icon: Icons.thumb_up_outlined,
       message: 'Upvoted Posts',
-      count: _userData['upvoted'],
+      count: profile.upvotedPostsCount,
     );
   }
 
-  // Helper for tab placeholders - would be replaced with actual content
   Widget _buildEmptyStateWithCount({
     required IconData icon,
     required String message,
     required int count,
   }) {
     return SingleChildScrollView(
-      // Added ScrollView to handle overflow
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 32.0),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Changed to min
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
                 size: 64,
-                color: ThemeConstants.grey.withOpacity(0.5),
+                color: ThemeConstants.grey
+                    .withAlpha(51), // 0.2 opacity is approximately alpha 51
               ),
               const SizedBox(height: 16),
               Text(
@@ -736,7 +668,6 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // Action handlers
   Future<void> _pickLocationFromMap() async {
     final BuildContext currentContext = context;
     final result = await Navigator.push(
@@ -754,20 +685,24 @@ class _ProfilePageState extends State<ProfilePage>
     );
 
     if (result != null && result is String && mounted) {
-      setState(() {
-        _userData['location'] = result;
-      });
+      final profileProvider =
+          Provider.of<UserProfileProvider>(context, listen: false);
+      profileProvider.updateCurrentUserProfile(location: result);
     }
   }
 
   void _showEditProfileModal() {
-    // Create controllers for form fields
-    final nameController = TextEditingController(text: _userData['name']);
-    final usernameController =
-        TextEditingController(text: _userData['username']);
-    final bioController = TextEditingController(text: _userData['bio']);
-    final locationController =
-        TextEditingController(text: _userData['location']);
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    final profile = profileProvider.currentUserProfile;
+    if (profile == null) return;
+
+    final nameController = TextEditingController(text: profile.fullName);
+    final usernameController = TextEditingController(text: profile.username);
+    final bioController = TextEditingController(text: profile.bio);
+    final locationController = TextEditingController(text: profile.location);
+    final websiteController =
+        TextEditingController(text: profile.website ?? '');
 
     showModalBottomSheet(
       context: context,
@@ -809,15 +744,34 @@ class _ProfilePageState extends State<ProfilePage>
                     controller: scrollController,
                     children: [
                       const SizedBox(height: 16),
-                      // Profile Picture
                       Center(
                         child: Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundImage:
-                                  NetworkImage(_userData['profileImage']),
-                              onBackgroundImageError: (_, __) {},
+                            Consumer<UserProfileProvider>(
+                              builder: (context, provider, _) {
+                                final profilePictureUrl = provider
+                                        .currentUserProfile
+                                        ?.profilePictureUrl ??
+                                    '';
+                                // Add a cache-busting parameter to the URL
+                                final cacheBustedUrl =
+                                    '$profilePictureUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
+                                return CircleAvatar(
+                                  radius: 50,
+                                  backgroundColor: ThemeConstants.greyLight,
+                                  backgroundImage: profilePictureUrl.isNotEmpty
+                                      ? NetworkImage(cacheBustedUrl)
+                                      : null,
+                                  child: profilePictureUrl.isEmpty
+                                      ? Icon(Icons.person,
+                                          size: 50, color: ThemeConstants.grey)
+                                      : null,
+                                  onBackgroundImageError: (_, __) {
+                                    // Display fallback icon when error occurs
+                                  },
+                                );
+                              },
                             ),
                             Positioned(
                               bottom: 0,
@@ -828,12 +782,123 @@ class _ProfilePageState extends State<ProfilePage>
                                 child: IconButton(
                                   icon: const Icon(Icons.camera_alt,
                                       size: 18, color: Colors.white),
-                                  onPressed: () {
-                                    // TODO: Implement image picker
-                                    // 1. Show image source dialog (camera/gallery)
-                                    // 2. Upload image to storage
-                                    // 3. Update user profile with new image URL
-                                    // 4. Update UI
+                                  onPressed: () async {
+                                    // Show image source selection dialog
+                                    final ImageSource? source =
+                                        await showModalBottomSheet<ImageSource>(
+                                      context: context,
+                                      builder: (BuildContext context) {
+                                        return SafeArea(
+                                          child: Wrap(
+                                            children: <Widget>[
+                                              ListTile(
+                                                leading: const Icon(
+                                                    Icons.photo_camera),
+                                                title:
+                                                    const Text('Take a photo'),
+                                                onTap: () => Navigator.pop(
+                                                    context,
+                                                    ImageSource.camera),
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(
+                                                    Icons.photo_library),
+                                                title: const Text(
+                                                    'Choose from gallery'),
+                                                onTap: () => Navigator.pop(
+                                                    context,
+                                                    ImageSource.gallery),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+
+                                    if (source == null) return;
+
+                                    try {
+                                      final ImagePicker picker = ImagePicker();
+                                      final XFile? image =
+                                          await picker.pickImage(
+                                        source: source,
+                                        maxWidth: 800,
+                                        maxHeight: 800,
+                                        imageQuality: 85,
+                                      );
+
+                                      if (image == null) return;
+
+                                      // Show uploading indicator
+                                      if (context.mounted) {
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) => const Dialog(
+                                            child: Padding(
+                                              padding: EdgeInsets.all(20.0),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  CircularProgressIndicator(),
+                                                  SizedBox(height: 16),
+                                                  Text(
+                                                      'Uploading profile picture...'),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      final profileProvider =
+                                          Provider.of<UserProfileProvider>(
+                                              context,
+                                              listen: false);
+
+                                      final success = await profileProvider
+                                          .updateProfilePicture(image.path);
+
+                                      // Close the loading dialog
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                      }
+
+                                      // Force refresh the profile to ensure UI updates properly
+                                      if (success) {
+                                        await profileProvider
+                                            .refreshCurrentUserProfile();
+                                      }
+
+                                      // Show result message
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(success
+                                                ? 'Profile picture updated successfully!'
+                                                : 'Failed to update profile picture: ${profileProvider.error ?? "Unknown error"}'),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      // Close loading dialog if open
+                                      if (context.mounted &&
+                                          Navigator.of(context).canPop()) {
+                                        Navigator.pop(context);
+                                      }
+
+                                      // Show error message
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Error updating profile picture: $e'),
+                                          ),
+                                        );
+                                      }
+                                    }
                                   },
                                 ),
                               ),
@@ -842,16 +907,15 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Name Field
                       TextField(
                         controller: nameController,
                         decoration: const InputDecoration(
                           labelText: 'Name',
                           border: OutlineInputBorder(),
                         ),
+                        enabled: false,
                       ),
                       const SizedBox(height: 16),
-                      // Username Field
                       TextField(
                         controller: usernameController,
                         decoration: const InputDecoration(
@@ -861,7 +925,6 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Bio Field
                       TextField(
                         controller: bioController,
                         maxLines: 3,
@@ -872,7 +935,6 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Location Field
                       TextField(
                         controller: locationController,
                         decoration: InputDecoration(
@@ -884,11 +946,25 @@ class _ProfilePageState extends State<ProfilePage>
                             onPressed: () async {
                               await _pickLocationFromMap();
                               if (mounted) {
-                                locationController.text = _userData['location'];
+                                final updatedProfile =
+                                    profileProvider.currentUserProfile;
+                                if (updatedProfile != null) {
+                                  locationController.text =
+                                      updatedProfile.location;
+                                }
                               }
                             },
                             tooltip: 'Pick location from map',
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: websiteController,
+                        decoration: const InputDecoration(
+                          labelText: 'Website',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.link),
                         ),
                       ),
                     ],
@@ -896,27 +972,35 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () {
-                    // TODO: Implement profile update
-                    // 1. Validate form fields
-                    // 2. Show loading indicator
-                    // 3. Update user profile in database
-                    // 4. Update local state
-                    // 5. Show success message
-                    // 6. Close modal
-
-                    // Mock update for now
-                    setState(() {
-                      _userData['name'] = nameController.text;
-                      _userData['username'] = usernameController.text;
-                      _userData['bio'] = bioController.text;
-                      _userData['location'] = locationController.text;
-                    });
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Profile updated successfully!')),
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) =>
+                          const Center(child: CircularProgressIndicator()),
                     );
+
+                    final success =
+                        await profileProvider.updateCurrentUserProfile(
+                      username: usernameController.text,
+                      bio: bioController.text,
+                      location: locationController.text,
+                      website: websiteController.text,
+                    );
+
+                    if (context.mounted) Navigator.pop(context);
+
+                    if (context.mounted) Navigator.pop(context);
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(success
+                              ? 'Profile updated successfully!'
+                              : 'Failed to update profile: ${profileProvider.error}'),
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ThemeConstants.primaryColor,
@@ -937,11 +1021,10 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _openSettings() {
-    // Capture the context that is valid before showing the modal/dialog
     final BuildContext pageContext = context;
 
     showModalBottomSheet(
-      context: pageContext, // Use the captured context for the modal
+      context: pageContext,
       backgroundColor: Theme.of(pageContext).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -963,7 +1046,6 @@ class _ProfilePageState extends State<ProfilePage>
                     MaterialPageRoute(
                       builder: (context) => AccountSettingsPage(
                         onThemeChanged: (ThemeMode value) {
-                          // Use Provider to update theme globally
                           Provider.of<ThemeProvider>(context, listen: false)
                               .setThemeMode(value);
                         },
@@ -1016,9 +1098,7 @@ class _ProfilePageState extends State<ProfilePage>
                 title: const Text('Log Out',
                     style: TextStyle(color: ThemeConstants.red)),
                 onTap: () async {
-                  // Close settings modal first
                   Navigator.pop(modalContext);
-                  // Then handle logout - this prevents UI issues
                   _handleLogout(pageContext);
                 },
               ),
@@ -1034,7 +1114,6 @@ class _ProfilePageState extends State<ProfilePage>
         name: 'LogoutTrace');
     developer.log('Showing confirmation dialog...', name: 'LogoutTrace');
 
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: pageContext,
       builder: (BuildContext dialogContext) {
@@ -1075,7 +1154,6 @@ class _ProfilePageState extends State<ProfilePage>
       developer.log('Proceeding with logout call...', name: 'LogoutTrace');
 
       try {
-        // 1. First, handle GoogleSignIn - do this before the AccountProvider logout
         try {
           final googleSignIn = GoogleSignIn();
           final isSignedIn = await googleSignIn.isSignedIn();
@@ -1087,7 +1165,6 @@ class _ProfilePageState extends State<ProfilePage>
             developer.log('Successfully signed out from GoogleSignIn',
                 name: 'LogoutTrace');
 
-            // Try disconnect, but don't fail if it doesn't work
             try {
               await googleSignIn.disconnect();
               developer.log('Successfully disconnected from GoogleSignIn',
@@ -1103,29 +1180,22 @@ class _ProfilePageState extends State<ProfilePage>
         } catch (e) {
           developer.log('Error handling GoogleSignIn during logout: $e',
               name: 'LogoutTrace');
-          // Continue with logout even if GoogleSignIn fails
         }
 
-        // 2. Now handle the main logout through AccountProvider
         final accountProvider =
             Provider.of<AccountProvider>(pageContext, listen: false);
 
-        // Show a loading indicator using ResponsiveSnackBar instead of standard SnackBar
         ResponsiveSnackBar.showInfo(
             context: pageContext, message: 'Logging out...');
 
         developer.log('Calling accountProvider.logout()...',
             name: 'LogoutTrace');
 
-        // Execute the logout
         await accountProvider.logout();
 
         developer.log('accountProvider.logout() finished.',
             name: 'LogoutTrace');
-
-        // Navigation will be handled by the Auth listener in main.dart
       } catch (e, stackTrace) {
-        // Show error if logout fails using ResponsiveSnackBar instead of standard SnackBar
         ResponsiveSnackBar.showError(
           context: pageContext,
           message: 'Logout failed: ${e.toString()}',
@@ -1143,26 +1213,32 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _showFollowersList() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _FollowersPage(
           title: 'Followers',
           isFollowers: true,
-          userData: _userData,
+          profileProvider: profileProvider,
         ),
       ),
     );
   }
 
   void _showFollowingList() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _FollowersPage(
           title: 'Following',
           isFollowers: false,
-          userData: _userData,
+          profileProvider: profileProvider,
         ),
       ),
     );
@@ -1179,8 +1255,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: Theme.of(context)
-          .scaffoldBackgroundColor, // Use theme background instead of hardcoded white
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: _tabBar,
     );
   }
@@ -1200,12 +1275,12 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 class _FollowersPage extends StatefulWidget {
   final String title;
   final bool isFollowers;
-  final Map<String, dynamic> userData;
+  final UserProfileProvider profileProvider;
 
   const _FollowersPage({
     required this.title,
     required this.isFollowers,
-    required this.userData,
+    required this.profileProvider,
   });
 
   @override
@@ -1214,14 +1289,49 @@ class _FollowersPage extends StatefulWidget {
 
 class _FollowersPageState extends State<_FollowersPage> {
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _filteredUsers = [];
-  List<Map<String, dynamic>> _allUsers = [];
+  List<UserProfile> _users = [];
+  List<UserProfile> _filteredUsers = [];
+  bool _isLoading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _initializeUsers();
     _searchController.addListener(_onSearchChanged);
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final List<UserProfile> users;
+
+      if (widget.isFollowers) {
+        users = await widget.profileProvider.getFollowers();
+      } else {
+        users = await widget.profileProvider.getFollowing();
+      }
+
+      if (mounted) {
+        setState(() {
+          _users = users;
+          _filteredUsers = List.from(users);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error =
+              'Failed to load ${widget.isFollowers ? 'followers' : 'following'}: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -1230,29 +1340,12 @@ class _FollowersPageState extends State<_FollowersPage> {
     super.dispose();
   }
 
-  void _initializeUsers() {
-    final count = widget.isFollowers
-        ? widget.userData['followers']
-        : widget.userData['following'];
-    _allUsers = List.generate(
-      count > 20 ? 20 : count,
-      (index) => {
-        'id': index,
-        'name': 'User ${index + 1}',
-        'username': 'user${index + 1}',
-        'imageUrl': 'https://picsum.photos/seed/user$index/100',
-        'isVerified': index % 5 == 0,
-      },
-    );
-    _filteredUsers = List.from(_allUsers);
-  }
-
   void _onSearchChanged() {
     final query = _searchController.text.toLowerCase();
     setState(() {
-      _filteredUsers = _allUsers.where((user) {
-        final name = user['name'].toString().toLowerCase();
-        final username = user['username'].toString().toLowerCase();
+      _filteredUsers = _users.where((user) {
+        final name = user.fullName.toLowerCase();
+        final username = user.username.toLowerCase();
         return name.contains(query) || username.contains(query);
       }).toList();
     });
@@ -1266,7 +1359,6 @@ class _FollowersPageState extends State<_FollowersPage> {
       ),
       body: Column(
         children: [
-          // Search bar
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
@@ -1282,66 +1374,123 @@ class _FollowersPageState extends State<_FollowersPage> {
               ),
             ),
           ),
-          // User list
           Expanded(
-            child: _filteredUsers.isEmpty
-                ? const Center(
-                    child: Text('No users found'),
-                  )
-                : ListView.builder(
-                    itemCount: _filteredUsers.length,
-                    itemBuilder: (context, index) {
-                      final user = _filteredUsers[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: NetworkImage(user['imageUrl']),
-                          onBackgroundImageError: (_, __) {},
-                          child: const Icon(Icons.person),
-                        ),
-                        title: Row(
-                          children: [
-                            Text(user['name']),
-                            if (user['isVerified'])
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Icon(
-                                  Icons.verified,
-                                  size: 16,
-                                  color: ThemeConstants.primaryColor,
-                                ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Text('@${user['username']}'),
-                        trailing: ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: widget.isFollowers
-                                ? ThemeConstants.greyLight
-                                : ThemeConstants.primaryColor,
-                            foregroundColor: widget.isFollowers
-                                ? ThemeConstants.grey
-                                : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                          ),
-                          child:
-                              Text(widget.isFollowers ? 'Remove' : 'Unfollow'),
-                        ),
-                        onTap: () {
-                          // TODO: Navigate to user profile
-                        },
-                      );
-                    },
-                  ),
+            child: _buildContent(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(color: ThemeConstants.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadUsers,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_filteredUsers.isEmpty) {
+      return Center(
+        child: Text(_users.isEmpty
+            ? 'No ${widget.isFollowers ? 'followers' : 'following'} yet'
+            : 'No users found'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _filteredUsers.length,
+      itemBuilder: (context, index) {
+        final user = _filteredUsers[index];
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundImage: CachedNetworkImageProvider(user.profilePictureUrl),
+            child: user.profilePictureUrl.isEmpty
+                ? const Icon(Icons.person)
+                : null,
+          ),
+          title: Row(
+            children: [
+              Text(user.fullName),
+              if (user.isVerified)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.verified,
+                    size: 16,
+                    color: ThemeConstants.primaryColor,
+                  ),
+                ),
+            ],
+          ),
+          subtitle: Text('@${user.username}'),
+          trailing: ElevatedButton(
+            onPressed: () async {
+              final userId = user.account.id;
+              if (widget.isFollowers) {
+                await widget.profileProvider.followUser(userId);
+              } else {
+                await widget.profileProvider.unfollowUser(userId);
+                _loadUsers();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.isFollowers
+                  ? ThemeConstants.primaryColor
+                  : ThemeConstants.greyLight,
+              foregroundColor:
+                  widget.isFollowers ? Colors.white : ThemeConstants.grey,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+            ),
+            child: Text(widget.isFollowers ? 'Follow Back' : 'Unfollow'),
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => OtherUserProfilePage(
+                  userData: {
+                    'id': user.account.id,
+                    'name': user.fullName,
+                    'username': user.username,
+                    'profileImage': user.profilePictureUrl,
+                    'bio': user.bio,
+                    'location': user.location,
+                    'honesty': user.honestyScore,
+                    'followers': user.followersCount,
+                    'following': user.followingCount,
+                    'joinDate': user.joinDateFormatted,
+                    'posts': user.postsCount,
+                    'comments': user.commentsCount,
+                    'saved': user.savedPostsCount,
+                    'upvoted': user.upvotedPostsCount,
+                    'activityStatus': user.activityStatusStr,
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

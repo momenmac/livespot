@@ -1,11 +1,16 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
-    CustomTokenObtainPairView, RegisterView, LoginView, GoogleLoginView, ProfileView, ProfileImageView,
-    VerifyEmailView, ResendVerificationCodeView,
-    ForgotPasswordView, VerifyResetCodeView, ResetPasswordView,
-    LogoutView, ValidateTokenView,  # Add ValidateTokenView
-    all_users_minimal,  # <-- import the new view
+    # Existing views
+    CustomTokenObtainPairView, RegisterView, LoginView, GoogleLoginView, 
+    ProfileView, ProfileImageView, LogoutView, ValidateTokenView, 
+    VerifyEmailView, ResendVerificationCodeView, ForgotPasswordView, 
+    VerifyResetCodeView, ResetPasswordView, all_users_minimal,
+    
+    # New Profile views
+    UserProfileView, UserProfileUpdateView, UserProfileDetailView,
+    UserFollowView, UserUnfollowView, UserFollowersView,
+    UserFollowingView, UserSearchView,
 )
 
 urlpatterns = [
@@ -19,7 +24,6 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('google-login/', GoogleLoginView.as_view(), name='google_login'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    # Add minimal all users endpoint
     path('all-users/', all_users_minimal, name='all_users_minimal'),
     
     # Profile management
@@ -35,5 +39,13 @@ urlpatterns = [
     path('verify-reset-code/', VerifyResetCodeView.as_view(), name='verify_reset_code'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
     
-    # Remove the CSRF token endpoint
+    # New user profile endpoints
+    path('users/profile/', UserProfileView.as_view(), name='user_profile'),
+    path('users/profile/update/', UserProfileUpdateView.as_view(), name='user_profile_update'),
+    path('users/<int:user_id>/profile/', UserProfileDetailView.as_view(), name='user_profile_detail'),
+    path('users/<int:user_id>/follow/', UserFollowView.as_view(), name='user_follow'),
+    path('users/<int:user_id>/unfollow/', UserUnfollowView.as_view(), name='user_unfollow'),
+    path('users/<int:user_id>/followers/', UserFollowersView.as_view(), name='user_followers'),
+    path('users/<int:user_id>/following/', UserFollowingView.as_view(), name='user_following'),
+    path('users/search/', UserSearchView.as_view(), name='user_search'),
 ]

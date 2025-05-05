@@ -129,6 +129,55 @@ class SessionManager {
     }
   }
 
+  // Method to try to load session from SharedPreferences
+  Future<void> _loadSessionFromSharedPrefs() async {
+    try {
+      final token = await SharedPrefs.getJwtToken();
+      if (token != null) {
+        // Check if the token is still valid
+        if (token.isAccessTokenExpired) {
+          // Try to refresh the token
+          final result = await refreshToken(token);
+          if (!result) {
+            // If refresh failed, clear session
+            await clearSession();
+            return;
+          }
+        } else {
+          _token = token;
+        }
+
+        // We don't have a SharedPrefs.getUser() method, so we'll fetch from server instead
+        await _fetchUserFromServer(token);
+
+        // Now that we have the account, update the state
+        _setState(SessionState.authenticated);
+      } else {
+        // No token found, session is unauthenticated
+        _setState(SessionState.unauthenticated);
+      }
+    } catch (e, stackTrace) {
+      developer.log('Error loading session: $e',
+          name: 'SessionManager', error: e, stackTrace: stackTrace);
+      _setState(SessionState.unauthenticated, errorMessage: e.toString());
+    }
+  }
+
+  // Helper method to fetch user from server using token
+  Future<void> _fetchUserFromServer(JwtToken token) async {
+    try {
+      final userProfile = await _fetchUserProfile(token.accessToken);
+      if (userProfile != null) {
+        _user = userProfile;
+        // We don't have a SharedPrefs.saveUser method, so we'll just update in-memory
+        // No need to save to shared prefs since we can fetch again when needed
+      }
+    } catch (e) {
+      developer.log('Error fetching user from server: $e',
+          name: 'SessionManager');
+    }
+  }
+
   // Set the session state and notify listeners
   void _setState(SessionState newState, {String? errorMessage}) {
     _state = newState;
@@ -228,21 +277,31 @@ class SessionManager {
     _setState(SessionState.refreshing);
     try {
       final url = Uri.parse(ApiUrls.tokenRefresh);
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${token.refreshToken}',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'refresh': token.refreshToken,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
+        final newAccessToken = responseData['access'];
 
-        // Create new token with proper constructor parameters
+        // Extract expiration from the new token
+        final expiryTime = JwtToken.getExpirationFromToken(newAccessToken);
+
+        // Create new token with all required parameters including expiration
         final newToken = JwtToken(
-          accessToken: responseData['access'],
-          refreshToken: token.refreshToken, // Keep the same refresh token
+          accessToken: newAccessToken,
+          refreshToken: responseData['refresh'] ??
+              token.refreshToken, // Use new refresh token if provided
+          expiration: expiryTime,
         );
 
         // Save the new token
@@ -311,7 +370,11 @@ class SessionManager {
   // Fetch user profile
   Future<Account?> _fetchUserProfile(String accessToken) async {
     try {
-      final url = Uri.parse('${ApiUrls.baseUrl}/accounts/profile/');
+      // Add timestamp to prevent caching
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final url =
+          Uri.parse('${ApiUrls.baseUrl}/accounts/profile/?_t=$timestamp');
+
       final response = await http.get(
         url,
         headers: {
@@ -321,14 +384,23 @@ class SessionManager {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final userData = jsonDecode(response.body);
-        return Account.fromJson(userData);
+        final responseJson = jsonDecode(response.body);
+        if (responseJson['data'] != null) {
+          developer.log('Successfully fetched user profile data',
+              name: 'SessionManager');
+          return Account.fromJson(responseJson['data']);
+        } else {
+          developer.log('Profile data missing in response: $responseJson',
+              name: 'SessionManager');
+          return null;
+        }
       } else {
-        print('Failed to fetch user profile: ${response.statusCode}');
+        developer.log('Failed to fetch user profile: ${response.statusCode}',
+            name: 'SessionManager');
         return null;
       }
     } catch (e) {
-      print('Error fetching user profile: $e');
+      developer.log('Error fetching user profile: $e', name: 'SessionManager');
       return null;
     }
   }

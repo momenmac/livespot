@@ -1,18 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/utils/url_utils.dart';
 import 'package:flutter_application_2/ui/pages/messages/image_preview_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ImageMessageBubble extends StatelessWidget {
   final Message message;

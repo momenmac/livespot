@@ -1500,7 +1500,7 @@ class MessagesController extends ChangeNotifier {
     // Using dynamic to avoid import cycle issues
     try {
       // Instead of using dynamic import, create the instance directly
-      return await Future.value(await import_api.AttachmentsApi());
+      return await Future.value(import_api.AttachmentsApi());
     } catch (e) {
       debugPrint('[_getAttachmentsApi] Error loading API: $e');
       rethrow;

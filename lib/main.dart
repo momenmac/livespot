@@ -12,6 +12,7 @@ import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
+import 'package:flutter_application_2/providers/user_profile_provider.dart'; // Add this import
 import 'package:flutter_application_2/services/utils/route_observer.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
@@ -237,6 +238,8 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
+        ChangeNotifierProvider<UserProfileProvider>(
+            create: (_) => UserProfileProvider(accountProvider: accountProvider)),
         Provider<GoogleSignIn>.value(value: googleSignIn),
       ],
       child: MyApp(accountProvider: accountProvider),

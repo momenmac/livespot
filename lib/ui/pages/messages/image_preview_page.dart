@@ -11,10 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as path;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/rendering.dart'; // Added for repaintBoundary
+// Added for repaintBoundary
 import 'package:flutter_application_2/services/permissions/permission_service.dart'; // Fixed import path
 
 class ImagePreviewPage extends StatefulWidget {

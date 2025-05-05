@@ -1,11 +1,18 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth import authenticate
 # Remove login import since we don't need sessions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from .models import Account, VerificationCode
-from .serializers import AccountSerializer
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import status, permissions, views, generics
+from django.db.models import Q
+from .models import Account, VerificationCode, UserProfile
+from .serializers import (
+    AccountSerializer,
+    UserProfileSerializer,
+    UserProfileUpdateSerializer,
+    UserSearchResultSerializer
+)
 import json
 import logging
 from django.utils.decorators import method_decorator
@@ -16,7 +23,6 @@ from django.core.mail import send_mail
 from django.conf import settings
 from datetime import timedelta
 from django.utils import timezone  # Import Django's timezone utility
-from rest_framework import status, permissions
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -512,11 +518,33 @@ class ProfileView(APIView):
     def get(self, request):
         try:
             user = request.user
-            response = Response(AccountSerializer(user).data)
-            return add_cors_headers(response)
+            
+            # First, check if user has a profile
+            try:
+                profile = user.profile
+                # Return both account and profile data
+                serializer = UserProfileSerializer(profile)
+                return add_cors_headers(Response({
+                    'success': True, 
+                    'data': serializer.data
+                }))
+            except UserProfile.DoesNotExist:
+                # If no profile exists, return just account data with error flag
+                serializer = AccountSerializer(user)
+                return add_cors_headers(Response({
+                    'success': False,
+                    'error': 'Profile not found',
+                    'data': {
+                        'account': serializer.data
+                    }
+                }, status=status.HTTP_404_NOT_FOUND))
+                
         except Exception as e:
-            response = Response({"error": str(e)}, status=500)
-            return add_cors_headers(response)
+            logger.error(f"Error fetching user profile: {str(e)}")
+            return add_cors_headers(Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR))
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProfileImageView(APIView):
@@ -865,3 +893,220 @@ def all_users_minimal(request):
             "avatarUrl": avatar_url,
         })
     return add_cors_headers(JsonResponse(data, safe=False))
+
+class UserProfileView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get current user's profile"""
+        try:
+            profile = request.user.profile
+            serializer = UserProfileSerializer(profile)
+            return Response({'success': True, 'data': serializer.data})
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'success': False, 'error': 'Profile not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def post(self, request):
+        """Create a profile if it doesn't exist (should rarely be needed due to signal)"""
+        try:
+            # Check if profile already exists
+            profile = UserProfile.objects.get(user=request.user)
+            return Response(
+                {'success': False, 'error': 'Profile already exists'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except UserProfile.DoesNotExist:
+            # Create new profile with data from request
+            data = request.data.copy()
+            
+            # Default username to email prefix if not provided
+            if 'username' not in data:
+                data['username'] = request.user.email.split('@')[0]
+            
+            # Ensure username is unique
+            username = data['username']
+            counter = 1
+            while UserProfile.objects.filter(username=username).exists():
+                username = f"{data['username']}{counter}"
+                counter += 1
+            data['username'] = username
+            
+            # Create profile
+            profile = UserProfile.objects.create(
+                user=request.user,
+                username=data['username'],
+                bio=data.get('bio', ''),
+                location=data.get('location', ''),
+                website=data.get('website', ''),
+                interests=data.get('interests')
+            )
+            
+            serializer = UserProfileSerializer(profile)
+            return Response({'success': True, 'data': serializer.data}, status=status.HTTP_201_CREATED)
+
+
+class UserProfileUpdateView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Update current user's profile"""
+        try:
+            profile = request.user.profile
+            serializer = UserProfileUpdateSerializer(profile, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                # Check username uniqueness if it's being changed
+                if 'username' in serializer.validated_data:
+                    new_username = serializer.validated_data['username']
+                    if new_username != profile.username and UserProfile.objects.filter(username=new_username).exists():
+                        return Response(
+                            {'success': False, 'error': 'Username is already taken'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                serializer.save()
+                return Response({'success': True, 'data': UserProfileSerializer(profile).data})
+            else:
+                return Response(
+                    {'success': False, 'error': serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'success': False, 'error': 'Profile not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class UserProfileDetailView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, user_id):
+        """Get another user's profile by ID"""
+        profile = get_object_or_404(UserProfile, user_id=user_id)
+        serializer = UserProfileSerializer(profile)
+        return Response({'success': True, 'data': serializer.data})
+
+
+class UserFollowView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, user_id):
+        """Follow another user"""
+        if int(user_id) == request.user.id:
+            return Response(
+                {'success': False, 'error': 'Cannot follow yourself'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        target_profile = get_object_or_404(UserProfile, user_id=user_id)
+        user_profile = request.user.profile
+        
+        if target_profile in user_profile.following.all():
+            return Response(
+                {'success': False, 'error': 'Already following this user'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        target_profile.followers.add(user_profile)
+        return Response({'success': True, 'message': f'Now following @{target_profile.username}'})
+
+
+class UserUnfollowView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, user_id):
+        """Unfollow a user"""
+        target_profile = get_object_or_404(UserProfile, user_id=user_id)
+        user_profile = request.user.profile
+        
+        if target_profile not in user_profile.following.all():
+            return Response(
+                {'success': False, 'error': 'You are not following this user'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        target_profile.followers.remove(user_profile)
+        return Response({'success': True, 'message': f'Unfollowed @{target_profile.username}'})
+
+
+class UserFollowersView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, user_id):
+        """Get a user's followers"""
+        profile = get_object_or_404(UserProfile, user_id=user_id)
+        
+        # Pagination parameters
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+        
+        followers = profile.followers.all()[offset:offset+limit]
+        serializer = UserSearchResultSerializer(followers, many=True)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'followers': serializer.data,
+                'total': profile.followers.count(),
+                'limit': limit,
+                'offset': offset
+            }
+        })
+
+
+class UserFollowingView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, user_id):
+        """Get users that a user is following"""
+        profile = get_object_or_404(UserProfile, user_id=user_id)
+        
+        # Pagination parameters
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+        
+        following = profile.following.all()[offset:offset+limit]
+        serializer = UserSearchResultSerializer(following, many=True)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'following': serializer.data,
+                'total': profile.following.count(),
+                'limit': limit,
+                'offset': offset
+            }
+        })
+
+
+class UserSearchView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSearchResultSerializer
+    
+    def get_queryset(self):
+        """Search for users by name, username, or email"""
+        query = self.request.query_params.get('q', '')
+        if not query:
+            return UserProfile.objects.none()
+        
+        return UserProfile.objects.filter(
+            Q(username__icontains=query) |
+            Q(user__email__icontains=query) |
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query)
+        ).distinct()[:20]  # Limit to 20 results
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'success': True,
+            'data': {
+                'users': serializer.data,
+                'total': len(serializer.data)
+            }
+        })

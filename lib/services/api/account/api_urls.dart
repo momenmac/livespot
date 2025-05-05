@@ -7,7 +7,7 @@ class ApiUrls {
     if (kIsWeb) {
       return 'http://localhost:8000'; // For web development
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.9:8000'; // For Android emulator
+      return 'http://192.168.1.4:8000'; // For Android emulator
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'http://localhost:8000'; // For iOS simulator
     } else {
@@ -33,7 +33,7 @@ class ApiUrls {
 
   // Profile image upload - updated paths based on server configuration
   static String get profileImage => '$baseUrl/accounts/profile-image/';
-  static String get updateProfile => '$baseUrl/accounts/update-profile/';
+  static String get updateProfile => '$baseUrl/accounts/users/profile/update/';
 
   // Email verification URLs
   static String get verifyEmail => '$baseUrl/accounts/verify-email/';

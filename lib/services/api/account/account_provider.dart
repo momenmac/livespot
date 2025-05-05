@@ -300,16 +300,155 @@ class AccountProvider extends ChangeNotifier {
     _debouncedNotify();
   }
 
-  // Verify and refresh token if needed
-  Future<bool> verifyAndRefreshTokenIfNeeded() async {
-    final result = await _sessionManager.verifyAndRefreshTokenIfNeeded();
-    _debouncedNotify();
-    return result;
+  // Validate the token with the server and refresh if needed
+  Future<bool> validateToken() async {
+    developer.log('Validating token with server: ${ApiUrls.tokenValidate}',
+        name: 'TokenValidation');
+
+    if (token == null) {
+      developer.log('No token to validate', name: 'TokenValidation');
+      return false;
+    }
+
+    try {
+      // Check if token is expired based on expiration date
+      final now = DateTime.now().millisecondsSinceEpoch / 1000;
+      final expiryTime = token!.expiration;
+
+      // If token is about to expire (or expired), try to refresh it first
+      if (expiryTime - now < 300) {
+        // Less than 5 minutes remaining
+        developer.log(
+            'Token expiring soon (${expiryTime - now} seconds left), attempting refresh',
+            name: 'TokenRefresh');
+
+        final refreshed = await refreshToken();
+        if (refreshed) {
+          developer.log('Token refreshed successfully before validation',
+              name: 'TokenRefresh');
+          return true; // Token was successfully refreshed
+        } else {
+          developer.log('Token refresh failed, will try direct validation',
+              name: 'TokenRefresh');
+        }
+      }
+
+      // Validate current token with server
+      final response = await http.post(
+        Uri.parse(ApiUrls.tokenValidate),
+        headers: {
+          'Authorization': 'Bearer ${token!.accessToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({}),
+      );
+
+      developer.log('Token validation response: ${response.statusCode}',
+          name: 'TokenValidation');
+
+      if (response.statusCode == 200) {
+        developer.log('Token validated successfully with server',
+            name: 'TokenValidation');
+        return true;
+      } else if (response.statusCode == 401) {
+        developer.log('Token validation failed (401), trying to refresh token',
+            name: 'TokenValidation');
+        return await refreshToken();
+      } else {
+        developer.log(
+            'Token validation failed with status: ${response.statusCode}',
+            name: 'TokenValidation');
+        return false;
+      }
+    } catch (e) {
+      developer.log('Error validating token: $e', name: 'TokenValidation');
+      // Try refreshing token as a last resort if validation fails
+      return await refreshToken();
+    }
   }
 
-  // Refresh token
+  // Refresh the JWT token using the refresh token
   Future<bool> refreshToken() async {
-    return await verifyAndRefreshTokenIfNeeded();
+    developer.log('Attempting to refresh token', name: 'TokenRefresh');
+
+    if (token == null || token!.refreshToken.isEmpty) {
+      developer.log('No refresh token available', name: 'TokenRefresh');
+      return false;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiUrls.tokenRefresh),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'refresh': token!.refreshToken,
+        }),
+      );
+
+      developer.log('Token refresh response received', name: 'TokenRefresh');
+
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(response.body);
+        final newAccessToken = responseBody['access'];
+
+        // Use the existing refresh token unless a new one was provided
+        final newRefreshToken = responseBody['refresh'] ?? token!.refreshToken;
+        final expiryTime = JwtToken.getExpirationFromToken(newAccessToken);
+
+        final refreshedToken = JwtToken(
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+          expiration: expiryTime,
+        );
+
+        // Save the updated token
+        await SharedPrefs.saveJwtToken(refreshedToken);
+
+        developer.log(
+            'Token refreshed successfully. New expiry: ${DateTime.fromMillisecondsSinceEpoch(expiryTime * 1000)}',
+            name: 'TokenRefresh');
+
+        // Force notifyListeners since authentication state actually didn't change,
+        // but we want to make sure the new token is used
+        _sessionManager.setSession(token: refreshedToken, user: currentUser!);
+        _debouncedNotify();
+
+        return true;
+      } else {
+        developer.log('Failed to refresh token: ${response.body}',
+            name: 'TokenRefresh');
+        // Clear the token if refresh fails
+        return false;
+      }
+    } catch (e) {
+      developer.log('Error refreshing token: $e', name: 'TokenRefresh');
+      return false;
+    }
+  }
+
+  // Verify token and refresh if needed
+  Future<bool> verifyAndRefreshTokenIfNeeded() async {
+    if (token == null) {
+      return false;
+    }
+
+    try {
+      // Check if token is valid
+      final isValid = await validateToken();
+
+      // If not valid, try refreshing
+      if (!isValid) {
+        return await refreshToken();
+      }
+
+      return isValid;
+    } catch (e) {
+      developer.log('Error during token verification: $e',
+          name: 'TokenValidation');
+      return false;
+    }
   }
 
   // Register a new user

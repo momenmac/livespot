@@ -37,11 +37,17 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   late final MessagesController _controller;
 
   late Stream<QuerySnapshot> _messagesStream;
+  bool _isLoadingMore = false;
+  DocumentSnapshot? _lastMessageDoc;
+  final int _messagesPerPage = 150; // Initial load of 150 messages
+  final int _additionalMessagesPerPage = 50; // Load 50 more when scrolling up
+
   Message? _replyToMessage;
   Timer? _typingTimer;
   Timer? _scrollDebounceTimer;
   Timer? _readReceiptTimer; // Timer for periodic read receipt checks
   bool isTyping = false;
+  bool _isInitialLoad = true;
 
   // Animation controllers for typing indicator
   final List<AnimationController> _dotControllers = [];
@@ -56,9 +62,21 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     _controller = widget.controller;
     _scrollController = ScrollController();
 
+    // Initially hide the scroll-to-bottom button
+    _showScrollToBottomButton.value = false;
+
     // Set up listeners and load messages
     _setupMessageListener();
     _listenForTyping();
+
+    // Add scroll listener to prevent scroll jumps when typing
+    _messageFocusNode.addListener(() {
+      // When text field gets focus, don't auto-scroll
+      if (_messageFocusNode.hasFocus) {
+        // Prevent automatic scrolling
+        _scrollDebounceTimer?.cancel();
+      }
+    });
 
     // Improved approach for handling read status with proper timing
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -195,21 +213,133 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   }
 
   void _setupMessageListener() {
+    // Initial query to load the most recent messages
     _messagesStream = FirebaseFirestore.instance
         .collection('conversations')
         .doc(widget.conversation.id)
         .collection('messages')
-        .orderBy('timestamp',
-            descending: false) // Change to ascending order (oldest to newest)
-        .limit(150) // Increased limit for more history
+        .orderBy('timestamp', descending: true)
+        .limit(_messagesPerPage)
         .snapshots();
 
-    // Add listener to scroll to bottom when new messages come in
-    _messagesStream.listen((snapshot) {
-      _handleNewMessages();
+    // Setup scroll listener for pagination and scroll button visibility
+    _scrollController.addListener(() {
+      // When user scrolls to the top, load more messages
+      if (_scrollController.position.pixels <= 0 && !_isLoadingMore) {
+        _loadMoreMessages();
+      }
 
-      // Mark new incoming messages as read automatically
+      // Properly check if we're at the bottom to hide the button
+      _checkScrollPosition();
+    });
+
+    // Listen to message stream for updates
+    _messagesStream.listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        // Store the last document for pagination
+        _lastMessageDoc = snapshot.docs.last;
+      }
+
+      // Handle new messages arriving
+      bool hasNewMessages = snapshot.docChanges
+          .any((change) => change.type == DocumentChangeType.added);
+
+      if (hasNewMessages) {
+        debugPrint('[ChatDetail] New messages detected in snapshot');
+
+        // Use a short delay to ensure the UI updates before attempting to scroll
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) _handleNewMessages();
+        });
+      }
+
+      // Mark new incoming messages as read
       _markNewMessagesAsRead(snapshot);
+
+      // Update scroll button visibility after data loads
+      if (_isInitialLoad && mounted) {
+        _isInitialLoad = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkScrollPosition();
+        });
+      }
+    });
+  }
+
+  // Check scroll position and update button visibility
+  void _checkScrollPosition() {
+    if (!mounted || !_scrollController.hasClients) return;
+
+    // For reversed list, position.pixels is how far we've scrolled UP from bottom
+    // We consider "at bottom" when within 20 pixels of the bottom
+    final atBottom = _scrollController.position.pixels < 20;
+
+    // Only update value if it changed to avoid unnecessary rebuilds
+    if (_showScrollToBottomButton.value == atBottom) {
+      _showScrollToBottomButton.value = !atBottom;
+    }
+  }
+
+  Future<void> _loadMoreMessages() async {
+    if (_isLoadingMore || _lastMessageDoc == null) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      debugPrint('[ChatDetail] Loading more messages');
+
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(widget.conversation.id)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .startAfterDocument(_lastMessageDoc!)
+          .limit(_additionalMessagesPerPage)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        debugPrint(
+            '[ChatDetail] Loaded ${querySnapshot.docs.length} more messages');
+        _lastMessageDoc = querySnapshot.docs.last;
+      } else {
+        debugPrint('[ChatDetail] No more messages to load');
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ChatDetail] Error loading more messages: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  void _listenForTyping() {
+    FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(widget.conversation.id)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted && snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        if (data.containsKey('typingUsers') && data['typingUsers'] != null) {
+          final typingUsers = List<String>.from(data['typingUsers'] ?? []);
+          final currentUserId = _controller.currentUserId;
+          setState(() {
+            isTyping = typingUsers.any((id) =>
+                id != currentUserId &&
+                widget.conversation.participants.any((u) => u.id == id));
+          });
+        }
+      }
     });
   }
 
@@ -277,104 +407,80 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     }
   }
 
-  void _listenForTyping() {
-    FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(widget.conversation.id)
-        .snapshots()
-        .listen((snapshot) {
-      if (mounted && snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>;
-        if (data.containsKey('typingUsers') && data['typingUsers'] != null) {
-          final typingUsers = List<String>.from(data['typingUsers'] ?? []);
-          final currentUserId = _controller.currentUserId;
-          setState(() {
-            isTyping = typingUsers.any((id) =>
-                id != currentUserId &&
-                widget.conversation.participants.any((u) => u.id == id));
-          });
-        }
-      }
-    });
-  }
-
-  // Optimized smooth scrolling that prevents jumping
-  void _scrollToBottom({bool animated = true, bool force = false}) {
-    // Skip if not mounted or controller not attached to positions
-    if (!mounted || !_scrollController.hasClients) return;
-
-    try {
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final currentOffset = _scrollController.offset;
-      final viewportDimension = _scrollController.position.viewportDimension;
-
-      // Only scroll if we're not already at the bottom (with small tolerance)
-      // or if force=true is passed to override this check
-      final shouldScroll = force || (maxScroll - currentOffset) > 10.0;
-
-      if (shouldScroll) {
-        if (animated) {
-          // Use smooth easing curve for more natural feeling
-          _scrollController.animateTo(
-            maxScroll,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutQuart, // Even smoother animation curve
-          );
-        } else {
-          // Jump immediately but only if really needed
-          _scrollController.jumpTo(maxScroll);
-        }
-      }
-
-      // Always update button visibility when we scroll
-      _updateScrollToBottomButtonVisibility();
-    } catch (e) {
-      debugPrint('Error in smooth scrolling: $e');
-      // Error handling
-    }
-  }
-
-  // Update the visibility of the scroll-to-bottom button based on scroll position
-  void _updateScrollToBottomButtonVisibility() {
-    if (!mounted || !_scrollController.hasClients) return;
-
-    try {
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final currentOffset = _scrollController.offset;
-
-      // Show button if we're not at the bottom (with tolerance)
-      final isAtBottom = (maxScroll - currentOffset) < 150.0;
-      _showScrollToBottomButton.value = !isAtBottom;
-    } catch (e) {
-      debugPrint('Error updating scroll button visibility: $e');
-    }
-  }
-
-  // Handle when new messages arrive
+  // Called when new messages are received
   void _handleNewMessages() {
+    // Skip if widget is no longer mounted
     if (!mounted) return;
 
-    // Use a debounced approach to avoid multiple rapid scrolls
+    // Cancel any existing debounce timer
     _scrollDebounceTimer?.cancel();
+
+    // Debounce the scroll to prevent rapid UI updates
     _scrollDebounceTimer = Timer(const Duration(milliseconds: 100), () {
       if (!mounted) return;
 
-      // Determine if we should scroll based on current position
-      final isCloseToBottom = !_scrollController.hasClients ||
-          (_scrollController.hasClients &&
-              _scrollController.position.pixels >
-                  (_scrollController.position.maxScrollExtent - 150));
+      // Only auto-scroll if we're near the bottom already
+      if (_scrollController.hasClients) {
+        final isNearBottom = _scrollController.position.pixels >
+            (_scrollController.position.maxScrollExtent - 100);
 
-      // Only scroll if we're already near the bottom
-      if (isCloseToBottom) {
-        _scrollToBottom(animated: true);
-      } else {
-        // If we're not near the bottom, show the scroll-to-bottom button
-        if (mounted && !_showScrollToBottomButton.value) {
+        if (isNearBottom && !_messageFocusNode.hasFocus) {
+          // Smoothly scroll to bottom with animation
+          _scrollToBottom(animated: true);
+        } else {
+          // Otherwise just show the scroll-to-bottom button
           _showScrollToBottomButton.value = true;
         }
       }
     });
+  }
+
+  // Track scroll position to show/hide the scroll-to-bottom button
+  void _updateScrollToBottomButtonVisibility() {
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+
+    // For reversed lists, we're at the bottom when pixels value is close to 0
+    // We're away from bottom if scrolled up more than 200 pixels
+    final isAwayFromBottom = position.pixels > 200;
+
+    // Only update if the value is changing to avoid unnecessary rebuilds
+    if (_showScrollToBottomButton.value != isAwayFromBottom) {
+      _showScrollToBottomButton.value = isAwayFromBottom;
+    }
+  }
+
+  // Optimized scroll-to-bottom that prevents unwanted jumping
+  void _scrollToBottom({bool animated = true}) {
+    // Skip if widget is no longer mounted or scroll controller isn't attached
+    if (!mounted || !_scrollController.hasClients) return;
+
+    try {
+      if (animated && !_messageFocusNode.hasFocus) {
+        // For reversed list, 0 is the bottom
+        _scrollController.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      } else {
+        // Only jump if needed and not focused on message input
+        if (!_messageFocusNode.hasFocus) {
+          _scrollController.jumpTo(0.0);
+        }
+      }
+
+      // Update button visibility right after scrolling
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _showScrollToBottomButton.value = false;
+        }
+      });
+    } catch (e) {
+      // Ignore scroll errors to prevent crashes
+      debugPrint('[ChatDetail] Error scrolling: $e');
+    }
   }
 
   @override
@@ -739,8 +845,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           }
 
                           if (snapshot.hasError) {
-                            return Center(
-                                child: Text('Error: ${snapshot.error}'));
+                            return const Center(
+                                child: Text('Error loading messages'));
                           }
 
                           if (!snapshot.hasData ||
@@ -748,71 +854,42 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                             return const Center(child: Text('No messages yet'));
                           }
 
-                          // Always sort messages by timestamp ascending (oldest first)
                           final messages = snapshot.data!.docs.map((doc) {
                             final data = doc.data() as Map<String, dynamic>;
                             return Message.fromJson({...data, 'id': doc.id});
-                          }).toList()
-                            ..sort(
-                                (a, b) => a.timestamp.compareTo(b.timestamp));
+                          }).toList();
 
-                          // --- Group messages by date ---
-                          final List<Widget> messageWidgets = [];
-                          DateTime? lastDate;
+                          return ListView.builder(
+                            controller: _scrollController,
+                            reverse: true,
+                            itemCount: messages.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index == messages.length) {
+                                return _isLoadingMore
+                                    ? const Center(
+                                        child: CircularProgressIndicator())
+                                    : const SizedBox.shrink();
+                              }
 
-                          for (int i = 0; i < messages.length; i++) {
-                            final message = messages[i];
-                            final isCurrentUser =
-                                message.senderId == _controller.currentUserId;
+                              final message = messages[index];
+                              final isCurrentUser =
+                                  message.senderId == _controller.currentUserId;
 
-                            // Insert date separator if date changes
-                            final messageDate = DateTime(
-                              message.timestamp.year,
-                              message.timestamp.month,
-                              message.timestamp.day,
-                            );
-                            if (lastDate == null || messageDate != lastDate) {
-                              messageWidgets
-                                  .add(_buildDateSeparator(messageDate));
-                              lastDate = messageDate;
-                            }
-
-                            messageWidgets.add(
-                              Dismissible(
-                                key: Key(message.id),
-                                direction: DismissDirection.startToEnd,
-                                confirmDismiss: (direction) async {
-                                  _handleSwipeReply(message);
-                                  return false;
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Dismissible(
+                                  key: Key(message.id),
+                                  direction: DismissDirection.startToEnd,
+                                  confirmDismiss: (direction) async {
+                                    _handleSwipeReply(message);
+                                    return false;
+                                  },
                                   child: _buildMessageBubble(
                                       message, isCurrentUser),
                                 ),
-                              ),
-                            );
-                          }
-
-                          // Add the typing indicator as a temporary message at the bottom if someone is typing
-                          if (isTyping) {
-                            messageWidgets.add(
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                child: _buildTypingIndicator(isTyping),
-                              ),
-                            );
-                          }
-
-                          // --- Scroll to bottom after build if new message arrives ---
-                          WidgetsBinding.instance.addPostFrameCallback(
-                              (_) => _scrollToBottom(animated: true));
-
-                          return ListView(
-                            controller: _scrollController,
-                            children: messageWidgets,
+                              );
+                            },
                           );
                         },
                       ),
@@ -1199,7 +1276,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           ),
                           child: Hero(
                             tag:
-                                'image-preview-${message.id}-${fixedMediaUrl!.hashCode}',
+                                'image-preview-${message.id}-${fixedMediaUrl.hashCode}',
                             child: Image.network(
                               fixedMediaUrl,
                               fit: BoxFit.contain,
