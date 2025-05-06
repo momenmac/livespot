@@ -890,8 +890,7 @@ class _ProfilePageState extends State<ProfilePage>
 
                                       // Show error message
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                             content: Text(
                                                 'Error updating profile picture: $e'),
@@ -1293,6 +1292,8 @@ class _FollowersPageState extends State<_FollowersPage> {
   List<UserProfile> _filteredUsers = [];
   bool _isLoading = false;
   String? _error;
+  Map<int, bool> _followingStates = {}; // Track follow state for each user
+  Map<int, bool> _loadingStates = {};  // Track loading state for each user
 
   @override
   void initState() {
@@ -1314,6 +1315,12 @@ class _FollowersPageState extends State<_FollowersPage> {
         users = await widget.profileProvider.getFollowers();
       } else {
         users = await widget.profileProvider.getFollowing();
+      }
+
+      // Initialize follow states
+      for (var user in users) {
+        _followingStates[user.account.id] = !widget.isFollowers;
+        _loadingStates[user.account.id] = false;
       }
 
       if (mounted) {
@@ -1349,6 +1356,54 @@ class _FollowersPageState extends State<_FollowersPage> {
         return name.contains(query) || username.contains(query);
       }).toList();
     });
+  }
+
+  Future<void> _toggleFollow(int userId) async {
+    // Don't do anything if already loading
+    if (_loadingStates[userId] == true) return;
+    
+    // Set loading state for this user
+    setState(() {
+      _loadingStates[userId] = true;
+    });
+
+    try {
+      bool success;
+      final isFollowing = _followingStates[userId] ?? false;
+      
+      if (isFollowing) {
+        // User is already following, so unfollow
+        success = await widget.profileProvider.unfollowUser(userId);
+        if (success) {
+          setState(() {
+            _followingStates[userId] = false;
+            
+            // If we're on the following page and unfollow is successful,
+            // we should remove this user from the list
+            if (!widget.isFollowers) {
+              _filteredUsers.removeWhere((user) => user.account.id == userId);
+              _users.removeWhere((user) => user.account.id == userId);
+            }
+          });
+        }
+      } else {
+        // User is not following, so follow
+        success = await widget.profileProvider.followUser(userId);
+        if (success) {
+          setState(() {
+            _followingStates[userId] = true;
+          });
+        }
+      }
+    } catch (e) {
+      developer.log('Error toggling follow state: $e', name: 'FollowersPage');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingStates[userId] = false;
+        });
+      }
+    }
   }
 
   @override
@@ -1415,9 +1470,15 @@ class _FollowersPageState extends State<_FollowersPage> {
       itemCount: _filteredUsers.length,
       itemBuilder: (context, index) {
         final user = _filteredUsers[index];
+        final userId = user.account.id;
+        final isFollowing = _followingStates[userId] ?? false;
+        final isLoading = _loadingStates[userId] ?? false;
+        
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: CachedNetworkImageProvider(user.profilePictureUrl),
+            backgroundImage: user.profilePictureUrl.isNotEmpty
+                ? NetworkImage(user.profilePictureUrl)
+                : null,
             child: user.profilePictureUrl.isEmpty
                 ? const Icon(Icons.person)
                 : null,
@@ -1438,21 +1499,13 @@ class _FollowersPageState extends State<_FollowersPage> {
           ),
           subtitle: Text('@${user.username}'),
           trailing: ElevatedButton(
-            onPressed: () async {
-              final userId = user.account.id;
-              if (widget.isFollowers) {
-                await widget.profileProvider.followUser(userId);
-              } else {
-                await widget.profileProvider.unfollowUser(userId);
-                _loadUsers();
-              }
-            },
+            onPressed: isLoading ? null : () => _toggleFollow(userId),
             style: ElevatedButton.styleFrom(
-              backgroundColor: widget.isFollowers
-                  ? ThemeConstants.primaryColor
-                  : ThemeConstants.greyLight,
+              backgroundColor: isFollowing
+                  ? ThemeConstants.greyLight
+                  : ThemeConstants.primaryColor,
               foregroundColor:
-                  widget.isFollowers ? Colors.white : ThemeConstants.grey,
+                  isFollowing ? ThemeConstants.grey : Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -1461,7 +1514,13 @@ class _FollowersPageState extends State<_FollowersPage> {
                 vertical: 8,
               ),
             ),
-            child: Text(widget.isFollowers ? 'Follow Back' : 'Unfollow'),
+            child: isLoading 
+                ? const SizedBox(
+                    width: 16, 
+                    height: 16, 
+                    child: CircularProgressIndicator(strokeWidth: 2)
+                  )
+                : Text(isFollowing ? 'Unfollow' : 'Follow'),
           ),
           onTap: () {
             Navigator.push(
@@ -1484,10 +1543,17 @@ class _FollowersPageState extends State<_FollowersPage> {
                     'saved': user.savedPostsCount,
                     'upvoted': user.upvotedPostsCount,
                     'activityStatus': user.activityStatusStr,
+                    'website': user.website,
+                    'interests': user.interests,
+                    'is_verified': user.isVerified,
+                    'isFollowing': _followingStates[user.account.id] ?? false, // Pass the current follow state
                   },
                 ),
               ),
-            );
+            ).then((_) {
+              // Refresh the list when returning from profile page
+              _loadUsers();
+            });
           },
         );
       },

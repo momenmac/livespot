@@ -18,6 +18,7 @@ import 'package:flutter_application_2/services/api/account/account_provider.dart
 import 'package:uuid/uuid.dart';
 import 'package:flutter_application_2/services/api/attachments/attachments_api.dart'
     as import_api;
+import 'package:flutter_application_2/models/user_profile.dart'; // Add import for UserProfile class
 
 enum FilterMode {
   all,
@@ -1959,6 +1960,164 @@ class MessagesController extends ChangeNotifier {
       startTypingIndicator();
     } else {
       _stopTypingIndicator();
+    }
+  }
+
+  // Create or get a conversation with a user
+  Future<Conversation?> createOrGetConversation(UserProfile userProfile) async {
+    try {
+      final String otherUserId = userProfile.account.id.toString();
+      
+      // Check if current user id is valid
+      if (currentUserId.isEmpty) {
+        debugPrint('[createOrGetConversation] Current user ID is empty');
+        return null;
+      }
+      
+      // First check if conversation already exists
+      final querySnapshot = await _firestore
+          .collection('conversations')
+          .where('participants', arrayContains: currentUserId)
+          .get();
+      
+      // Search for existing conversation with this user
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+        final List<dynamic> participants = data['participants'] ?? [];
+        
+        // Check if this is a one-on-one conversation with the target user
+        if (participants.length == 2 && 
+            participants.contains(otherUserId) && 
+            participants.contains(currentUserId)) {
+          debugPrint('[createOrGetConversation] Found existing conversation: ${doc.id}');
+          
+          // Load all users to properly populate the conversation
+          final users = await _fetchAllUsers();
+          
+          // Create and return the conversation object
+          return Conversation.fromFirestore(data, users);
+        }
+      }
+      
+      // No existing conversation found, create a new one
+      debugPrint('[createOrGetConversation] Creating new conversation with user: ${userProfile.username}');
+      
+      // Generate a unique ID for the conversation
+      final String conversationId = _firestore.collection('conversations').doc().id;
+      
+      // Create a user object for the other participant
+      final otherUser = User(
+        id: otherUserId,
+        name: userProfile.fullName,
+        avatarUrl: userProfile.profilePictureUrl,
+      );
+      
+      // Create a user object for the current user
+      final currentUser = User(
+        id: currentUserId,
+        name: accountProvider.currentUser?.firstName ?? 'You',
+        avatarUrl: accountProvider.currentUser?.profilePictureUrl ?? '',
+      );
+      
+      // Create an initial message
+      final messageId = const Uuid().v4();
+      final now = DateTime.now();
+      final message = Message(
+        id: messageId,
+        senderId: currentUserId,
+        senderName: currentUser.name,
+        content: 'Started a conversation',
+        timestamp: now,
+        conversationId: conversationId,
+        status: MessageStatus.sent,
+        messageType: MessageType.system, // Mark as a system message
+        isRead: true,
+      );
+      
+      // Create conversation document
+      final conversationData = {
+        'id': conversationId,
+        'participants': [currentUserId, otherUserId],
+        'participantDetails': [
+          {
+            'id': currentUserId,
+            'name': currentUser.name,
+            'avatarUrl': currentUser.avatarUrl,
+          },
+          {
+            'id': otherUserId,
+            'name': otherUser.name,
+            'avatarUrl': otherUser.avatarUrl,
+          },
+        ],
+        'lastMessage': message.toJson(),
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'isMuted': false,
+        'isArchived': false,
+        'isGroup': false,
+      };
+      
+      // Create the conversation in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .set(conversationData);
+      
+      // Add the initial message to the conversation
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .set(message.toJson());
+      
+      // Set read status for both participants
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('readStatus')
+          .doc(currentUserId)
+          .set({
+        'userId': currentUserId,
+        'isRead': true,
+        'lastReadTimestamp': FieldValue.serverTimestamp(),
+      });
+      
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('readStatus')
+          .doc(otherUserId)
+          .set({
+        'userId': otherUserId,
+        'isRead': false,
+        'lastReadTimestamp': FieldValue.serverTimestamp(),
+      });
+      
+      // Create and return the new conversation object
+      final newConversation = Conversation(
+        id: conversationId,
+        participants: [currentUser, otherUser],
+        lastMessage: message,
+        messages: [message],
+        isMuted: false,
+        isArchived: false,
+        unreadCount: 0,
+        isGroup: false,
+        groupName: null,
+      );
+      
+      // Add to the conversations list
+      _conversations.add(newConversation);
+      _applyFilters();
+      notifyListeners();
+      
+      return newConversation;
+    } catch (e) {
+      debugPrint('[createOrGetConversation] Error: $e');
+      return null;
     }
   }
 }

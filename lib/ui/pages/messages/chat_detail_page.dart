@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart'; // Add this import for date formatting
@@ -14,6 +15,7 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/ui/pages/messages/image_preview_page.dart'; // Import for image preview
 import 'package:flutter_application_2/services/permissions/permission_service.dart'; // Import the permission service
+import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart'; // Import for user profile
 
 class ChatDetailPage extends StatefulWidget {
   final MessagesController controller;
@@ -761,6 +763,59 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(userName)}';
   }
 
+  // Navigate to user profile when their name is clicked
+  void _navigateToUserProfile(User otherParticipant) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading profile...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Convert the User model (from chat) to a format that OtherUserProfilePage can understand
+      Map<String, dynamic> userData = {
+        'id': int.tryParse(otherParticipant.id) ?? -1,
+        'username': otherParticipant.name,
+        'name': otherParticipant.name,
+        'profileImage': otherParticipant.avatarUrl,
+        'isOnline': otherParticipant.isOnline,
+        'email': '', // This is intentionally empty as we don't have email in chat User model
+      };
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Navigate to OtherUserProfilePage with user data
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => OtherUserProfilePage(userData: userData),
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog if still open
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load profile: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -780,27 +835,31 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       appBar: AppBar(
         title: Row(
           children: [
-            CircleAvatar(
-              backgroundImage: validAvatarUrl.isNotEmpty
-                  ? NetworkImage(validAvatarUrl)
-                  : null,
-              child: validAvatarUrl.isEmpty
-                  ? Text(otherParticipant.name.isNotEmpty
-                      ? otherParticipant.name[0].toUpperCase()
-                      : '?')
-                  : null,
+            // Make the avatar clickable
+            GestureDetector(
+              onTap: () => _navigateToUserProfile(otherParticipant),
+              child: CircleAvatar(
+                backgroundImage: validAvatarUrl.isNotEmpty
+                    ? NetworkImage(validAvatarUrl)
+                    : null,
+                child: validAvatarUrl.isEmpty
+                    ? Text(otherParticipant.name.isNotEmpty
+                        ? otherParticipant.name[0].toUpperCase()
+                        : '?')
+                    : null,
+              ),
             ),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
+            // Make the username clickable
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _navigateToUserProfile(otherParticipant),
+                child: Text(
                   otherParticipant.name,
                   style: Theme.of(context).textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                // Removed typing indicator from here
-              ],
+              ),
             ),
           ],
         ),
@@ -808,6 +867,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
+                case 'profile':
+                  _navigateToUserProfile(otherParticipant);
+                  break;
                 case 'delete':
                   _confirmDeleteConversation();
                   break;
@@ -820,6 +882,21 @@ class _ChatDetailPageState extends State<ChatDetailPage>
               }
             },
             itemBuilder: (context) => [
+              // View profile option
+              PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person,
+                      color: ThemeConstants.primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text('View Profile'),
+                  ],
+                ),
+              ),
+              
               // Mute/Unmute option
               PopupMenuItem(
                 value: 'mute',
@@ -836,6 +913,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ],
                 ),
               ),
+              
               // Archive/Unarchive option
               PopupMenuItem(
                 value: 'archive',
@@ -854,6 +932,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ],
                 ),
               ),
+              
               // Delete option
               const PopupMenuItem(
                 value: 'delete',

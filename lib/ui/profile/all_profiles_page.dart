@@ -75,14 +75,8 @@ class _AllProfilesPageState extends State<AllProfilesPage> {
         }
       }
 
-      if (success && mounted) {
-        ResponsiveSnackBar.showInfo(
-          context: context,
-          message: isCurrentlyFollowing
-              ? 'Unfollowed @${widget.profiles[index]['username']}'
-              : 'Now following @${widget.profiles[index]['username']}',
-        );
-      } else if (mounted) {
+      if (!success && mounted) {
+        // Only show error message if the action failed
         ResponsiveSnackBar.showError(
           context: context,
           message:
@@ -140,19 +134,30 @@ class _AllProfilesPageState extends State<AllProfilesPage> {
             ),
             child: InkWell(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => OtherUserProfilePage(
-                      userData: profile,
+                // Check if this is the current user's profile
+                final profileProvider =
+                    Provider.of<UserProfileProvider>(context, listen: false);
+                final currentUserId = profileProvider.currentUserProfile?.account.id;
+                
+                if (currentUserId != null && currentUserId == userId) {
+                  // If it's the current user's profile, just go back (profile page is the parent)
+                  Navigator.pop(context);
+                } else {
+                  // If it's another user's profile, navigate to their profile page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => OtherUserProfilePage(
+                        userData: profile,
+                      ),
                     ),
-                  ),
-                ).then((_) {
-                  // Refresh data when returning from profile page
-                  final profileProvider =
-                      Provider.of<UserProfileProvider>(context, listen: false);
-                  profileProvider.fetchCurrentUserProfile();
-                });
+                  ).then((_) {
+                    // Refresh data when returning from profile page
+                    final profileProvider =
+                        Provider.of<UserProfileProvider>(context, listen: false);
+                    profileProvider.fetchCurrentUserProfile();
+                  });
+                }
               },
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
@@ -206,29 +211,77 @@ class _AllProfilesPageState extends State<AllProfilesPage> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () => _toggleFollow(context, userId, index),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isFollowing
-                            ? Colors.grey[200]
-                            : ThemeConstants.primaryColor,
-                        foregroundColor:
-                            isFollowing ? ThemeConstants.grey : Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                    // If user has location, show it
+                    if (profile['location'] != null && profile['location'].isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.location_on, size: 12, color: ThemeConstants.grey),
+                            const SizedBox(width: 2),
+                            Flexible(
+                              child: Text(
+                                profile['location'],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: ThemeConstants.grey,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
                       ),
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(isFollowing ? 'Following' : 'Follow'),
+                    const Spacer(),
+                    Consumer<UserProfileProvider>(
+                      builder: (context, provider, _) {
+                        // Check if this is the current user's profile
+                        final currentUserId = provider.currentUserProfile?.account.id;
+                        final isCurrentUser = currentUserId != null && currentUserId == userId;
+                        
+                        if (isCurrentUser) {
+                          return ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context); // Go back to profile page
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ThemeConstants.primaryColor,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                            ),
+                            child: const Text('Your Profile'),
+                          );
+                        }
+                        
+                        return ElevatedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => _toggleFollow(context, userId, index),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isFollowing
+                                ? Colors.grey[200]
+                                : ThemeConstants.primaryColor,
+                            foregroundColor:
+                                isFollowing ? ThemeConstants.grey : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Text(isFollowing ? 'Following' : 'Follow'),
+                        );
+                      },
                     ),
                   ],
                 ),

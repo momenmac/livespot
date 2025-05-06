@@ -556,7 +556,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.get(
-        '/accounts/followers/${_currentUserProfile!.account.id}/?limit=$limit&offset=$offset',
+        '/accounts/users/${_currentUserProfile!.account.id}/followers/?limit=$limit&offset=$offset',
         token: token.accessToken,
       );
 
@@ -564,12 +564,22 @@ class UserProfileProvider extends ChangeNotifier {
           name: 'UserProfileProvider');
 
       if (response['success'] == true && response.containsKey('data')) {
-        final data = response['data'];
-        final List<dynamic> followersData = data is List
-            ? data
-            : (data is Map && data.containsKey('followers')
-                ? data['followers']
-                : []);
+        var data = response['data'];
+        
+        // Check if data is nested another level deep
+        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+          developer.log('Detected nested data structure in followers response', name: 'UserProfileProvider');
+          data = data['data'];
+        }
+        
+        // Extract followers from the proper location in the response
+        final List<dynamic> followersData;
+        if (data is Map && data.containsKey('followers')) {
+          followersData = data['followers'] as List;
+        } else {
+          followersData = [];
+          developer.log('No followers found in response', name: 'UserProfileProvider');
+        }
 
         final followers = followersData.map((data) {
           // Make sure account data is included if not already
@@ -606,7 +616,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.get(
-        '/accounts/following/${_currentUserProfile!.account.id}/?limit=$limit&offset=$offset',
+        '/accounts/users/${_currentUserProfile!.account.id}/following/?limit=$limit&offset=$offset',
         token: token.accessToken,
       );
 
@@ -614,12 +624,22 @@ class UserProfileProvider extends ChangeNotifier {
           name: 'UserProfileProvider');
 
       if (response['success'] == true && response.containsKey('data')) {
-        final data = response['data'];
-        final List<dynamic> followingData = data is List
-            ? data
-            : (data is Map && data.containsKey('following')
-                ? data['following']
-                : []);
+        var data = response['data'];
+        
+        // Check if data is nested another level deep
+        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+          developer.log('Detected nested data structure in following response', name: 'UserProfileProvider');
+          data = data['data'];
+        }
+        
+        // Extract following from the proper location in the response
+        final List<dynamic> followingData;
+        if (data is Map && data.containsKey('following')) {
+          followingData = data['following'] as List;
+        } else {
+          followingData = [];
+          developer.log('No following users found in response', name: 'UserProfileProvider');
+        }
 
         final following = followingData.map((data) {
           // Make sure account data is included if not already
@@ -646,6 +666,81 @@ class UserProfileProvider extends ChangeNotifier {
     }
   }
 
+  // Search for users
+  Future<List<Map<String, dynamic>>> searchUsers(String query,
+      {int limit = 20, int offset = 0}) async {
+    final token = _accountProvider.token;
+    if (token == null) return [];
+
+    try {
+      developer.log('Searching for users with query: "$query"', name: 'UserProfileProvider');
+      
+      // Construct the full URL for debugging
+      final endpoint = '/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset';
+      developer.log('Search endpoint: $endpoint', name: 'UserProfileProvider');
+      
+      final response = await ApiClient.get(
+        endpoint,
+        token: token.accessToken,
+      );
+
+      developer.log('Search users raw response: $response', name: 'UserProfileProvider');
+
+      if (response['success'] == true && response['data'] != null) {
+        // Handle the nested response structure
+        var data = response['data'];
+        
+        // Check if data is nested another level deep
+        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+          developer.log('Detected nested data structure in search response', name: 'UserProfileProvider');
+          data = data['data'];
+        }
+        
+        // Check if 'users' key exists
+        if (!data.containsKey('users')) {
+          developer.log('No "users" key in response data: $data', name: 'UserProfileProvider');
+          return [];
+        }
+        
+        final List<dynamic> usersData = data['users'] as List;
+        developer.log('Found ${usersData.length} users', name: 'UserProfileProvider');
+
+        return usersData.map((userData) {
+          // Convert each user data into a format that can be used by the UI
+          final account = userData['account'] ?? {};
+          developer.log('User data: $userData', name: 'UserProfileProvider');
+          return {
+            'id': account['id'],
+            'email': account['email'],
+            'name': '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim(),
+            'profileImage': account['profile_picture'],
+            'username': userData['username'],
+            'bio': userData['bio'] ?? '',
+            'location': userData['location'] ?? '',
+            'website': userData['website'] ?? '',
+            'is_verified': userData['is_verified'] ?? false,
+            'followers': userData['followers_count'] ?? 0,
+            'following': userData['following_count'] ?? 0,
+            'posts': userData['posts_count'] ?? 0,
+            'saved': userData['saved_posts_count'] ?? 0,
+            'upvoted': userData['upvoted_posts_count'] ?? 0,
+            'comments': userData['comments_count'] ?? 0,
+            'honesty': userData['honesty_score'] ?? 0,
+            'joinDate': userData['join_date'] ?? '',
+            'activityStatus': userData['activity_status'] ?? 'offline',
+            'interests': userData['interests'] is List ? List<String>.from(userData['interests']) : [],
+          };
+        }).toList();
+      } else {
+        developer.log('Search failed or returned no data: $response', name: 'UserProfileProvider');
+      }
+      return [];
+    } catch (e) {
+      developer.log('Error searching users: $e', name: 'UserProfileProvider', error: e);
+      return [];
+    }
+  }
+
   // Follow a user
   Future<bool> followUser(int userId) async {
     final token = _accountProvider.token;
@@ -657,20 +752,15 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.post(
-        '/accounts/follow/$userId/',
+        '/accounts/users/$userId/follow/',
         token: token.accessToken,
       );
 
-      developer.log('Follow user response: $response',
-          name: 'UserProfileProvider');
+      developer.log('Follow user response: $response', name: 'UserProfileProvider');
 
       if (response['success'] == true) {
-        // Update local follower count
-        if (_currentUserProfile != null) {
-          _currentUserProfile = _currentUserProfile!.copyWith(
-              followingCount: _currentUserProfile!.followingCount + 1);
-          notifyListeners();
-        }
+        // Force refresh profile data after following a user
+        await refreshCurrentUserProfile();
         return true;
       }
 
@@ -696,20 +786,15 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.post(
-        '/accounts/unfollow/$userId/',
+        '/accounts/users/$userId/unfollow/',
         token: token.accessToken,
       );
 
-      developer.log('Unfollow user response: $response',
-          name: 'UserProfileProvider');
+      developer.log('Unfollow user response: $response', name: 'UserProfileProvider');
 
       if (response['success'] == true) {
-        // Update local follower count
-        if (_currentUserProfile != null) {
-          _currentUserProfile = _currentUserProfile!.copyWith(
-              followingCount: _currentUserProfile!.followingCount - 1);
-          notifyListeners();
-        }
+        // Force refresh profile data after unfollowing a user
+        await refreshCurrentUserProfile();
         return true;
       }
 
@@ -724,48 +809,188 @@ class UserProfileProvider extends ChangeNotifier {
     }
   }
 
-  // Search for users
-  Future<List<UserProfile>> searchUsers(String query,
-      {int limit = 20, int offset = 0}) async {
+  // Check if the current user follows a user
+  Future<bool> checkFollowing(int userId) async {
     final token = _accountProvider.token;
-    if (token == null) return [];
+    if (token == null || _currentUserProfile == null) return false;
 
     try {
+      // Get followers of the target user to check if current user is among them
       final response = await ApiClient.get(
-        '/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset',
+        '/accounts/users/$userId/followers/',
         token: token.accessToken,
       );
 
-      developer.log('Search users response: $response',
-          name: 'UserProfileProvider');
+      if (response['success'] == true && response.containsKey('data')) {
+        var data = response['data'];
+        
+        // Handle nested response structure
+        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+          data = data['data'];
+        }
+        
+        // Extract followers from the correct location
+        final List<dynamic> followers;
+        if (data is Map && data.containsKey('followers')) {
+          followers = data['followers'] as List;
+          
+          // Check if current user's ID is in the followers list
+          final currentUserId = _currentUserProfile!.account.id;
+          for (var follower in followers) {
+            if (follower is Map && 
+                follower.containsKey('account') && 
+                follower['account'] is Map &&
+                follower['account']['id'] == currentUserId) {
+              developer.log('User $userId follow status check: true', name: 'OtherUserProfilePage');
+              return true;
+            }
+          }
+        }
+      }
+      
+      developer.log('User $userId follow status check: false', name: 'OtherUserProfilePage');
+      return false;
+    } catch (e) {
+      developer.log('Error checking follow status: $e', name: 'UserProfileProvider');
+      return false;
+    }
+  }
+
+  // Fetch another user's profile by ID
+  Future<Map<String, dynamic>?> fetchUserProfile(int userId) async {
+    final token = _accountProvider.token;
+    if (token == null) return null;
+
+    try {
+      developer.log('Fetching profile for user ID: $userId', name: 'UserProfileProvider');
+      
+      // Use a specific endpoint that returns the complete user profile with all fields
+      final response = await ApiClient.get(
+        '/accounts/users/$userId/profile/',
+        token: token.accessToken,
+      );
+
+      developer.log('Fetch user profile response: $response', name: 'UserProfileProvider');
 
       if (response['success'] == true && response.containsKey('data')) {
-        final data = response['data'];
-        final List<dynamic> usersData = data is List
-            ? data
-            : (data is Map && data.containsKey('users') ? data['users'] : []);
-
-        final users = usersData.map((data) {
-          // Ensure account data is included
-          if (data is Map &&
-              !data.containsKey('account') &&
-              data.containsKey('user_id')) {
-            data['account'] = {'id': data['user_id']};
-          }
-          return UserProfile.fromJson(data);
-        }).toList();
-
-        // Cache the found profiles
-        for (var profile in users) {
-          _profileCache[profile.account.id] = profile;
+        var data = response['data'];
+        
+        // Handle nested response structure
+        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+          data = data['data'];
+        }
+        
+        if (data is Map && data.containsKey('user')) {
+          data = data['user'];
         }
 
-        return users;
+        // Extract user account data
+        final Map<String, dynamic> account = data['account'] ?? {};
+        
+        // Create a standardized format that matches what OtherUserProfilePage expects
+        return {
+          'id': account['id'],
+          'email': account['email'],
+          'name': '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim(),
+          'profileImage': account['profile_picture'],
+          'username': data['username'] ?? '',
+          'bio': data['bio'] ?? '',
+          'location': data['location'] ?? '',
+          'website': data['website'] ?? '',
+          'is_verified': data['is_verified'] ?? false,
+          'followers': data['followers_count'] ?? 0,
+          'following': data['following_count'] ?? 0,
+          'posts': data['posts_count'] ?? 0,
+          'saved': data['saved_posts_count'] ?? 0,
+          'upvoted': data['upvoted_posts_count'] ?? 0, 
+          'comments': data['comments_count'] ?? 0,
+          'honesty': data['honesty_score'] ?? 0,
+          'joinDate': data['join_date'] ?? account['created_at']?.toString().split('T')[0] ?? '',
+          'activityStatus': data['activity_status'] ?? 'offline',
+          'interests': data['interests'] is List ? List<String>.from(data['interests']) : [],
+        };
       }
-      return [];
+      return null;
     } catch (e) {
-      developer.log('Error searching users: $e', name: 'UserProfileProvider');
-      return [];
+      developer.log('Error fetching user profile: $e', name: 'UserProfileProvider');
+      return null;
+    }
+  }
+
+  // Fetch a user profile by ID with fresh data (no caching)
+  Future<UserProfile?> fetchUserProfileById(int userId) async {
+    final token = _accountProvider.token;
+    if (token == null) return null;
+
+    try {
+      developer.log('Fetching fresh profile for user ID: $userId',
+          name: 'UserProfileProvider');
+      
+      // Add cache-busting parameter to ensure fresh data
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Use the user profile endpoint with nocache parameter
+      final response = await ApiClient.get(
+        '/accounts/users/$userId/profile/?nocache=$timestamp',
+        token: token.accessToken,
+      );
+
+      if (response['success'] == true && response.containsKey('data')) {
+        var profileData = response['data'];
+        
+        // Handle nested response structure
+        if (profileData is Map && 
+            profileData.containsKey('success') && 
+            profileData.containsKey('data')) {
+          profileData = profileData['data'];
+        }
+        
+        // If we have a 'user' wrapper, extract the user data
+        if (profileData is Map && profileData.containsKey('user')) {
+          profileData = profileData['user'];
+        }
+
+        // Create a UserProfile object from the data
+        final userProfile = UserProfile.fromJson(profileData);
+        
+        // Update the cache with fresh data
+        _profileCache[userId] = userProfile;
+        
+        // Log success for debugging
+        developer.log('Successfully fetched fresh profile for user ID: $userId',
+            name: 'UserProfileProvider');
+            
+        // Notify listeners if this is the current user's profile
+        if (_currentUserProfile != null && _currentUserProfile!.account.id == userId) {
+          _currentUserProfile = userProfile;
+          notifyListeners();
+        }
+            
+        return userProfile;
+      } else {
+        // If we failed to get fresh data but have cached data, return that as fallback
+        if (_profileCache.containsKey(userId)) {
+          developer.log('Using cached profile for user ID: $userId as fallback',
+              name: 'UserProfileProvider');
+          return _profileCache[userId];
+        }
+        
+        developer.log('Failed to fetch profile for user ID: $userId: ${response['error'] ?? "Unknown error"}',
+            name: 'UserProfileProvider');
+        return null;
+      }
+    } catch (e) {
+      developer.log('Error fetching user profile by ID: $e',
+          name: 'UserProfileProvider', error: e);
+          
+      // On error, return cached data if available as fallback
+      if (_profileCache.containsKey(userId)) {
+        developer.log('Using cached profile for user ID: $userId as fallback after error',
+            name: 'UserProfileProvider');
+        return _profileCache[userId];
+      }
+      
+      return null;
     }
   }
 
