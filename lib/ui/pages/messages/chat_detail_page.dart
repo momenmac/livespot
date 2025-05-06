@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
@@ -53,14 +55,27 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   final List<AnimationController> _dotControllers = [];
   final List<Animation<double>> _dotAnimations = [];
 
+  // Animation controllers specifically for the typing indicator dots
+  late List<AnimationController> _typingDotControllers;
+  late List<Animation<double>> _typingDotAnimations;
+
   // ValueNotifier to control visibility of the scroll-to-bottom button
   final ValueNotifier<bool> _showScrollToBottomButton = ValueNotifier(false);
+
+  // Add this to the class variables section
+  List<GlobalKey<_AnimatedDotState>> _dotKeys = [];
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller;
     _scrollController = ScrollController();
+
+    // Initialize the dot animation keys
+    _dotKeys = List.generate(3, (_) => GlobalKey<_AnimatedDotState>());
+
+    // Initialize the typing indicator animations
+    _initTypingDotAnimations();
 
     // Initially hide the scroll-to-bottom button
     _showScrollToBottomButton.value = false;
@@ -89,6 +104,35 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         _updateReadReceipts();
       });
     });
+  }
+
+  void _initTypingDotAnimations() {
+    // Create persistent animation controllers for the dots
+    _typingDotControllers = List.generate(3, (index) {
+      final controller = AnimationController(
+        vsync: this,
+        duration: Duration(milliseconds: 600),
+      );
+
+      // Start with staggered delays
+      Future.delayed(Duration(milliseconds: index * 200), () {
+        if (mounted && !controller.isAnimating) {
+          controller.repeat(reverse: true);
+        }
+      });
+
+      return controller;
+    });
+
+    // Create animations for each dot
+    _typingDotAnimations = _typingDotControllers.map((controller) {
+      return Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: controller,
+          curve: Curves.easeInOut,
+        ),
+      );
+    }).toList();
   }
 
   // More comprehensive handling of message read status
@@ -192,6 +236,11 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 
   @override
   void dispose() {
+    // Dispose typing dot controllers
+    for (final controller in _typingDotControllers) {
+      controller.dispose();
+    }
+
     _disposeTypingAnimations();
     _messageController.dispose();
     _scrollController.dispose();
@@ -935,6 +984,33 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                     ),
                   ),
 
+                // Add typing indicator above the message composition area
+                if (isTyping)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                        decoration: BoxDecoration(
+                          color: isDarkMode 
+                              ? Colors.grey.withOpacity(0.2) 
+                              : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(3, (index) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                              child: _AnimatedDot(index: index),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ),
+
                 // Message composition area - redesigned for better positioning
                 Container(
                   margin: const EdgeInsets.only(
@@ -952,23 +1028,28 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Edit mode indicator with a UI similar to reply
+                      // Edit mode indicator with a consistent UI across all platforms
                       if (_controller.editingMessage != null)
                         Container(
-                          padding: const EdgeInsets.all(8),
-                          color: isDarkMode
-                              ? ThemeConstants.darkCardColor.withAlpha(180)
-                              : ThemeConstants.lightCardColor.withAlpha(180),
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 4),
+                          decoration: BoxDecoration(
+                            color: ThemeConstants.primaryColor.withOpacity(0.1),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
+                            border: Border.all(
+                              color: ThemeConstants.primaryColor.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
                           child: Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: ThemeConstants.primaryColor,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.edit,
-                                    size: 16, color: Colors.white),
+                              const Icon(
+                                Icons.edit, 
+                                size: 16, 
+                                color: ThemeConstants.primaryColor
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -976,11 +1057,12 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(
-                                      'Edit message',
+                                    const Text(
+                                      'Editing message',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: ThemeConstants.primaryColor,
+                                        fontSize: 12,
                                       ),
                                     ),
                                     Text(
@@ -998,12 +1080,16 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.close),
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 20,
+                                  color: ThemeConstants.primaryColor,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                constraints: const BoxConstraints(),
                                 onPressed: () {
-                                  setState(() {
-                                    _messageController.text = '';
-                                    _controller.setEditingMessage(null);
-                                  });
+                                  _messageController.clear();
+                                  _controller.setEditingMessage(null);
                                 },
                               ),
                             ],
@@ -1674,6 +1760,54 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     );
   }
 
+  // Cross-platform animated dot that works consistently on web and mobile
+  Widget _buildAnimatedDot(int index) {
+    return AnimatedBuilder(
+      // Use a continuous animation controller that doesn't stop
+      animation: _typingDotAnimations[index],
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, -6.0 * sin(pi * 2 * index / 3)),
+          child: Container(
+            width: 8.0,
+            height: 8.0,
+            decoration: BoxDecoration(
+              color: ThemeConstants.primaryColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Simple animated dot for typing indicator that works on all platforms
+  Widget _buildDot(int index) {
+    // Use a pulsating dot animation that works consistently on web and mobile
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.5, end: 1.0),
+      duration: Duration(milliseconds: 600 + (index * 100)), 
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Container(
+          width: 6.0,
+          height: 6.0,
+          margin: EdgeInsets.only(bottom: value * 8.0 - 4.0), // Animated margin for bouncing effect
+          decoration: BoxDecoration(
+            color: ThemeConstants.primaryColor.withOpacity(value * 0.7),
+            shape: BoxShape.circle,
+          ),
+        );
+      },
+      // Make the animation repeat
+      onEnd: () {
+        if (mounted) {
+          setState(() {});  // Trigger rebuild to restart animation
+        }
+      },
+    );
+  }
+
   // Helper for explaining message status
   void _showMessageStatusInfo(BuildContext context) {
     showDialog(
@@ -1716,6 +1850,72 @@ class _ChatDetailPageState extends State<ChatDetailPage>
           ),
         ],
       ),
+    );
+  }
+}
+
+// Specialized widget for continuous dot animation that never stops
+class _AnimatedDot extends StatefulWidget {
+  final int index;
+  
+  const _AnimatedDot({Key? key, required this.index}) : super(key: key);
+  
+  @override
+  State<_AnimatedDot> createState() => _AnimatedDotState();
+}
+
+class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Create a controller with different duration based on index for wave effect
+    _controller = AnimationController(
+      duration: Duration(milliseconds: 600 + (widget.index * 200)),
+      vsync: this,
+    );
+    
+    // Create a curved animation
+    _animation = Tween<double>(begin: -5, end: 5).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+    
+    // Start the animation with a slight delay based on index
+    Future.delayed(Duration(milliseconds: widget.index * 160), () {
+      if (mounted) {
+        _controller.repeat(reverse: true);
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _animation.value),
+          child: Container(
+            width: 8.0,
+            height: 8.0,
+            decoration: BoxDecoration(
+              color: ThemeConstants.primaryColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
     );
   }
 }

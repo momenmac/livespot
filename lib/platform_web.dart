@@ -1,19 +1,19 @@
-// This is a stub implementation of Platform class for web platform
+// This file provides web-compatible implementations for Platform
+// Used as a conditional import for web platform
+
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();
 
 class Platform {
-  static bool get isIOS => false;
-  static bool get isAndroid => false;
-  static bool get isMacOS => false;
-  static bool get isWindows => false;
-  static bool get isLinux => false;
-  static bool get isFuchsia => false;
+  static const bool isAndroid = false;
+  static const bool isIOS = false;
+  static const bool isFuchsia = false;
+  static const bool isLinux = false;
+  static const bool isMacOS = false;
+  static const bool isWindows = false;
+  static const bool isWeb = true;
 
-  // Add any other Platform properties you're using
-  static String get operatingSystem => 'web';
-  static String get localeName => 'en_US';
-
-  // Add other platform properties as needed
+  // Add any additional platform-specific methods needed for web
+  static Future<String> get localeName async => 'en_US';
 }

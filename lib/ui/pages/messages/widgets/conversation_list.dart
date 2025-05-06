@@ -768,12 +768,15 @@ class _ConversationTileState extends State<_ConversationTile> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Replace numeric badge with simple blue circle indicator for unread messages
+                  // Replace numeric badge with consistent badge indicator for unread messages
                   if (widget.conversation.unreadCount > 0)
                     Container(
                       margin: const EdgeInsets.only(left: 6),
-                      width: 10,
-                      height: 10,
+                      padding: const EdgeInsets.all(2),
+                      constraints: const BoxConstraints(
+                        minWidth: 10,
+                        minHeight: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: ThemeConstants.primaryColor,
                         shape: BoxShape.circle,

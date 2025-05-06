@@ -58,6 +58,11 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
     // Check if we need to show badge
     final showBadge = widget.badgeCount != null && widget.badgeCount! > 0;
 
+    // Get the platform-independent constraints to ensure consistency
+    const double badgeSize = 16.0;
+    const double badgeFontSize = 10.0;
+    const double badgePadding = 4.0;
+
     return IconButton(
       padding: EdgeInsets.zero,
       onPressed: () {
@@ -83,15 +88,15 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
               right: -4,
               top: -2,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: badgePadding, vertical: 1),
                 decoration: BoxDecoration(
                   color: Colors.red,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(badgeSize / 2),
                   border: Border.all(color: Colors.white, width: 1),
                 ),
                 constraints: const BoxConstraints(
-                  minWidth: 16,
-                  maxHeight: 16, // Ensure height doesn't exceed width
+                  minWidth: badgeSize,
+                  minHeight: badgeSize,
                 ),
                 child: Center(
                   child: Text(
@@ -100,7 +105,7 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton>
                         : widget.badgeCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 11,
+                      fontSize: badgeFontSize,
                       fontWeight: FontWeight.bold,
                       height: 1.0, // Removes extra vertical space in text
                     ),

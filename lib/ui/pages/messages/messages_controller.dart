@@ -1665,10 +1665,24 @@ class MessagesController extends ChangeNotifier {
     _editingMessage = message;
     // Prefill the message controller with the content to edit
     if (message != null) {
+      // Special handling for web platforms to ensure proper focus and selection
       messageController.text = message.content;
-      messageController.selection = TextSelection.fromPosition(
-        TextPosition(offset: messageController.text.length),
-      );
+      
+      // Use a small delay to ensure the text field gets proper focus on web
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!_isDisposed) {
+          // Set cursor position at the end with proper selection
+          messageController.selection = TextSelection.fromPosition(
+            TextPosition(offset: messageController.text.length),
+          );
+
+          // Request focus on the field if needed
+          FocusManager.instance.primaryFocus?.unfocus();
+          
+          // Force a refresh to ensure UI updates correctly
+          notifyListeners();
+        }
+      });
     }
     notifyListeners();
   }
@@ -1690,17 +1704,13 @@ class MessagesController extends ChangeNotifier {
           .doc(_selectedConversation!.id)
           .collection('messages')
           .doc(message.id);
-
-      // Update the message in Firestore
-      await messageRef.update({
-        'content': newContent,
-        'isEdited': true, // Mark the message as edited
-      });
-
-      // Find and update the in-memory message
+      
+      debugPrint("Updating message ${message.id} with new content: $newContent");
+      
+      // First update our local message immediately for a responsive UI
       final index = _selectedConversation!.messages
           .indexWhere((msg) => msg.id == message.id);
-
+          
       if (index != -1) {
         // Create a new message with updated properties
         _selectedConversation!.messages[index] =
@@ -1708,18 +1718,33 @@ class MessagesController extends ChangeNotifier {
           content: newContent,
           isEdited: true,
         );
+        // Force UI update right away
+        notifyListeners();
       }
 
-      // Clear the editing state
-      setEditingMessage(null);
+      // Update the message in Firestore
+      await messageRef.update({
+        'content': newContent,
+        'isEdited': true, // Mark the message as edited
+      }).catchError((e) {
+        debugPrint("Error updating message in Firestore: $e");
+        // Revert the local change if Firestore update fails
+        if (index != -1) {
+          _selectedConversation!.messages[index] = message;
+          notifyListeners();
+        }
+        return Future.error(e);
+      });
 
-      // Notify listeners that the message has been updated
-      notifyListeners();
+      // Clear the editing state
+      cancelEditing();
 
       // Show a debug print to verify this code is running
-      debugPrint("Message updated with isEdited=true: ${message.id}");
+      debugPrint("✅ Message successfully updated with isEdited=true: ${message.id}");
     } catch (e) {
-      debugPrint("Error updating message: $e");
+      debugPrint("❌ Error updating message: $e");
+      // Make sure editing is canceled even if there was an error
+      cancelEditing();
       rethrow;
     }
   }
