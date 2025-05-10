@@ -5,15 +5,23 @@ from django.utils.translation import gettext_lazy as _
 User = get_user_model()
 
 class PostCategory(models.TextChoices):
-    GENERAL = 'general', _('General')
     NEWS = 'news', _('News')
     EVENT = 'event', _('Event')
-    QUESTION = 'question', _('Question')
     ALERT = 'alert', _('Alert')
+    MILITARY = 'military', _('Military')
+    CASUALTIES = 'casualties', _('Casualties')
+    EXPLOSION = 'explosion', _('Explosion')
+    POLITICS = 'politics', _('Politics')
+    SPORTS = 'sports', _('Sports')
+    HEALTH = 'health', _('Health')
     TRAFFIC = 'traffic', _('Traffic')
     WEATHER = 'weather', _('Weather')
     CRIME = 'crime', _('Crime')
     COMMUNITY = 'community', _('Community')
+    DISASTER = 'disaster', _('Disaster')
+    ENVIRONMENT = 'environment', _('Environment')
+    EDUCATION = 'education', _('Education')
+    FIRE = 'fire', _('Fire')
     OTHER = 'other', _('Other')
 
 class PostStatus(models.TextChoices):
@@ -35,7 +43,7 @@ class Thread(models.Model):
     category = models.CharField(
         max_length=20,
         choices=PostCategory.choices,
-        default=PostCategory.GENERAL
+        default=PostCategory.NEWS
     )
     location = models.ForeignKey(
         PostCoordinates, 
@@ -57,7 +65,7 @@ class Post(models.Model):
     category = models.CharField(
         max_length=20,
         choices=PostCategory.choices,
-        default=PostCategory.GENERAL
+        default=PostCategory.NEWS
     )
     location = models.ForeignKey(
         PostCoordinates, 
