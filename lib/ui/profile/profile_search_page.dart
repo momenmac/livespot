@@ -3,7 +3,6 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;

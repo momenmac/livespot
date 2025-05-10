@@ -50,17 +50,12 @@ class UserWithEmail extends User {
   final String email;
 
   UserWithEmail({
-    required String id,
-    required String name,
-    required String avatarUrl,
+    required super.id,
+    required super.name,
+    required super.avatarUrl,
     required this.email,
-    bool isOnline = false,
-  }) : super(
-          id: id,
-          name: name,
-          avatarUrl: avatarUrl,
-          isOnline: isOnline,
-        );
+    super.isOnline,
+  });
 
   @override
   Map<String, dynamic> toJson() {

@@ -1,110 +1,115 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/ui/widgets/top_toast.dart';
+import 'package:uuid/uuid.dart';
 
 class ResponsiveSnackBar {
-  static void show({
-    required BuildContext context,
-    required String message,
-    Color backgroundColor = Colors.black87,
-    Duration duration = const Duration(seconds: 3),
-    SnackBarAction? action,
-    bool isError = false,
-  }) {
-    // First check if the context is valid and has an overlay
-    try {
-      // Use safer method to check for overlay availability
-      final overlay = Overlay.maybeOf(context);
-      if (overlay != null && context.mounted) {
-        TopToast.show(
-          context: context,
-          message: message,
-          backgroundColor: backgroundColor,
-          duration: duration,
-          icon: isError ? Icons.error_outline : null,
-        );
-      } else {
-        // Fallback to regular SnackBar if Overlay is not available
-        try {
-          if (context.mounted) {
-            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              SnackBar(
-                content: Text(message),
-                duration: duration,
-                backgroundColor: backgroundColor,
-                action: action,
-              ),
-            );
-          }
-        } catch (e) {
-          // If even SnackBar fails, just print to console
-          print('📢 Notification fallback: $message');
-        }
-      }
-    } catch (e) {
-      print('⚠️ ResponsiveSnackBar: Error showing notification: $e');
-      print('📢 Message: $message');
-    }
-  }
+  // Generate a random UUID for each SnackBar to avoid Hero tag duplication
+  static String _generateUniqueKey() => const Uuid().v4();
 
   static void showError({
     required BuildContext context,
     required String message,
-    Duration duration = const Duration(seconds: 4),
-    SnackBarAction? action,
+    Duration? duration,
   }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: ThemeConstants.red,
-      duration: duration,
-      action: action,
-      isError: true,
-    );
-  }
-
-  static void showWarning({
-    required BuildContext context,
-    required String message,
-    Duration duration = const Duration(seconds: 4),
-    SnackBarAction? action,
-  }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: ThemeConstants.orange,
-      duration: duration,
-      action: action,
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: ValueKey(
+            _generateUniqueKey()), // Add unique key to avoid Hero tag duplication
+        content: Row(
+          key: ValueKey(_generateUniqueKey()), // Add unique key to Row
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.symmetric(
+          horizontal: MediaQuery.of(context).size.width > 600 ? 32.0 : 16.0,
+          vertical: 16.0,
+        ),
+        duration: duration ?? const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
     );
   }
 
   static void showSuccess({
     required BuildContext context,
     required String message,
-    Duration duration = const Duration(seconds: 3),
-    SnackBarAction? action,
+    Duration? duration,
   }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: ThemeConstants.green,
-      duration: duration,
-      action: action,
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: ValueKey(
+            _generateUniqueKey()), // Add unique key to avoid Hero tag duplication
+        content: Row(
+          key: ValueKey(_generateUniqueKey()), // Add unique key to Row
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.symmetric(
+          horizontal: MediaQuery.of(context).size.width > 600 ? 32.0 : 16.0,
+          vertical: 16.0,
+        ),
+        duration: duration ?? const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
     );
   }
 
   static void showInfo({
     required BuildContext context,
     required String message,
-    Duration duration = const Duration(seconds: 3),
-    SnackBarAction? action,
+    Duration? duration,
   }) {
-    show(
-      context: context,
-      message: message,
-      backgroundColor: ThemeConstants.primaryColor,
-      duration: duration,
-      action: action,
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: ValueKey(
+            _generateUniqueKey()), // Add unique key to avoid Hero tag duplication
+        content: Row(
+          key: ValueKey(_generateUniqueKey()), // Add unique key to Row
+          children: [
+            const Icon(Icons.info_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.blue.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.symmetric(
+          horizontal: MediaQuery.of(context).size.width > 600 ? 32.0 : 16.0,
+          vertical: 16.0,
+        ),
+        duration: duration ?? const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
     );
   }
 }

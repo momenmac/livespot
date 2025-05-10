@@ -40,6 +40,14 @@ class MapPageController extends ChangeNotifier {
     LatLng(85.0, 180.0),
   );
 
+  // Properties to hold marker information
+  String? _markerEventType;
+  String? _markerDescription;
+
+  // Getters for marker information
+  String get markerEventType => _markerEventType ?? 'news';
+  String? get markerDescription => _markerDescription;
+
   // Call this from your FlutterMap's onMapReady callback
   void setMapReady() {
     if (!_mapReadyCompleter.isCompleted) {
@@ -193,6 +201,23 @@ class MapPageController extends ChangeNotifier {
     } catch (e) {
       if (!_isDisposed) {
         showErrorMessage(TextStrings.unableToGetCurrentLocation);
+      }
+    }
+  }
+
+  Future<void> centerOnLocation(double latitude, double longitude) async {
+    if (_isDisposed) return; // Safety check
+
+    try {
+      final location = LatLng(latitude, longitude);
+      await _moveMapWhenReady(location, 15.0);
+
+      // Add a temporary marker at this location
+      destination = location;
+      _safeNotifyListeners();
+    } catch (e) {
+      if (!_isDisposed) {
+        showErrorMessage('Error centering on location: $e');
       }
     }
   }
@@ -444,5 +469,54 @@ class MapPageController extends ChangeNotifier {
     showInfoMessage(
         TextStrings.showingDataForDate.replaceFirst('%s', formatDate(newDate)));
     _safeNotifyListeners();
+  }
+
+  // Method to set a custom event marker on the map
+  void setCustomMarker({
+    required double latitude,
+    required double longitude,
+    required String eventType,
+    String? description,
+  }) {
+    if (_isDisposed) return; // Safety check
+
+    // Set destination coordinates (for compatibility with existing code)
+    destination = LatLng(latitude, longitude);
+
+    // Store event type and description for the marker
+    _markerEventType = eventType;
+    _markerDescription = description;
+
+    // Notify listeners to update UI
+    _safeNotifyListeners();
+  }
+
+  // Method to get user's current location as LatLng
+  Future<LatLng?> getUserLocation() async {
+    if (_isDisposed) return null; // Safety check
+
+    try {
+      // If we already have a current location, return it
+      if (currentLocation != null) {
+        return currentLocation;
+      }
+
+      // Otherwise, try to get the current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
+      );
+
+      final newLocation = LatLng(position.latitude, position.longitude);
+      // Update currentLocation
+      currentLocation = newLocation;
+
+      return newLocation;
+    } catch (e) {
+      if (!_isDisposed) {
+        print('Error getting user location: $e');
+      }
+      return null;
+    }
   }
 }

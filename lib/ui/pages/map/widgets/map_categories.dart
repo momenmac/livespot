@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/constants/category_utils.dart';
 
 class CategoryItem {
   final String name;
   final IconData icon;
   bool isSelected;
-  List<CategoryItem>? subCategories; // Add this missing property
 
   CategoryItem({
     required this.name,
     required this.icon,
     this.isSelected = false,
-    this.subCategories, // Add this parameter
   });
 
   // Override equals to compare category items properly
@@ -21,63 +20,23 @@ class CategoryItem {
       identical(this, other) ||
       other is CategoryItem &&
           runtimeType == other.runtimeType &&
-          name == other.name &&
-          icon == other.icon;
+          name.toLowerCase() == other.name.toLowerCase();
 
   @override
-  int get hashCode => name.hashCode ^ icon.hashCode;
+  int get hashCode => name.toLowerCase().hashCode;
 }
 
 class MapCategories extends StatefulWidget {
   final Function(List<CategoryItem>) onCategorySelected;
   final bool alwaysVisible;
 
-  // Sample categories - using text constants
-  static final List<CategoryItem> mainCategories = [
-    CategoryItem(name: TextStrings.following, icon: Icons.people_outline),
-    CategoryItem(name: TextStrings.events, icon: Icons.event_available),
-    CategoryItem(name: TextStrings.food, icon: Icons.restaurant_outlined),
-    CategoryItem(name: TextStrings.shopping, icon: Icons.shopping_bag_outlined),
-    CategoryItem(name: TextStrings.hotels, icon: Icons.hotel_outlined),
-    CategoryItem(
-        name: TextStrings.entertainment, icon: Icons.attractions_outlined),
-  ];
-
-  // Important categories using text constants
-  static final CategoryItem mainCategoriesGroup = CategoryItem(
-    name: TextStrings.mainCategories,
-    icon: Icons.category,
-    subCategories: mainCategories,
-  );
-
-  // Additional categories using text constants
-  static final List<CategoryItem> additionalCategories = [
-    CategoryItem(
-      name: TextStrings.activities,
-      icon: Icons.local_activity,
-      subCategories: [
-        CategoryItem(name: TextStrings.sports, icon: Icons.sports),
-        CategoryItem(name: TextStrings.arts, icon: Icons.palette),
-        CategoryItem(name: TextStrings.music, icon: Icons.music_note),
-      ],
-    ),
-    CategoryItem(
-      name: TextStrings.places,
-      icon: Icons.place,
-      subCategories: [
-        CategoryItem(name: TextStrings.parks, icon: Icons.park),
-        CategoryItem(name: TextStrings.museums, icon: Icons.museum),
-        CategoryItem(name: TextStrings.libraries, icon: Icons.local_library),
-      ],
-    ),
-    // Add more categories as needed
-  ];
-
-  // Combined categories for the More dialog
-  static final List<CategoryItem> allCategories = [
-    mainCategoriesGroup,
-    ...additionalCategories,
-  ];
+  // Get categories directly from CategoryUtils - no additional groups or subgroups
+  static final List<CategoryItem> allCategories = CategoryUtils.allCategories
+      .map((category) => CategoryItem(
+            name: category,
+            icon: CategoryUtils.getCategoryIcon(category),
+          ))
+      .toList();
 
   const MapCategories({
     super.key,
@@ -93,24 +52,36 @@ class _MapCategoriesState extends State<MapCategories> {
   // Set of selected categories to easily check if a category is selected
   final Set<CategoryItem> _selectedCategories = {};
 
-  // Dynamic list of visible categories in the main view
-  final List<CategoryItem> _visibleCategories =
-      List.from(MapCategories.mainCategories);
+  // Dynamic list of visible categories in the main view - start with initial list
+  late final List<CategoryItem> _visibleCategories =
+      List.from(MapCategories.allCategories.take(5).toList());
 
   // Maximum number of visible categories
   final int _maxVisibleCategories = 5;
 
+  @override
+  void initState() {
+    super.initState();
+    // Reset all isSelected properties to ensure clean state
+    for (var category in MapCategories.allCategories) {
+      category.isSelected = false;
+    }
+  }
+
   void _toggleCategorySelection(CategoryItem category) {
     setState(() {
-      if (_selectedCategories.contains(category)) {
-        _selectedCategories.remove(category);
-      } else {
+      // Update the category's isSelected property
+      category.isSelected = !category.isSelected;
+
+      if (category.isSelected) {
         _selectedCategories.add(category);
 
         // If the category is not visible in the main list, promote it
         if (!_visibleCategories.contains(category)) {
           _promoteCategory(category);
         }
+      } else {
+        _selectedCategories.remove(category);
       }
     });
 
@@ -137,7 +108,25 @@ class _MapCategoriesState extends State<MapCategories> {
     _visibleCategories.insert(0, category);
   }
 
+  void _clearAllCategories() {
+    setState(() {
+      // Clear selection in the selected categories set
+      _selectedCategories.clear();
+
+      // Reset isSelected property for all categories
+      for (var category in MapCategories.allCategories) {
+        category.isSelected = false;
+      }
+
+      // Notify parent that no categories are selected
+      widget.onCategorySelected([]);
+    });
+  }
+
   void _showCategoriesSheet(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -146,54 +135,106 @@ class _MapCategoriesState extends State<MapCategories> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.8,
+          height: MediaQuery.of(context).size.height *
+              0.5, // Reduced from 0.7 to 0.5
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            color: isDarkMode
+                ? ThemeConstants.darkCardColor.withOpacity(0.95)
+                : Colors.white,
+            borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24)), // More rounded corners
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                spreadRadius: 1,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
           child: Column(
             children: [
-              // Header section with handle and close button
+              // Sleeker header section with handle and close button
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(
                   children: [
                     // Handle bar
                     Container(
-                      width: 40,
-                      height: 4,
+                      width: 36,
+                      height: 5,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
+                        color: isDarkMode ? Colors.grey[600] : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2.5),
                       ),
                     ),
+                    const SizedBox(height: 14),
                     // Header row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          TextStrings.allCategories,
-                          style: Theme.of(context).textTheme.titleLarge,
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: ThemeConstants.primaryColor
+                                    .withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.category,
+                                color: ThemeConstants.primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              TextStrings.allCategories,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isDarkMode ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
                         Row(
                           children: [
                             if (_selectedCategories.isNotEmpty)
-                              TextButton(
-                                onPressed: () {
-                                  setModalState(() {
-                                    _selectedCategories.clear();
-                                    widget.onCategorySelected([]);
-                                  });
-                                  setState(() {}); // Update main view
-                                },
-                                child: Text(TextStrings.clearAll),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    _clearAllCategories();
+                                    setModalState(() {}); // Update modal state
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    child: Text(
+                                      TextStrings.clearAll,
+                                      style: TextStyle(
+                                        color: ThemeConstants.primaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             IconButton(
-                              icon: const Icon(Icons.close),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
                               onPressed: () => Navigator.pop(context),
                               padding: const EdgeInsets.all(8),
                               constraints: const BoxConstraints(),
-                              iconSize: 24,
+                              iconSize: 22,
                             ),
                           ],
                         ),
@@ -202,36 +243,171 @@ class _MapCategoriesState extends State<MapCategories> {
                   ],
                 ),
               ),
-              const Divider(),
-              // Categories list
+              const Divider(height: 1),
+
+              // Modern compact grid with cool animations
               Expanded(
-                child: ListView.builder(
-                  itemCount: MapCategories.allCategories.length,
-                  padding: const EdgeInsets.all(16),
-                  itemBuilder: (context, index) {
-                    final category = MapCategories.allCategories[index];
-                    return _buildCategorySection(
-                        context, category, setModalState);
-                  },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3, // 3 categories per row
+                      childAspectRatio: 1.6,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: MapCategories.allCategories.length,
+                    itemBuilder: (context, index) {
+                      final category = MapCategories.allCategories[index];
+                      final isSelected = category.isSelected;
+                      final color =
+                          CategoryUtils.getCategoryColor(category.name);
+
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: isSelected ? color : color.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          // Removing the border/outline
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: color.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setModalState(() {
+                                _toggleCategorySelection(category);
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      category.icon,
+                                      color: isSelected ? Colors.white : color,
+                                      size: 26, // Increased from 22 to 26
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      CategoryUtils.getCategoryDisplayName(
+                                          category.name),
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                        fontSize: 12,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+
+                                // Selected indicator
+                                if (isSelected)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: color,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.check,
+                                          color: color,
+                                          size: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-              // Apply button at bottom
+
+              // Cool floating apply button
               if (_selectedCategories.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
+                Container(
+                  margin: EdgeInsets.only(
+                    bottom: 16 + MediaQuery.of(context).padding.bottom,
+                    left: 16,
+                    right: 16,
+                  ),
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: ThemeConstants.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: ThemeConstants.primaryColor.withOpacity(0.4),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                     ),
-                    child: Text(
-                      TextStrings.applyFilters.replaceFirst(
-                          '%d', _selectedCategories.length.toString()),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            _selectedCategories.length.toString(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Apply Filters',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -239,67 +415,6 @@ class _MapCategoriesState extends State<MapCategories> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCategorySection(
-      BuildContext context, CategoryItem category, StateSetter setModalState) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            category.name,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-        ),
-        if (category.subCategories != null)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: category.subCategories!
-                .map((subCategory) =>
-                    _buildCategoryChip(context, subCategory, setModalState))
-                .toList(),
-          ),
-        const Divider(height: 32),
-      ],
-    );
-  }
-
-  Widget _buildCategoryChip(
-      BuildContext context, CategoryItem category, StateSetter setModalState) {
-    final isSelected = _selectedCategories.contains(category);
-
-    return ActionChip(
-      avatar: Icon(
-        category.icon,
-        size: 18,
-        color: isSelected ? Colors.white : null,
-      ),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            category.name,
-            style: TextStyle(
-              color: isSelected ? Colors.white : null,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          if (isSelected) const SizedBox(width: 4),
-          if (isSelected)
-            const Icon(Icons.check, size: 16, color: Colors.white),
-        ],
-      ),
-      backgroundColor: isSelected ? ThemeConstants.primaryColor : null,
-      onPressed: () {
-        // Update both the parent state and the modal's state
-        setModalState(() {
-          _toggleCategorySelection(category);
-        });
-      },
     );
   }
 
@@ -342,7 +457,7 @@ class _MapCategoriesState extends State<MapCategories> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        category.name,
+                        CategoryUtils.getCategoryDisplayName(category.name),
                         style: TextStyle(
                           fontSize: 12,
                           color:

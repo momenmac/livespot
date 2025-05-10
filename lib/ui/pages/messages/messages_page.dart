@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 // Import UserService but rename the UserWithEmail class to avoid conflict
-import 'package:flutter_application_2/services/user_service.dart' hide UserWithEmail;
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';

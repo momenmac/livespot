@@ -7,7 +7,7 @@ class ApiUrls {
     if (kIsWeb) {
       return 'http://localhost:8000'; // For web development
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.4:8000'; // For Android emulator
+      return 'http://192.168.1.6:8000'; // For Android emulator
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'http://localhost:8000'; // For iOS simulator
     } else {
@@ -44,4 +44,22 @@ class ApiUrls {
   static String get forgotPassword => '$baseUrl/accounts/forgot-password/';
   static String get verifyResetCode => '$baseUrl/accounts/verify-reset-code/';
   static String get resetPassword => '$baseUrl/accounts/reset-password/';
+
+  // Posts endpoints
+  static String get posts => '$baseUrl/api/posts/';
+  static String get nearbyPosts => '$baseUrl/api/posts/nearby/';
+  static String get searchPosts => '$baseUrl/api/posts/search/';
+  static String postVote(int postId) => '$baseUrl/api/posts/$postId/vote/';
+
+  // Using the correct endpoint that matches server URL patterns
+  // We need to filter threads by post ID in the client side since there's no direct API endpoint
+  static String get threads =>
+      '$baseUrl/api/threads/'; // Use standard threads endpoint
+
+  // Threads endpoints
+  static String get nearbyThreads => '$baseUrl/api/threads/nearby/';
+  static String threadDetails(int threadId) =>
+      '$baseUrl/api/threads/$threadId/';
+  static String addPostToThread(int threadId) =>
+      '$baseUrl/api/threads/$threadId/add_post/';
 }

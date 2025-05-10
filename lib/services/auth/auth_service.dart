@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart'; // Add this dependency if not already added
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
 
 class AuthService extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -15,10 +16,6 @@ class AuthService extends ChangeNotifier {
   bool get initialCheckComplete => _initialCheckComplete;
   String? get token => _token;
   Map<String, dynamic>? get user => _user;
-
-  // Base URL for API calls
-  final String _baseUrl =
-      'https://your-api-url.com'; // Update with your actual API URL
 
   // Initialize and validate existing token
   Future<void> initialize() async {
@@ -54,16 +51,22 @@ class AuthService extends ChangeNotifier {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/accounts/token/validate/'),
+        Uri.parse(ApiUrls.tokenValidate),
         headers: {
           'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',
         },
       );
 
+      debugPrint(
+          '[TokenValidation] Token validation response: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         // Token is valid
         return true;
+      } else if (response.statusCode == 401) {
+        debugPrint('[TokenValidation] Attempting to refresh expired token');
+        return await refreshToken();
       } else {
         debugPrint('🔑 Token validation failed, clearing session');
         return false;
@@ -80,16 +83,16 @@ class AuthService extends ChangeNotifier {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/accounts/token/refresh/'),
+        Uri.parse(ApiUrls.tokenRefresh),
         headers: {
-          'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',
         },
+        body: jsonEncode({'refresh': _token}),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _token = data['token'];
+        _token = data['access']; // Using the access token from response
 
         // Save new token
         final prefs = await SharedPreferences.getInstance();

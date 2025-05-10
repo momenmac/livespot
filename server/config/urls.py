@@ -24,6 +24,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('media-api/', include('media_api.urls')),  # Add our new media API endpoints
+    path('api/', include('posts.urls')),  # Add our posts API endpoints
 ]
 
 # Serve media files in development

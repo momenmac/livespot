@@ -12,12 +12,14 @@ import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
-import 'package:flutter_application_2/providers/user_profile_provider.dart'; // Add this import
+import 'package:flutter_application_2/providers/user_profile_provider.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
-// Add this import for message event bus
 
 // Use conditional import for Platform
 import 'dart:io'
@@ -25,7 +27,7 @@ import 'dart:io'
     show Platform;
 
 // Import the correct file for hero tag management
-import 'ui/widgets/safe_hero.dart'; // Using relative path instead of package path
+import 'package:flutter_application_2/ui/widgets/safe_hero.dart'; // Using package path instead of relative path
 
 // Global flag to track Firebase status
 bool _isFirebaseInitialized = false;
@@ -148,7 +150,6 @@ Future<bool> initFirebaseSafely() async {
 }
 
 Future<void> main() async {
-  // Enable Flutter binding before any platform interaction
   WidgetsFlutterBinding.ensureInitialized();
 
   // Apply system optimizations
@@ -239,8 +240,26 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
         ChangeNotifierProvider<UserProfileProvider>(
-            create: (_) => UserProfileProvider(accountProvider: accountProvider)),
+            create: (_) =>
+                UserProfileProvider(accountProvider: accountProvider)),
         Provider<GoogleSignIn>.value(value: googleSignIn),
+        Provider<LocationService>(
+          create: (_) => LocationService(),
+        ),
+        Provider<PostsService>(
+          create: (context) => PostsService(
+            authService: Provider.of<AuthService>(context, listen: false),
+            accountProvider:
+                Provider.of<AccountProvider>(context, listen: false),
+          ),
+        ),
+        ChangeNotifierProvider<PostsProvider>(
+          create: (context) => PostsProvider(
+            postsService: Provider.of<PostsService>(context, listen: false),
+            locationService:
+                Provider.of<LocationService>(context, listen: false),
+          ),
+        ),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),

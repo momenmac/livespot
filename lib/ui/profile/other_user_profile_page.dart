@@ -21,9 +21,9 @@ class OtherUserProfilePage extends StatefulWidget {
   final Map<String, dynamic> userData;
 
   const OtherUserProfilePage({
-    Key? key,
+    super.key,
     required this.userData,
-  }) : super(key: key);
+  });
 
   @override
   State<OtherUserProfilePage> createState() => _OtherUserProfilePageState();
@@ -430,7 +430,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       // Get the current user ID from the provider
       final profileProvider = Provider.of<UserProfileProvider>(context, listen: false);
       final currentUserProfile = profileProvider.currentUserProfile;
-      if (currentUserProfile != null && currentUserProfile.account.id != null) {
+      if (currentUserProfile != null) {
         return currentUserProfile.account.id.toString();
       }
       return '';
@@ -482,7 +482,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     } catch (e) {
       developer.log('Error formatting join date: $e', name: 'OtherUserProfilePage');
       // Use the non-nullable version which we know is valid at this point
-      return dateStr as String;
+      return dateStr;
     }
   }
 

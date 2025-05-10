@@ -1292,8 +1292,8 @@ class _FollowersPageState extends State<_FollowersPage> {
   List<UserProfile> _filteredUsers = [];
   bool _isLoading = false;
   String? _error;
-  Map<int, bool> _followingStates = {}; // Track follow state for each user
-  Map<int, bool> _loadingStates = {};  // Track loading state for each user
+  final Map<int, bool> _followingStates = {}; // Track follow state for each user
+  final Map<int, bool> _loadingStates = {};  // Track loading state for each user
 
   @override
   void initState() {

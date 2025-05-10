@@ -1,29 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/models/post.dart';
+import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class NewsPostCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String imageUrl;
-  final String location;
-  final String time;
-  final int honesty;
-  final int upvotes;
-  final int comments;
-  final bool isVerified;
+  final Post post;
+  final Function(Post, bool)? onVote;
 
   const NewsPostCard({
     super.key,
-    required this.title,
-    required this.description,
-    required this.imageUrl,
-    required this.location,
-    required this.time,
-    required this.honesty,
-    required this.upvotes,
-    required this.comments,
-    required this.isVerified,
+    required this.post,
+    this.onVote,
   });
 
   @override
@@ -42,12 +31,24 @@ class NewsPostCard extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: Container(
-                color: ThemeConstants.greyLight,
-                alignment: Alignment.center,
-                child: const Icon(Icons.image,
-                    size: 64, color: ThemeConstants.grey),
-              ),
+              child: post.hasMedia
+                  ? Image.network(
+                      post.mediaUrls.first,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return _buildPlaceholderImage();
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return _buildPlaceholderImage(
+                            showProgressIndicator: true,
+                            progress: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null);
+                      },
+                    )
+                  : _buildPlaceholderImage(),
             ),
           ),
 
@@ -62,14 +63,14 @@ class NewsPostCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        title,
+                        post.title,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    if (isVerified)
+                    if (post.author.isVerified)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
@@ -101,7 +102,7 @@ class NewsPostCard extends StatelessWidget {
 
                 // Description
                 Text(
-                  description,
+                  post.content,
                   style: const TextStyle(fontSize: 14),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -116,7 +117,7 @@ class NewsPostCard extends StatelessWidget {
                         size: 16, color: ThemeConstants.grey),
                     const SizedBox(width: 4),
                     Text(
-                      location,
+                      post.location.address ?? "Unknown location",
                       style: TextStyle(
                         fontSize: 12,
                         color: ThemeConstants.grey,
@@ -127,7 +128,7 @@ class NewsPostCard extends StatelessWidget {
                         size: 16, color: ThemeConstants.grey),
                     const SizedBox(width: 4),
                     Text(
-                      time,
+                      timeago.format(post.createdAt),
                       style: TextStyle(
                         fontSize: 12,
                         color: ThemeConstants.grey,
@@ -145,7 +146,7 @@ class NewsPostCard extends StatelessWidget {
                       '${TextStrings.honestyRating}: ',
                       style: const TextStyle(fontSize: 12),
                     ),
-                    _buildHonestyRating(honesty),
+                    _buildHonestyRating(post.honestyScore),
                   ],
                 ),
 
@@ -158,14 +159,28 @@ class NewsPostCard extends StatelessWidget {
                   alignment: WrapAlignment.spaceBetween,
                   children: [
                     _buildActionButton(
-                        Icons.thumb_up_outlined, TextStrings.upvote),
+                      Icons.thumb_up_outlined,
+                      '${post.upvotes}',
+                      onPressed: () => onVote?.call(post, true),
+                    ),
                     _buildActionButton(
-                        Icons.thumb_down_outlined, TextStrings.downvote),
+                      Icons.thumb_down_outlined,
+                      '${post.downvotes}',
+                      onPressed: () => onVote?.call(post, false),
+                    ),
                     _buildActionButton(
-                        Icons.chat_bubble_outline, TextStrings.comments),
-                    _buildActionButton(Icons.share_outlined, TextStrings.share),
+                      Icons.chat_bubble_outline,
+                      TextStrings.comments,
+                      onPressed: () => _navigateToDetail(context),
+                    ),
                     _buildActionButton(
-                        Icons.flag_outlined, TextStrings.reportPost),
+                      Icons.share_outlined,
+                      TextStrings.share,
+                    ),
+                    _buildActionButton(
+                      Icons.flag_outlined,
+                      TextStrings.reportPost,
+                    ),
                   ],
                 ),
               ],
@@ -173,6 +188,17 @@ class NewsPostCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceholderImage(
+      {bool showProgressIndicator = false, double? progress}) {
+    return Container(
+      color: ThemeConstants.greyLight,
+      alignment: Alignment.center,
+      child: showProgressIndicator
+          ? CircularProgressIndicator(value: progress)
+          : const Icon(Icons.image, size: 64, color: ThemeConstants.grey),
     );
   }
 
@@ -187,29 +213,42 @@ class NewsPostCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        '$rating%',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.verified_user,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$rating%',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label) {
-    return GestureDetector(
-      onTap: () {},
+  Widget _buildActionButton(IconData icon, String label,
+      {VoidCallback? onPressed}) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Row(
-          mainAxisSize: MainAxisSize.min, // Use minimum required width
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 16, color: ThemeConstants.grey),
             const SizedBox(width: 4),
@@ -221,6 +260,27 @@ class NewsPostCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToDetail(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(
+          title: post.title,
+          description: post.content,
+          imageUrl: post.hasMedia ? post.mediaUrls.first : '',
+          location: post.location.address ?? "Unknown location",
+          time: timeago.format(post.createdAt),
+          honesty: post.honestyScore,
+          upvotes: post.upvotes,
+          comments: post.isInThread
+              ? 0
+              : 0, // Fixed to use isInThread instead of inThread
+          isVerified: post.author.isVerified,
         ),
       ),
     );

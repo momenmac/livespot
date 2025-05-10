@@ -1937,7 +1937,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 class _AnimatedDot extends StatefulWidget {
   final int index;
   
-  const _AnimatedDot({Key? key, required this.index}) : super(key: key);
+  const _AnimatedDot({super.key, required this.index});
   
   @override
   State<_AnimatedDot> createState() => _AnimatedDotState();

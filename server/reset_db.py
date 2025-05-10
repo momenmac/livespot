@@ -18,6 +18,15 @@ conn_params = {
     "port": os.getenv("DATABASE_PORT")
 }
 
+# Tables to exclude from dropping (PostGIS related tables)
+POSTGIS_TABLES = [
+    'spatial_ref_sys',
+    'geography_columns',
+    'geometry_columns',
+    'raster_columns',
+    'raster_overviews'
+]
+
 try:
     # Connect to the database
     conn = psycopg2.connect(**conn_params)
@@ -37,16 +46,19 @@ try:
     # Disable triggers
     cursor.execute("SET session_replication_role = 'replica';")
     
-    # Drop all tables
+    # Drop all tables except PostGIS tables
     for table in tables:
         table_name = table[0]
-        print(f"Dropping table: {table_name}")
-        cursor.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE;")
+        if table_name not in POSTGIS_TABLES:
+            print(f"Dropping table: {table_name}")
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE;")
+        else:
+            print(f"Skipping PostGIS table: {table_name}")
     
     # Enable triggers
     cursor.execute("SET session_replication_role = 'origin';")
     
-    print("All tables have been dropped successfully.")
+    print("All non-PostGIS tables have been dropped successfully.")
     
     cursor.close()
     conn.close()

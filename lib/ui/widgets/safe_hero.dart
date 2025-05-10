@@ -36,14 +36,14 @@ class SafeHero extends StatelessWidget {
   final bool transitionOnUserGestures;
   
   const SafeHero({
-    Key? key,
+    super.key,
     required this.tag,
     required this.child,
     this.createRectTween,
     this.flightShuttleBuilder,
     this.placeholderBuilder,
     this.transitionOnUserGestures = false,
-  }) : super(key: key);
+  });
   
   @override
   Widget build(BuildContext context) {

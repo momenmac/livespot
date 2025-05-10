@@ -33,7 +33,7 @@ class WebMessageSyncService {
       _setupRefreshTimer();
     }
     
-    debugPrint('🌐 WebMessageSyncService: Initialized (active: ${kIsWeb})');
+    debugPrint('🌐 WebMessageSyncService: Initialized (active: $kIsWeb)');
   }
   
   /// Set up periodic refresh timer (web only)

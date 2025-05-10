@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'dart:math' as math;
+import 'package:flutter_application_2/models/post.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'dart:developer' as developer;
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/ui/widgets/shimmer_loading_image.dart';
+import 'package:flutter_application_2/utils/time_formatter.dart';
+import 'package:flutter_application_2/ui/widgets/thread_item.dart';
+import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
+import 'dart:math' show sin, cos, sqrt, atan2, pi;
+import 'package:flutter_application_2/constants/category_utils.dart';
+import 'dart:io';
 
 class PostDetailPage extends StatefulWidget {
   final String title;
@@ -15,6 +28,9 @@ class PostDetailPage extends StatefulWidget {
   final int upvotes;
   final int comments;
   final bool isVerified;
+  final Post? post; // Add post parameter
+  final String? distance; // Add optional distance parameter
+  final String? authorName; // Add optional author name parameter
 
   const PostDetailPage({
     super.key,
@@ -27,6 +43,9 @@ class PostDetailPage extends StatefulWidget {
     required this.upvotes,
     required this.comments,
     required this.isVerified,
+    this.post, // Make it optional for backward compatibility
+    this.distance,
+    this.authorName,
   });
 
   @override
@@ -34,73 +53,64 @@ class PostDetailPage extends StatefulWidget {
 }
 
 class _PostDetailPageState extends State<PostDetailPage> {
-  late int _upvotes;
-  late int _downvotes;
+  // Initialize with default values from widget to avoid LateInitializationError
+  int _upvotes = 0;
+  int _downvotes = 0;
   bool _hasUpvoted = false;
   bool _hasDownvoted = false;
   final TextEditingController _threadController = TextEditingController();
   late MapPageController _mapController;
-  late bool _mapInitialized = false;
+  bool _mapInitialized = false; // Remove 'late' as it's initialized here
+  bool _isLoadingVote = false; // Add loading state for vote operations
 
-  // Updated image URLs with reliable placeholders
-  final List<String> _imageUrls = [
-    'https://picsum.photos/seed/picsum1/800/600',
-    'https://picsum.photos/seed/picsum2/800/600',
-    'https://picsum.photos/seed/picsum3/800/600',
-    'https://picsum.photos/seed/picsum4/800/600',
-    'https://picsum.photos/seed/picsum5/800/600',
-  ];
+  // Real threads data, initialized empty
+  List<Map<String, dynamic>> _threads = [];
 
-  // Mock threads data (renamed from comments)
-  final List<Map<String, dynamic>> _threads = [
-    {
-      'author': 'Emily Johnson',
-      'text':
-          'This is really concerning. Has anyone heard if evacuations are being ordered yet?',
-      'time': '45m ago',
-      'likes': 24,
-      'replies': 3,
-      'isVerified': true,
-      'distance': '0.3 mi away',
-    },
-    {
-      'author': 'Michael Chen',
-      'text':
-          'I live close to the area and we\'ve already been told to prepare. The wind is picking up significantly.',
-      'time': '32m ago',
-      'likes': 18,
-      'replies': 1,
-      'isVerified': false,
-      'distance': '0.1 mi away',
-    },
-    {
-      'author': 'Sarah Williams',
-      'text':
-          'Just heard from a friend working at the emergency services - they\'re setting up shelters at the community center and high school.',
-      'time': '25m ago',
-      'likes': 32,
-      'replies': 5,
-      'isVerified': false,
-      'distance': '0.5 mi away',
-    },
-    {
-      'author': 'David Rodriguez',
-      'text':
-          'My brother works at the weather station, and he says this could be worse than initially predicted. Everyone please stay safe!',
-      'time': '18m ago',
-      'likes': 15,
-      'replies': 2,
-      'isVerified': true,
-      'distance': '0.2 mi away',
-    },
-  ];
+  // Variables to track media attachment for thread
+  String? _threadImageUrl;
+  bool _isAttachingMedia = false;
 
   @override
   void initState() {
     super.initState();
+    // Initialize with values from widget
     _upvotes = widget.upvotes;
-    _downvotes = widget.upvotes ~/ 5; // Just a mock value
+    _initializePostData();
+    _initializeMap();
+    _fetchThreads();
+  }
 
+  void _initializePostData() {
+    // Use real post data if available
+    if (widget.post != null) {
+      setState(() {
+        // Initialize vote counts from the actual post data
+        _upvotes = widget.post!.upvotes;
+        _downvotes = widget.post!.downvotes;
+
+        // Initialize vote state from the post's userVote field
+        if (widget.post!.userVote == 1) {
+          _hasUpvoted = true;
+          _hasDownvoted = false;
+        } else if (widget.post!.userVote == -1) {
+          _hasUpvoted = false;
+          _hasDownvoted = true;
+        } else {
+          _hasUpvoted = false;
+          _hasDownvoted = false;
+        }
+      });
+
+      // Log initialization for debugging
+      developer.log(
+        'Initialized post detail with: upvotes=$_upvotes, downvotes=$_downvotes, '
+        'userVote=${widget.post!.userVote}, hasUpvoted=$_hasUpvoted, hasDownvoted=$_hasDownvoted',
+        name: 'PostDetailPage',
+      );
+    }
+  }
+
+  void _initializeMap() {
     // Initialize map controller
     _mapController = MapPageController();
 
@@ -110,62 +120,419 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
   }
 
+  void _fetchThreads() {
+    // Load threads for this post if available
+    _loadThreads();
+  }
+
+  // Load threads for this post
+  Future<void> _loadThreads() async {
+    // Defer execution until after the build is complete to avoid setState during build
+    if (!mounted) return;
+
+    // Use a post-frame callback to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (widget.post != null) {
+        try {
+          final postsProvider =
+              Provider.of<PostsProvider>(context, listen: false);
+          final threads =
+              await postsProvider.getThreadsForPost(widget.post!.id);
+
+          if (mounted) {
+            setState(() {
+              _threads = threads;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading threads: $e');
+        }
+      } else {
+        // Fallback to mock data for backward compatibility
+        if (mounted) {
+          setState(() {
+            _threads = [
+              {
+                'author': 'Emily Johnson',
+                'text':
+                    'This is really concerning. Has anyone heard if evacuations are being ordered yet?',
+                'time': '45m ago',
+                'likes': 24,
+                'replies': 3,
+                'isVerified': true,
+                'distance': '0.3 mi away',
+              },
+              {
+                'author': 'Michael Chen',
+                'text':
+                    'I live close to the area and we\'ve already been told to prepare. The wind is picking up significantly.',
+                'time': '32m ago',
+                'likes': 18,
+                'replies': 1,
+                'isVerified': false,
+                'distance': '0.1 mi away',
+              },
+              {
+                'author': 'Sarah Williams',
+                'text':
+                    'Just heard from a friend working at the emergency services - they\'re setting up shelters at the community center and high school.',
+                'time': '25m ago',
+                'likes': 32,
+                'replies': 5,
+                'isVerified': false,
+                'distance': '0.5 mi away',
+              },
+              {
+                'author': 'David Rodriguez',
+                'text':
+                    'My brother works at the weather station, and he says this could be worse than initially predicted. Everyone please stay safe!',
+                'time': '18m ago',
+                'likes': 15,
+                'replies': 2,
+                'isVerified': true,
+                'distance': '0.2 mi away',
+              },
+            ];
+          });
+        }
+      }
+    });
+  }
+
   // Helper method to set map center to post location
   void _setCenterToPostLocation() {
     try {
       _mapController.setContext(context);
       _mapController.initializeLocation();
 
-      // Use a longer delay to ensure map is fully initialized before moving
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        // Use the available method to center on user location as fallback
-        _mapController.centerOnUserLocation();
+      // If we have post coordinates, use them
+      if (widget.post?.latitude != null && widget.post?.longitude != null) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          _mapController.centerOnLocation(
+              widget.post!.latitude, widget.post!.longitude);
 
-        // Since we can't add markers or center on specific locations with the current controller,
-        // we'll use a fixed UI overlay to represent the post location
-        setState(() {
-          _mapInitialized = true;
+          // Get the category from the post, or use a default
+          String category = widget.post?.category.toLowerCase() ?? 'news';
+          
+          // Set a custom marker with appropriate styling based on the category
+          _mapController.setCustomMarker(
+            latitude: widget.post!.latitude,
+            longitude: widget.post!.longitude,
+            eventType: category, // This will determine the styling
+            description: widget.post?.title ?? widget.title,
+          );
+
+          setState(() {
+            _mapInitialized = true;
+          });
         });
-      });
+      } else {
+        // Use a longer delay to ensure map is fully initialized before moving
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          // Use the available method to center on user location as fallback
+          _mapController.centerOnUserLocation();
+          setState(() {
+            _mapInitialized = true;
+          });
+        });
+      }
     } catch (e) {
       debugPrint('Error setting map location: $e');
     }
   }
 
-  void _handleUpvote() {
+  // Handle upvote with proper API interaction
+  void _handleUpvote() async {
+    if (_isLoadingVote) return; // Prevent multiple simultaneous votes
+
+    setState(() => _isLoadingVote = true);
+
+    // Get the posts provider
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+    final int previousVote = widget.post!.userVote;
+
+    // For upvotes, we're using isUpvote=true
+    // If already upvoted, this would normally remove the upvote (neutral)
+    // If not upvoted, it would add an upvote
+    final bool isUpvote = true;
+
+    // Optimistically update UI
     setState(() {
       if (_hasUpvoted) {
+        // Removing an upvote
         _upvotes--;
         _hasUpvoted = false;
       } else {
+        // Adding an upvote
         _upvotes++;
-        _hasUpvoted = true;
+        // If was downvoted before, also remove the downvote
         if (_hasDownvoted) {
           _downvotes--;
           _hasDownvoted = false;
         }
+        _hasUpvoted = true;
       }
     });
+
+    try {
+      // Call the API with the correct parameters
+      final result = await postsProvider.voteOnPost(widget.post!, isUpvote);
+
+      if (result.isNotEmpty) {
+        // Log success for debugging
+        developer.log(
+          'Successfully updated vote: postId=${widget.post!.id}, isUpvote=true',
+          name: 'PostDetailPage',
+        );
+
+        // Update the post's vote counts from the result
+        setState(() {
+          _upvotes = result['upvotes'];
+          _downvotes = result['downvotes'];
+
+          // Update the underlying post object
+          widget.post!.upvotes = result['upvotes'];
+          widget.post!.downvotes = result['downvotes'];
+          widget.post!.honestyScore = result['honesty_score'];
+
+          // Set the user vote based on the action taken
+          widget.post!.userVote = _hasUpvoted ? 1 : (_hasDownvoted ? -1 : 0);
+        });
+      } else {
+        // Revert UI changes if API call failed
+        setState(() {
+          // Reset state based on the previous vote value
+          if (previousVote == 1) {
+            _hasUpvoted = true;
+            _hasDownvoted = false;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          } else if (previousVote == -1) {
+            _hasUpvoted = false;
+            _hasDownvoted = true;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          } else {
+            _hasUpvoted = false;
+            _hasDownvoted = false;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          }
+        });
+
+        // Show error message
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: postsProvider.errorMessage ?? 'Failed to update vote',
+        );
+      }
+    } catch (e) {
+      // Revert UI on exception and show error
+      setState(() {
+        // Reset to previous vote state
+        _hasUpvoted = previousVote == 1;
+        _hasDownvoted = previousVote == -1;
+        _upvotes = widget.post!.upvotes;
+        _downvotes = widget.post!.downvotes;
+      });
+
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: 'Error: ${e.toString()}',
+      );
+    } finally {
+      setState(() => _isLoadingVote = false);
+    }
   }
 
-  void _handleDownvote() {
+  // Handle downvote with proper API interaction
+  void _handleDownvote() async {
+    if (_isLoadingVote) return; // Prevent multiple simultaneous votes
+
+    setState(() => _isLoadingVote = true);
+
+    // Get the posts provider
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+    final int previousVote = widget.post!.userVote;
+
+    // For downvotes, we need to handle differently
+    // If already downvoted, we're removing the downvote (neutral)
+    // If not downvoted, we're adding a downvote
+    // The provider expects isUpvote=false for downvotes
+    final bool isUpvote = false;
+
+    // Optimistically update UI
     setState(() {
       if (_hasDownvoted) {
+        // Removing a downvote
         _downvotes--;
         _hasDownvoted = false;
       } else {
+        // Adding a downvote
         _downvotes++;
-        _hasDownvoted = true;
+        // If was upvoted before, also remove the upvote
         if (_hasUpvoted) {
           _upvotes--;
           _hasUpvoted = false;
         }
+        _hasDownvoted = true;
       }
     });
+
+    try {
+      // Call the API with the correct parameters
+      // For removing a downvote, we'd need a separate call to reset to neutral
+      // which would be similar to the upvote flow but with isUpvote=null
+      final result = await postsProvider.voteOnPost(widget.post!, isUpvote);
+
+      if (result.isNotEmpty) {
+        // Log success for debugging
+        developer.log(
+          'Successfully updated vote: postId=${widget.post!.id}, isDownvote=true',
+          name: 'PostDetailPage',
+        );
+
+        // Update the post's vote counts from the result
+        setState(() {
+          _upvotes = result['upvotes'];
+          _downvotes = result['downvotes'];
+
+          // Update the underlying post object
+          widget.post!.upvotes = result['upvotes'];
+          widget.post!.downvotes = result['downvotes'];
+          widget.post!.honestyScore = result['honesty_score'];
+
+          // Set the user vote based on the action taken
+          widget.post!.userVote = _hasDownvoted ? -1 : (_hasUpvoted ? 1 : 0);
+        });
+      } else {
+        // Revert UI changes if API call failed
+        setState(() {
+          // Reset state based on the previous vote value
+          if (previousVote == 1) {
+            _hasUpvoted = true;
+            _hasDownvoted = false;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          } else if (previousVote == -1) {
+            _hasUpvoted = false;
+            _hasDownvoted = true;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          } else {
+            _hasUpvoted = false;
+            _hasDownvoted = false;
+            _upvotes = widget.post!.upvotes;
+            _downvotes = widget.post!.downvotes;
+          }
+        });
+
+        // Show error message
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: postsProvider.errorMessage ?? 'Failed to update vote',
+        );
+      }
+    } catch (e) {
+      // Revert UI on exception and show error
+      setState(() {
+        // Reset to previous vote state
+        _hasUpvoted = previousVote == 1;
+        _hasDownvoted = previousVote == -1;
+        _upvotes = widget.post!.upvotes;
+        _downvotes = widget.post!.downvotes;
+      });
+
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: 'Error: ${e.toString()}',
+      );
+    } finally {
+      setState(() => _isLoadingVote = false);
+    }
   }
 
-  void _addThread() {
-    if (_threadController.text.trim().isNotEmpty) {
+  // Add thread through API
+  Future<void> _addThread() async {
+    // Check if image is attached - require an image to post a thread
+    if (_threadImageUrl == null) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Please attach an image to create a thread",
+      );
+      return;
+    }
+
+    // Check if content is provided
+    if (_threadController.text.trim().isEmpty) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Please add some text to your thread",
+      );
+      return;
+    }
+
+    // Verify location if this is a real post
+    if (widget.post != null) {
+      try {
+        final postsProvider =
+            Provider.of<PostsProvider>(context, listen: false);
+
+        // First verify the user's location before adding thread
+        bool locationVerified = await postsProvider.verifyUserLocation(
+          latitude: widget.post!.latitude,
+          longitude: widget.post!.longitude,
+          maxDistanceInMeters:
+              1000, // Allow threads within 1km of the post location
+        );
+
+        if (!locationVerified) {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: "You must be near the post location to add a thread",
+          );
+          return;
+        }
+
+        // Upload the image first and get the URL
+        final String? mediaUrl =
+            await postsProvider.uploadThreadMedia(_threadImageUrl!);
+
+        if (mediaUrl == null) {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: "Failed to upload media. Please try again.",
+          );
+          return;
+        }
+
+        // Create thread with the uploaded media
+        final newThread = await postsProvider.createThread(
+          postId: widget.post!.id,
+          content: _threadController.text,
+          mediaUrl: mediaUrl,
+        );
+
+        if (mounted) {
+          setState(() {
+            _threads.insert(0, newThread);
+            _threadController.clear();
+            _threadImageUrl = null; // Clear the image after posting
+          });
+
+          ResponsiveSnackBar.showSuccess(
+            context: context,
+            message: "Thread posted successfully!",
+          );
+        }
+      } catch (e) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Failed to post thread: ${e.toString()}",
+        );
+      }
+    } else {
+      // Fallback to mock behavior for testing
       setState(() {
         _threads.insert(0, {
           'author': 'You',
@@ -175,525 +542,164 @@ class _PostDetailPageState extends State<PostDetailPage> {
           'replies': 0,
           'isVerified': false,
           'distance': '0.0 mi away',
+          'media_url': _threadImageUrl,
         });
         _threadController.clear();
+        _threadImageUrl = null; // Clear the image after posting
       });
-      // Hide keyboard
-      FocusScope.of(context).unfocus();
+    }
+    // Hide keyboard
+    FocusScope.of(context).unfocus();
+  }
+
+  // Function to handle image selection
+  Future<void> _selectThreadImage() async {
+    setState(() {
+      _isAttachingMedia = true;
+    });
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        // For a real app, here you would upload the image to your server/storage
+        // and get back a URL. For now, we'll just store the local path.
+        setState(() {
+          _threadImageUrl = image.path;
+        });
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: "Image attached successfully",
+        );
+      }
+    } catch (e) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error attaching image: $e",
+      );
+    } finally {
+      setState(() {
+        _isAttachingMedia = false;
+      });
     }
   }
 
-  String _getRandomImageUrl() {
-    final random = math.Random();
-    return _imageUrls[random.nextInt(_imageUrls.length)];
+  // Function to handle video selection
+  Future<void> _selectThreadVideo() async {
+    setState(() {
+      _isAttachingMedia = true;
+    });
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+
+      if (video != null) {
+        // For a real app, here you would upload the video to your server/storage
+        // and get back a URL. For now, we'll just store the local path.
+        setState(() {
+          _threadImageUrl = video.path; // Using same variable for simplicity
+        });
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: "Video attached successfully",
+        );
+      }
+    } catch (e) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Error attaching video: $e",
+      );
+    } finally {
+      setState(() {
+        _isAttachingMedia = false;
+      });
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Local News'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              // Show options menu
-              showModalBottomSheet(
-                context: context,
-                builder: (context) => _buildOptionsSheet(),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Post content in a scrollable area
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Post header with author info
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        // Author avatar
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: ThemeConstants.primaryColor,
-                          child: const Icon(Icons.person,
-                              color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        // Author name and time
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Text(
-                                    'News Network',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  if (widget.isVerified)
-                                    const SizedBox(width: 4),
-                                  if (widget.isVerified)
-                                    Icon(
-                                      Icons.verified,
-                                      size: 16,
-                                      color: ThemeConstants.primaryColor,
-                                    ),
-                                ],
-                              ),
-                              Text(
-                                widget.time,
-                                style: TextStyle(
-                                  color: ThemeConstants.grey,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Follow button
-                        TextButton(
-                          onPressed: () {},
-                          style: TextButton.styleFrom(
-                            foregroundColor: ThemeConstants.primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: BorderSide(
-                                  color: ThemeConstants.primaryColor),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                          ),
-                          child: const Text('Follow'),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Post image (now using a real image)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 240,
-                    child: Image.network(
-                      _getRandomImageUrl(),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: ThemeConstants.greyLight,
-                          child: Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 64,
-                              color: ThemeConstants.grey.withOpacity(0.5),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // Post title and content
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          widget.description,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                          ),
-                        ),
-                        // Expanded description (simulated)
-                        const SizedBox(height: 8),
-                        Text(
-                          "Meteorologists have upgraded the storm to a category 3 hurricane, with sustained winds of over 120 mph. "
-                          "Coastal areas are particularly at risk of storm surge, which could reach heights of 9-12 feet above normal tide levels. "
-                          "Authorities are urging residents in low-lying areas to evacuate immediately and others to complete storm preparations "
-                          "as soon as possible.",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Location and honesty rating
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.location_on,
-                            size: 16, color: ThemeConstants.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          widget.location,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: ThemeConstants.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        _buildHonestyRating(widget.honesty),
-                      ],
-                    ),
-                  ),
-
-                  // Map Preview Section (UPDATED)
-                  _buildMapSection(),
-
-                  // Action buttons (upvote, downvote, thread, share)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Upvote button (changed icon)
-                        _buildActionButton(
-                          icon: Icons.arrow_upward,
-                          iconFilled: Icons.arrow_upward,
-                          label: '$_upvotes',
-                          isActive: _hasUpvoted,
-                          onPressed: _handleUpvote,
-                        ),
-                        // Downvote button (changed icon)
-                        _buildActionButton(
-                          icon: Icons.arrow_downward,
-                          iconFilled: Icons.arrow_downward,
-                          label: '$_downvotes',
-                          isActive: _hasDownvoted,
-                          onPressed: _handleDownvote,
-                        ),
-                        // Thread button
-                        _buildActionButton(
-                          icon: Icons.forum_outlined,
-                          iconFilled: Icons.forum,
-                          label: '${widget.comments}',
-                          onPressed: () {
-                            // Focus on the thread field
-                            FocusScope.of(context).requestFocus(FocusNode());
-                          },
-                        ),
-                        // Share button
-                        _buildActionButton(
-                          icon: Icons.share_outlined,
-                          iconFilled: Icons.share,
-                          label: TextStrings.share,
-                          onPressed: () {
-                            // Implement share functionality
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Divider
-                  const Divider(height: 1),
-
-                  // Threads header (renamed from Comments)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${_threads.length} Threads',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.sort, size: 16),
-                          label: const Text('Sort by'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: ThemeConstants.grey,
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Threads list (renamed from Comments)
-                  ListView.separated(
-                    physics: const NeverScrollableScrollPhysics(),
-                    shrinkWrap: true,
-                    itemCount: _threads.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1, indent: 72),
-                    itemBuilder: (context, index) {
-                      final thread = _threads[index];
-                      return _buildThreadItem(thread);
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-          ),
-
-          // Thread input field (renamed from Comment) - UPDATED with SafeArea
-          SafeArea(
-            minimum: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 0,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: ThemeConstants.greyLight, width: 1),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    spreadRadius: 1,
-                    blurRadius: 3,
-                    offset: const Offset(0, -1),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12), // Increased vertical padding
-              child: Row(
-                children: [
-                  // Author avatar
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: ThemeConstants.grey.withOpacity(0.2),
-                    child:
-                        const Icon(Icons.person, color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  // Thread text field (renamed from Comment)
-                  Expanded(
-                    child: TextField(
-                      controller: _threadController,
-                      decoration: InputDecoration(
-                        hintText: 'Start a thread...',
-                        hintStyle: TextStyle(color: ThemeConstants.grey),
-                        border: InputBorder.none,
-                      ),
-                      maxLines: 1,
-                    ),
-                  ),
-                  // Post button
-                  TextButton(
-                    onPressed: _addThread,
-                    style: TextButton.styleFrom(
-                      foregroundColor: ThemeConstants.primaryColor,
-                    ),
-                    child: const Text('Post'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      // Add resizeToAvoidBottomInset to handle keyboard properly
-      resizeToAvoidBottomInset: true,
-    );
+  // Function to clear selected media
+  void _clearSelectedMedia() {
+    setState(() {
+      _threadImageUrl = null;
+    });
   }
 
-  Widget _buildThreadItem(Map<String, dynamic> thread) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Author avatar
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: ThemeConstants.grey.withOpacity(0.2),
-            child: const Icon(Icons.person, color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          // Thread content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Author name, verification, and distance
-                Row(
-                  children: [
-                    Text(
-                      thread['author'],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (thread['isVerified']) const SizedBox(width: 4),
-                    if (thread['isVerified'])
-                      Icon(
-                        Icons.verified,
-                        size: 14,
-                        color: ThemeConstants.primaryColor,
-                      ),
-                    const Spacer(),
-                    // Distance indicator
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.place,
-                          size: 12,
-                          color: ThemeConstants.grey,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          thread['distance'],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: ThemeConstants.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  thread['time'],
-                  style: TextStyle(
-                    color: ThemeConstants.grey,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Thread text
-                Text(
-                  thread['text'],
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                // Thread actions
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        // Handle like
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.arrow_upward,
-                            size: 16,
-                            color: ThemeConstants.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${thread['likes']}',
-                            style: TextStyle(
-                              color: ThemeConstants.grey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    GestureDetector(
-                      onTap: () {
-                        // Handle reply
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.reply,
-                            size: 16,
-                            color: ThemeConstants.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Reply',
-                            style: TextStyle(
-                              color: ThemeConstants.grey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (thread['replies'] > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: GestureDetector(
-                          onTap: () {
-                            // Show replies
-                          },
-                          child: Text(
-                            'View ${thread['replies']} ${thread['replies'] == 1 ? 'reply' : 'replies'}',
-                            style: TextStyle(
-                              color: ThemeConstants.primaryColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  // Enhanced method to get appropriate image URL or path with better fallback handling
+  String _getImageUrl() {
+    // First try: Check if we have a valid post object with an imageUrl
+    if (widget.post?.imageUrl != null && widget.post!.imageUrl.isNotEmpty) {
+      return widget.post!.imageUrl;
+    } 
+    
+    // Second try: Check if the post has media URLs
+    if (widget.post?.hasMedia == true && widget.post!.mediaUrls.isNotEmpty) {
+      return widget.post!.mediaUrls.first;
+    }
+    
+    // Third try: Use the directly provided imageUrl
+    if (widget.imageUrl.isNotEmpty) {
+      return widget.imageUrl;
+    }
+
+    // Final fallback: Use a placeholder image
+    return 'https://via.placeholder.com/400x200?text=No+Image';
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required IconData iconFilled,
-    required String label,
-    bool isActive = false,
-    required VoidCallback onPressed,
-  }) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
+  // Helper method to determine if a string is a file path or URL
+  bool _isFilePath(String path) {
+    // This is a simple heuristic that can be enhanced based on your needs
+    return path.startsWith('/') || 
+           path.startsWith('file:/') ||
+           !path.contains('://');
+  }
+
+  // Widget to display either network image or file image based on the path
+  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover}) {
+    if (_isFilePath(imageUrl)) {
+      // Handle file paths (useful for locally picked images)
+      return Image.file(
+        File(imageUrl),
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Error loading file image: $error');
+          return _buildImageErrorPlaceholder();
+        },
+      );
+    } else {
+      // Handle network URLs
+      return Image.network(
+        imageUrl,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Error loading network image: $error');
+          return _buildImageErrorPlaceholder();
+        },
+      );
+    }
+  }
+
+  // Widget for showing a placeholder when image loading fails
+  Widget _buildImageErrorPlaceholder() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    
+    return Container(
+      color: isDarkMode ? Colors.grey[800] : ThemeConstants.greyLight,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isActive ? iconFilled : icon,
-              size: 20,
-              color:
-                  isActive ? ThemeConstants.primaryColor : ThemeConstants.grey,
+              Icons.broken_image,
+              size: 48,
+              color: isDarkMode ? Colors.grey[600] : ThemeConstants.grey,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(height: 8),
             Text(
-              label,
+              "Image unavailable",
               style: TextStyle(
-                fontSize: 14,
-                color: isActive
-                    ? ThemeConstants.primaryColor
-                    : ThemeConstants.grey,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
               ),
             ),
           ],
@@ -702,326 +708,582 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
   }
 
-  Widget _buildHonestyRating(int rating) {
-    Color color;
-    if (rating >= 80) {
-      color = ThemeConstants.green;
-    } else if (rating >= 60)
-      color = ThemeConstants.orange;
-    else
-      color = ThemeConstants.red;
+  // Helper method to format distance properly in km or m
+  String _formatDistance(double? distanceInMeters) {
+    // First check if we have an actual distance value from the post
+    if (widget.post?.distance != null && widget.post!.distance > 0) {
+      double meters =
+          widget.post!.distance * 1609.34; // Convert miles to meters
+      if (meters < 1000) {
+        return '${meters.toInt()} m';
+      } else {
+        return '${(meters / 1000).toStringAsFixed(1)} km';
+      }
+    }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.verified_user,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$rating% ${TextStrings.honestyRating}',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
+    // Then check if we're given a valid distance parameter
+    if (distanceInMeters != null && distanceInMeters > 0) {
+      if (distanceInMeters < 1000) {
+        return '${distanceInMeters.toInt()} m';
+      } else {
+        return '${(distanceInMeters / 1000).toStringAsFixed(1)} km';
+      }
+    }
+
+    // Try to extract distance from the distance string if available
+    if (widget.distance != null && widget.distance!.isNotEmpty) {
+      final RegExp regex = RegExp(r'(\d+\.?\d*)');
+      final match = regex.firstMatch(widget.distance!);
+      if (match != null) {
+        try {
+          final double miles = double.parse(match.group(1)!);
+          final double meters = miles * 1609.34; // Convert miles to meters
+          if (meters < 1000) {
+            return '${meters.toInt()} m';
+          } else {
+            return '${(meters / 1000).toStringAsFixed(1)} km';
+          }
+        } catch (e) {
+          // Fall through to default
+        }
+      }
+    }
+
+    // Try to calculate distance from coordinates if available
+    if (widget.post?.latitude != null && widget.post?.longitude != null) {
+      try {
+        // Try to get the current location
+        _mapController.getUserLocation().then((userLocation) {
+          if (userLocation != null) {
+            // Calculate distance between user and post
+            double calculatedDistance = _calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                widget.post!.latitude,
+                widget.post!.longitude);
+
+            // Update post distance
+            widget.post!.distance =
+                calculatedDistance / 1609.34; // Store in miles for consistency
+
+            // Force rebuild UI with new distance
+            if (mounted) setState(() {});
+          }
+        });
+      } catch (e) {
+        debugPrint("Error calculating distance: $e");
+      }
+    }
+
+    // Default: show 300m instead of "Nearby" as requested
+    return '300 m';
   }
 
-  Widget _buildOptionsSheet() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.bookmark_border),
-            title: const Text('Save Post'),
-            onTap: () {
-              Navigator.pop(context);
-              // Handle save post
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.flag_outlined),
-            title: const Text('Report Post'),
-            onTap: () {
-              Navigator.pop(context);
-              // Handle report post
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.block),
-            title: const Text('Not Interested'),
-            onTap: () {
-              Navigator.pop(context);
-              // Handle not interested
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.share_outlined),
-            title: const Text('Share Post'),
-            onTap: () {
-              Navigator.pop(context);
-              // Handle share post
-            },
-          ),
-        ],
-      ),
-    );
+  // Calculate distance between two coordinates in meters
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const int radiusOfEarth = 6371000; // Earth's radius in meters
+    double latDistance = _toRadians(lat2 - lat1);
+    double lonDistance = _toRadians(lon2 - lon1);
+
+    double a = (sin(latDistance / 2) * sin(latDistance / 2)) +
+        (cos(_toRadians(lat1)) *
+            cos(_toRadians(lat2)) *
+            sin(lonDistance / 2) *
+            sin(lonDistance / 2));
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return radiusOfEarth * c; // Distance in meters
   }
 
-  // New method to show expanded map view with proper marker
-  void _showExpandedMapView(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.95,
-        minChildSize: 0.4,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                // Handle
-                Container(
-                  margin: const EdgeInsets.only(top: 8, bottom: 8),
-                  height: 4,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    color: ThemeConstants.grey.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-
-                // Location header
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Row(
-                    children: [
-                      Icon(Icons.place, color: ThemeConstants.primaryColor),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.location,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      )
-                    ],
-                  ),
-                ),
-
-                // Expanded map with proper marker
-                Expanded(
-                  child: MapView(
-                    controller: _mapController,
-                    onTap: () {},
-                  ),
-                ),
-
-                // Related events nearby
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.white,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Related Events Nearby',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildNearbyEvent(
-                        'Storm Shelter Open',
-                        'Community Center',
-                        '0.4 miles away',
-                      ),
-                      _buildNearbyEvent(
-                        'Emergency Supply Distribution',
-                        'City Hall',
-                        '0.7 miles away',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  double _toRadians(double degree) {
+    return degree * (pi / 180);
   }
 
-  Widget _buildNearbyEvent(String title, String location, String distance) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ThemeConstants.greyLight,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
+  @override
+  Widget build(BuildContext context) {
+    final honestyScore = widget.post?.honestyScore ?? widget.honesty;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: ThemeConstants.primaryColorLight,
+              color: Colors.black.withOpacity(0.3),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.event, color: ThemeConstants.primaryColor),
+            child: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  location,
-                  style: TextStyle(
-                    color: ThemeConstants.grey,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              shape: BoxShape.circle,
             ),
-          ),
-          Text(
-            distance,
-            style: TextStyle(
-              color: ThemeConstants.primaryColor,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+            child: IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onPressed: () {
+                // Show post options popup
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => PostOptionsPopup(
+                    post: widget.post,
+                    postId: widget.post?.id ?? -1,
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
-    );
-  }
+      extendBodyBehindAppBar: true,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Main post image
+            Stack(
+              children: [
+                // Image with shimmer loading placeholder
+                SizedBox(
+                  height: 250,
+                  width: double.infinity,
+                  child: _buildImageWidget(
+                    _getImageUrl(),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                // Dark gradient overlay at the bottom
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 100,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Post details overlay
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundImage:
+                            widget.post?.authorProfilePic != null &&
+                                    widget.post!.authorProfilePic!.isNotEmpty
+                                ? NetworkImage(widget.post!.authorProfilePic!)
+                                : null,
+                        radius: 18,
+                        child: (widget.post?.authorProfilePic == null ||
+                                widget.post!.authorProfilePic!.isEmpty)
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  // Use getDisplayName helper to respect isAnonymous flag
+                                  widget.post?.getDisplayName() ??
+                                      widget.authorName ??
+                                      "Anonymous",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (widget.post?.isAuthorVerified == true ||
+                                    widget.isVerified)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.verified,
+                                      size: 16,
+                                      color: ThemeConstants.primaryColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            Text(
+                              widget.post?.timePosted != null
+                                  ? TimeFormatter.getFormattedTime(
+                                      widget.post!.timePosted)
+                                  : widget.time,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ThemeConstants.primaryColor,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              widget.post?.distance != null
+                                  ? _formatDistance(widget.post!.distance *
+                                      1000) // Convert miles to meters
+                                  : _formatDistance(
+                                      300), // Default reasonable distance if none provided
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Post content
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Post title
+                  Text(
+                    widget.post?.title ?? widget.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Post description
+                  Text(
+                    widget.post?.description ?? widget.description,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
 
-  Widget _buildMapSection() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Location',
-                style: TextStyle(
+                  // Honesty Score Indicator
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color:
+                          _getHonestyScoreColor(honestyScore).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _getHonestyScoreColor(honestyScore),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.verified,
+                          color: _getHonestyScoreColor(honestyScore),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Honesty: $honestyScore%',
+                          style: TextStyle(
+                            color: _getHonestyScoreColor(honestyScore),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Engagement metrics
+                  Row(
+                    children: [
+                      // Upvotes - Using arrow up instead of thumb up
+                      GestureDetector(
+                        onTap: widget.post != null ? _handleUpvote : null,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _hasUpvoted
+                                  ? Icons.arrow_upward
+                                  : Icons.arrow_upward_outlined,
+                              color: _hasUpvoted
+                                  ? ThemeConstants.primaryColor
+                                  : Colors.grey,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 4),
+                            _isLoadingVote
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Row(
+                                    children: [
+                                      Text(
+                                        '$_upvotes',
+                                        style: TextStyle(
+                                          color: _hasUpvoted
+                                              ? ThemeConstants.primaryColor
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Upvote',
+                                        style: TextStyle(
+                                          color: _hasUpvoted
+                                              ? ThemeConstants.primaryColor
+                                              : Colors.grey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Downvotes - Using arrow down instead of thumb down
+                      GestureDetector(
+                        onTap: widget.post != null ? _handleDownvote : null,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _hasDownvoted
+                                  ? Icons.arrow_downward
+                                  : Icons.arrow_downward_outlined,
+                              color: _hasDownvoted
+                                  ? Colors.redAccent
+                                  : Colors.grey,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 4),
+                            _isLoadingVote
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Row(
+                                    children: [
+                                      Text(
+                                        '$_downvotes',
+                                        style: TextStyle(
+                                          color: _hasDownvoted
+                                              ? Colors.redAccent
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Downvote',
+                                        style: TextStyle(
+                                          color: _hasDownvoted
+                                              ? Colors.redAccent
+                                              : Colors.grey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(
+                          width:
+                              16), // Added more space here between downvote and thread count
+
+                      // Comments count
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.comment_outlined,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_threads.length}',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      // Share button
+                      GestureDetector(
+                        onTap: () {
+                          // Share post functionality
+                          Share.share(
+                            'Check out this post: ${widget.post?.title ?? widget.title}',
+                          );
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.share_outlined,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Share',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Location map
+            Container(
+              height: 200,
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: ClipRRectMapContainer(
+                child: !_mapInitialized
+                    ? const Center(child: CircularProgressIndicator())
+                    : MapWidget(mapController: _mapController),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Thread (comments) section
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Threads (${_threads.length})',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              // Location text
-              Row(
-                children: [
-                  Icon(Icons.place, size: 16, color: ThemeConstants.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    widget.location,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: ThemeConstants.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Real map implementation with marker
-          Container(
-            height: 180,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: ThemeConstants.greyLight),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
+            const SizedBox(height: 8),
+            // List of threads (removed the thread input text field)
+            ..._threads.map(
+              (thread) => ThreadItem(
+                authorName:
+                    thread['author_name'] ?? thread['author'] ?? 'Anonymous',
+                text: thread['content'] ?? thread['text'] ?? '',
+                time: thread['time_ago'] ?? thread['time'] ?? 'Unknown time',
+                likes: thread['likes'] ?? 0,
+                replies: thread['replies'] ?? 0,
+                isVerified:
+                    thread['is_verified'] ?? thread['isVerified'] ?? false,
+                distance: thread['distance'] ?? '0.0 mi away',
+                profilePic: thread['author_profile_pic'],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (context) => Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Actual map view widget with proper marker
-                MapView(
-                  controller: _mapController,
+                ListTile(
+                  leading: const Icon(Icons.image),
+                  title: const Text('Attach Image'),
                   onTap: () {
-                    // Do nothing on tap
+                    Navigator.pop(context);
+                    _selectThreadImage();
                   },
                 ),
-
-                // Only show the centered pin as fallback when map isn't initialized
-                if (!_mapInitialized)
-                  const Center(
-                    child: Icon(
-                      Icons.place,
-                      color: ThemeConstants.red,
-                      size: 36,
-                    ),
-                  ),
-
-                // Show more button
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _showExpandedMapView(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeConstants.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    icon: const Icon(Icons.fullscreen, size: 18),
-                    label: const Text('Show More'),
-                  ),
+                ListTile(
+                  leading: const Icon(Icons.videocam),
+                  title: const Text('Attach Video'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectThreadVideo();
+                  },
                 ),
+                if (_threadImageUrl != null)
+                  ListTile(
+                    leading: const Icon(Icons.clear),
+                    title: const Text('Clear Attachment'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _clearSelectedMedia();
+                    },
+                  ),
               ],
             ),
-          ),
-        ],
+          );
+        },
+        child: const Icon(Icons.add),
       ),
     );
+  }
+
+  // Helper method to get color based on honesty score
+  Color _getHonestyScoreColor(int score) {
+    if (score >= 80) {
+      return Colors.green;
+    } else if (score >= 60) {
+      return Colors.amber;
+    } else if (score >= 40) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
   }
 
   @override

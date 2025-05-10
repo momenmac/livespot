@@ -14,6 +14,7 @@ class ThemeConstants {
   static const Color pinkLight = Color(0xFFFFEBEB);
   static const Color red = Color(0xFFF63C3C);
   static const Color yellow = Color(0xFFECA61B);
+  static const Color purple = Color(0xFF9C27B0); // Added purple color
   static const Color black = Color(0xff202020);
   static const Color grey = Color.fromARGB(255, 173, 173, 173);
   static const Color greyLight = Color.fromARGB(255, 245, 245, 245);

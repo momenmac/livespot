@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/ui/widgets/safe_hero.dart'; // Import SafeHero
 
 class TopToast {
   static OverlayEntry? _overlayEntry;
@@ -127,8 +128,8 @@ class _ToastWidgetState extends State<_ToastWidget>
             begin: const Offset(0, -1),
             end: Offset.zero,
           ).animate(_animation),
-          // Wrap Material with a Hero widget that has a unique tag
-          child: Hero(
+          // Use SafeHero instead of Hero to prevent duplicate tag issues
+          child: SafeHero(
             tag: widget.heroTag,
             child: Material(
               elevation: 4,

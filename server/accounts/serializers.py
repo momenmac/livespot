@@ -2,11 +2,47 @@ from rest_framework import serializers
 from .models import Account, VerificationCode, UserProfile
 
 class AccountSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True)
+    
     class Meta:
         model = Account
-        fields = ['id', 'email', 'first_name', 'last_name', 'profile_picture',
+        fields = ['id', 'email', 'password', 'first_name', 'last_name', 'profile_picture',
                  'is_verified', 'google_id', 'created_at', 'last_login']
         read_only_fields = ['id', 'is_verified', 'created_at', 'last_login']
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+    
+    def create(self, validated_data):
+        # Extract password from validated data
+        password = validated_data.pop('password')
+        
+        # Create the user instance using the model's create_user method
+        # which properly handles password hashing
+        user = Account.objects.create_user(
+            password=password,
+            **validated_data
+        )
+        return user
+
+
+class AccountAuthorSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Account
+        fields = ['id', 'email', 'first_name', 'last_name', 'profile_picture', 'display_name']
+    
+    def get_display_name(self, obj):
+        # Try to get the username from the related UserProfile
+        try:
+            if hasattr(obj, 'userprofile') and obj.userprofile.username:
+                return obj.userprofile.username
+            else:
+                return f"{obj.first_name} {obj.last_name}".strip() or obj.email.split('@')[0]
+        except:
+            # Fallback to a combination of first_name and last_name or the email prefix
+            return f"{obj.first_name} {obj.last_name}".strip() or obj.email.split('@')[0]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

@@ -157,9 +157,7 @@ class UserProfileProvider extends ChangeNotifier {
           name: 'UserProfileProvider');
 
       // Fallback to creating a profile from the account if no server data
-      if (_currentUserProfile == null) {
-        _currentUserProfile = _createBasicProfileFromAccount(account);
-      }
+      _currentUserProfile ??= _createBasicProfileFromAccount(account);
     } finally {
       _isLoading = false;
       notifyListeners();

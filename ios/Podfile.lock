@@ -1295,6 +1295,8 @@ PODS:
     - OSMFlutterFramework
     - Polyline
     - Yams
+  - geocoding_ios (1.0.5):
+    - Flutter
   - geolocator_apple (1.2.0):
     - Flutter
   - google_sign_in_ios (0.0.1):
@@ -1491,6 +1493,7 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_compass (from `.symlinks/plugins/flutter_compass/ios`)
   - flutter_osm_plugin (from `.symlinks/plugins/flutter_osm_plugin/ios`)
+  - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/ios`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
@@ -1546,6 +1549,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_compass/ios"
   flutter_osm_plugin:
     :path: ".symlinks/plugins/flutter_osm_plugin/ios"
+  geocoding_ios:
+    :path: ".symlinks/plugins/geocoding_ios/ios"
   geolocator_apple:
     :path: ".symlinks/plugins/geolocator_apple/ios"
   google_sign_in_ios:
@@ -1588,6 +1593,7 @@ SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_compass: b236ab69b61545cce89fd58527f401a7587d5cc1
   flutter_osm_plugin: 3fb57665b32a81fcffa57c6206658d3a0d0d1a96
+  geocoding_ios: 86f1c479822f07a2f79f7094f2b753d1e9e20215
   geolocator_apple: 1560c3c875af2a412242c7a923e15d0d401966ff
   google_sign_in_ios: 19297361f2c51d7d8ac0201b866ef1fa5d1f94a8
   GoogleAppMeasurement: 36684bfb3ee034e2b42b4321eb19da3a1b81e65d

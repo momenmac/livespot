@@ -1,21 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'dart:math' as math;
+import 'package:flutter_application_2/models/post.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:flutter_application_2/ui/pages/home/components/all_news_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
+import 'package:provider/provider.dart';
+import 'dart:math' as math;
+import 'dart:io';
 
-class NewsFeedSection extends StatelessWidget {
+class NewsFeedSection extends StatefulWidget {
   final DateTime selectedDate;
   final VoidCallback? onMapToggle;
-
-  // Updated image URLs with reliable placeholders
-  final List<String> _imageUrls = const [
-    'https://picsum.photos/seed/news1/800/600',
-    'https://picsum.photos/seed/news2/800/600',
-    'https://picsum.photos/seed/news3/800/600',
-    'https://picsum.photos/seed/news4/800/600',
-    'https://picsum.photos/seed/news5/800/600',
-  ];
 
   const NewsFeedSection({
     super.key,
@@ -24,263 +19,293 @@ class NewsFeedSection extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // TODO: Implement dark mode support for news feed section
+  State<NewsFeedSection> createState() => _NewsFeedSectionState();
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Rest of the feed content
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          ThemeConstants.primaryColor,
-                          ThemeConstants.primaryColor.withOpacity(0.7),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.trending_up_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    TextStrings.happening,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              TextButton(
-                onPressed: () {
-                  // View all news
-                },
-                style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      TextStrings.viewAll,
-                      style: TextStyle(
-                        color: ThemeConstants.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: ThemeConstants.primaryColor,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Main feature story
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _buildFeatureStory(
-            context,
-            title: "Major Storm Approaching Eastern Coast",
-            description:
-                "Residents advised to prepare for high winds and flooding as category 3 hurricane approaches.",
-            imageUrl: "https://example.com/storm.jpg",
-            location: "Boston, MA",
-            time: "2 hours ago",
-            honesty: 92,
-            upvotes: 345,
-            comments: 78,
-            isVerified: true,
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Secondary stories in horizontal layout
-        SizedBox(
-          height: 280, // Increased from 270 to 280 to give more space
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(left: 16),
-            children: [
-              _buildSecondaryStory(
-                context, // Pass context here
-                title: "New Technology Center Opens Downtown",
-                description:
-                    "The innovation hub will create over 500 jobs and provide resources for tech startups.",
-                imageUrl: "https://example.com/tech.jpg",
-                location: "Austin, TX",
-                time: "5 hours ago",
-                honesty: 88,
-                upvotes: 210,
-                comments: 42,
-                isVerified: false,
-                color: ThemeConstants.green,
-              ),
-              _buildSecondaryStory(
-                context, // Pass context here
-                title: "Local Festival Draws Record Crowds",
-                description:
-                    "Annual cultural celebration sees highest attendance in its 15-year history.",
-                imageUrl: "https://example.com/festival.jpg",
-                location: "Portland, OR",
-                time: "Yesterday",
-                honesty: 95,
-                upvotes: 432,
-                comments: 63,
-                isVerified: false,
-                color: ThemeConstants.orange,
-              ),
-              _buildSecondaryStory(
-                context, // Pass context here
-                title: "City Council Approves New Housing Development",
-                description:
-                    "The project will include affordable housing units and community spaces.",
-                imageUrl: "https://example.com/housing.jpg",
-                location: "Denver, CO",
-                time: "Yesterday",
-                honesty: 90,
-                upvotes: 187,
-                comments: 35,
-                isVerified: true,
-                color: ThemeConstants.pink,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+class _NewsFeedSectionState extends State<NewsFeedSection> {
+  // Keep some image URLs for fallback and placeholders
+  final List<String> _imageUrls = const [
+    'https://picsum.photos/seed/news1/800/600',
+    'https://picsum.photos/seed/news2/800/600',
+    'https://picsum.photos/seed/news3/800/600',
+    'https://picsum.photos/seed/news4/800/600',
+    'https://picsum.photos/seed/news5/800/600',
+  ];
 
   String _getRandomImageUrl() {
     final random = math.Random();
     return _imageUrls[random.nextInt(_imageUrls.length)];
   }
 
-  Widget _buildFeatureStory(
-    BuildContext context, // Add context parameter
-    {
-    required String title,
-    required String description,
-    required String imageUrl,
-    required String location,
-    required String time,
-    required int honesty,
-    required int upvotes,
-    required int comments,
-    required bool isVerified,
-  }) {
+  @override
+  void initState() {
+    super.initState();
+    // Use a post-frame callback to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _fetchPosts();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(NewsFeedSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload posts if the selected date changes, but use post-frame callback
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _fetchPosts();
+        }
+      });
+    }
+  }
+
+  Future<void> _fetchPosts() async {
+    try {
+      // Format date as YYYY-MM-DD for API
+      final formattedDate =
+          widget.selectedDate.toIso8601String().split('T').first;
+
+      await Provider.of<PostsProvider>(context, listen: false)
+          .fetchPosts(date: formattedDate);
+    } catch (e) {
+      // Handle any errors, but don't rethrow
+      debugPrint('Error fetching posts: $e');
+    }
+  }
+
+  void _handleVote(Post post, bool isUpvote) {
+    try {
+      Provider.of<PostsProvider>(context, listen: false)
+          .voteOnPost(post, isUpvote);
+    } catch (e) {
+      debugPrint('Error voting on post: $e');
+      // Show a snackbar or other error notification
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to register your vote: $e')),
+      );
+    }
+  }
+
+  void _navigateToPostDetail(Post post) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(
+          title: post.title,
+          description: post.content,
+          imageUrl: _getBestImageUrl(post),
+          location: post.location.address ?? "Unknown location",
+          time: post.createdAt.toString(),
+          honesty: post.honestyScore,
+          upvotes: post.upvotes,
+          comments: 0,
+          isVerified: post.author.isVerified,
+          post: post, // Pass the post object
+        ),
+      ),
+    );
+  }
+
+  void _navigateToAllNews() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AllNewsPage(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PostsProvider>(
+      builder: (context, postsProvider, child) {
+        if (postsProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (postsProvider.posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline,
+                    size: 48, color: ThemeConstants.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'No news available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
+                  style: const TextStyle(color: ThemeConstants.grey),
+                ),
+                const SizedBox(height: 24),
+                TextButton.icon(
+                  onPressed: _fetchPosts,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Get a list of posts, sorted by honesty score
+        final posts = List.of(postsProvider.posts)
+          ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
+
+        // Extract the featured post (highest honesty score)
+        final featuredPost = posts.isNotEmpty ? posts.first : null;
+        // Rest of the posts for the horizontal scroll
+        final regularPosts = posts.length > 1 ? posts.sublist(1) : [];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Unified News Feed Section Header
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+              child: Row(
+                children: [
+                  const Text(
+                    'News Feed',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _navigateToAllNews,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View All',
+                          style: TextStyle(
+                            color: ThemeConstants.primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.arrow_forward,
+                          size: 16,
+                          color: ThemeConstants.primaryColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Featured post
+            if (featuredPost != null) _buildFeaturedPostCard(featuredPost),
+
+            // Regular posts in horizontal scroll
+            if (regularPosts.isNotEmpty) ...[
+              SizedBox(
+                height: 240,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: regularPosts.length,
+                  itemBuilder: (context, index) {
+                    final post = regularPosts[index];
+                    return SizedBox(
+                      width: 240, // Fixed width for each card
+                      child: _buildRegularPostCard(post),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildFeaturedPostCard(Post post) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    // Card background and shadow colors based on theme
-    final cardBackground = isDarkMode ? theme.cardColor : Colors.white;
-    final shadowColor = isDarkMode
-        ? Colors.black.withOpacity(0.15)
-        : Colors.black.withOpacity(0.06);
-
-    // Removed unused overlayTextColor variable
-    // TODO: Consider adding text overlay with better accessibility
-
-    return InkWell(
-      // Fix: Remove context parameter from onTap callback
-      onTap: () => _navigateToPostDetail(context, title, description, imageUrl,
-          location, time, honesty, upvotes, comments, isVerified),
-      borderRadius: BorderRadius.circular(24),
+    return GestureDetector(
+      onTap: () => _navigateToPostDetail(post),
       child: Container(
-        height: 360,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         decoration: BoxDecoration(
-          color: cardBackground,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: shadowColor,
-              blurRadius: 20,
-              offset: const Offset(0, 5),
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            // Image background with gradient overlay
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: ThemeConstants.greyLight,
+            // Background image
+            Container(
+              height: 350,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.grey[800] : ThemeConstants.greyLight,
+              ),
+              child: _buildImage(_getBestImageUrl(post)),
+            ),
+
+            // Content overlay with gradient
+            Container(
+              height: 350,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.2),
+                    Colors.black.withOpacity(0.7),
+                  ],
+                  stops: const [0.5, 0.75, 0.95],
                 ),
-                child: Stack(
-                  children: [
-                    // Use a more reliable image loading method with error handling
-                    Image.network(
-                      _getRandomImageUrl(),
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: ThemeConstants.greyLight,
-                          child: Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 100,
-                              color: ThemeConstants.grey.withOpacity(0.3),
-                            ),
-                          ),
-                        );
-                      },
+              ),
+            ),
+
+            // Featured badge
+            Positioned(
+              top: 16,
+              left: 16,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: ThemeConstants.primaryColor,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
-                    // Gradient overlay
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.1),
-                              Colors.black.withOpacity(0.6),
-                            ],
-                            stops: const [0.6, 0.75, 1.0],
-                          ),
-                        ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.star,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'FEATURED',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -288,138 +313,151 @@ class NewsFeedSection extends StatelessWidget {
               ),
             ),
 
-            // Content overlaid on image
+            // Content
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(20),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Verified badge if needed
-                    if (isVerified)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: ThemeConstants.primaryColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified_rounded,
-                              color: Colors.white,
-                              size: 12,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              TextStrings.verified,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
                     // Title
                     Text(
-                      title,
+                      post.title,
                       style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
                         shadows: [
                           Shadow(
-                            color: Colors.black26,
-                            blurRadius: 2,
-                            offset: Offset(0, 1),
+                            blurRadius: 3.0,
+                            color: Colors.black54,
+                            offset: Offset(1, 1),
                           ),
                         ],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
 
                     const SizedBox(height: 8),
 
                     // Description
                     Text(
-                      description,
+                      post.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
                         color: Colors.white,
+                        fontSize: 14,
                         shadows: [
                           Shadow(
-                            color: Colors.black26,
-                            blurRadius: 2,
-                            offset: Offset(0, 1),
+                            blurRadius: 3.0,
+                            color: Colors.black54,
+                            offset: Offset(1, 1),
                           ),
                         ],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
 
-                    // Location, time, and rating row
+                    // Bottom info row
                     Row(
                       children: [
-                        Icon(Icons.location_on,
-                            size: 14, color: Colors.white.withOpacity(0.9)),
-                        const SizedBox(width: 4),
-                        Text(
-                          location,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
+                        // Location
+                        if (post.location.address != null)
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: Colors.white70,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    post.location.address!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // Upvote button with count (non-clickable)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.arrow_upward_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${post.upvotes}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Icon(Icons.access_time,
-                            size: 14, color: Colors.white.withOpacity(0.9)),
-                        const SizedBox(width: 4),
-                        Text(
-                          time,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
+
+                        const SizedBox(width: 8),
+
+                        // Honesty score badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
                           ),
-                        ),
-                        const Spacer(),
-                        _buildHonestyPill(honesty),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Action buttons - FIXED: not inside a Positioned widget
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildVoteButton(
-                          icon: Icons.arrow_upward,
-                          label: '$upvotes',
-                          color: Colors.white,
-                          isUpvote: true,
-                        ),
-                        _buildActionButton(
-                          icon: Icons.forum_outlined,
-                          label: '$comments',
-                          color: Colors.white,
-                        ),
-                        _buildActionButton(
-                          icon: Icons.share_outlined,
-                          label: TextStrings.share,
-                          color: Colors.white,
+                          decoration: BoxDecoration(
+                            color: _getHonestyColor(post.honestyScore),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 2,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.verified_user,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${post.honestyScore}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -427,313 +465,260 @@ class NewsFeedSection extends StatelessWidget {
                 ),
               ),
             ),
+
+            // Verified badge if applicable
+            if (post.author.isVerified)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.verified,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSecondaryStory(
-    BuildContext context, // Add context parameter
-    {
-    required String title,
-    required String description,
-    required String imageUrl,
-    required String location,
-    required String time,
-    required int honesty,
-    required int upvotes,
-    required int comments,
-    required bool isVerified,
-    required Color color,
-  }) {
+  Widget _buildRegularPostCard(Post post) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    final cardBackgroundColor = isDarkMode ? theme.cardColor : Colors.white;
-    final textColor =
-        isDarkMode ? theme.textTheme.bodyLarge?.color : ThemeConstants.black;
-    final secondaryTextColor = isDarkMode
-        ? theme.textTheme.bodyMedium?.color?.withOpacity(0.7)
-        : ThemeConstants.grey;
-
-    // For the subtitle color error
-    final subtitleColor = secondaryTextColor;
-
-    return InkWell(
-      // Fix: Remove context parameter from onTap callback
-      onTap: () => _navigateToPostDetail(context, title, description, imageUrl,
-          location, time, honesty, upvotes, comments, isVerified),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 250,
-        // Explicitly set height to match parent constraint
-        height: 260,
-        margin: const EdgeInsets.only(
-            right: 16, bottom: 4), // Reduced bottom margin
-        decoration: BoxDecoration(
-          color: cardBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+    return GestureDetector(
+      onTap: () => _navigateToPostDetail(post),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // Use minimum required vertical space
-          children: [
-            // Image with category indicator
-            Stack(
-              children: [
-                // Improved image loading with error handling
-                SizedBox(
-                  height: 140,
-                  width: double.infinity,
-                  child: Image.network(
-                    _getRandomImageUrl(),
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
+        elevation: 3, // Add more elevation for better shadow
+        color: isDarkMode ? theme.cardColor : Colors.white,
+        child: SizedBox(
+          height: 232, // Set explicit height to match parent container
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image - fixed height with better error handling
+              SizedBox(
+                height: 126, // Fixed height for image
+                width: double.infinity,
+                child: _buildImage(_getBestImageUrl(post)),
+              ),
+
+              // Content - use Expanded to avoid overflow
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title with improved styling
+                      Text(
+                        post.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          height: 1.2, // Tighter line height
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: ThemeConstants.greyLight,
-                        child: Center(
-                          child: Icon(
-                            Icons.image,
-                            size: 50,
-                            color: ThemeConstants.grey.withOpacity(0.3),
-                          ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      // Location
+                      if (post.location.address != null)
+                        Row(
+                          children: [
+                            Icon(Icons.location_on,
+                                size: 12, color: ThemeConstants.grey),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                post.location.address!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: ThemeConstants.grey,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Transform.rotate(
-                    angle: -math.pi / 50, // Slight tilt
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+
+                      const Spacer(), // Push the action row to the bottom
+
+                      // Voting and honesty score with better styling
+                      Row(
+                        children: [
+                          // Upvote button (non-clickable)
+                          Icon(
+                            Icons.arrow_upward_rounded,
+                            size: 18,
+                            color: Colors.green,
                           ),
+
+                          const SizedBox(width: 4),
+                          Text('${post.upvotes}',
+                              style: const TextStyle(fontSize: 12)),
+
+                          const SizedBox(width: 12),
+
+                          // Downvote button (non-clickable)
+                          Icon(
+                            Icons.arrow_downward_rounded,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+
+                          const Spacer(),
+
+                          // Honesty score with improved badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getHonestyColor(post.honestyScore),
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.verified_user,
+                                  color: Colors.white,
+                                  size: 10,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${post.honestyScore}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Verified badge
+                          if (post.author.isVerified)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: Colors.blue,
+                              ),
+                            ),
                         ],
                       ),
-                      child: Text(
-                        _getCategoryFromTitle(title),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-                if (isVerified)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.verified_rounded,
-                        color: ThemeConstants.primaryColor,
-                        size: 14,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(12), // Reduced from 16 to 12
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
-                      color: textColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 6), // Reduced from 8 to 6
-
-                  // Location and time
-                  Row(
-                    children: [
-                      Icon(Icons.location_on,
-                          size: 12, color: secondaryTextColor),
-                      const SizedBox(width: 2),
-                      Text(
-                        location,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: secondaryTextColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.access_time,
-                          size: 12, color: secondaryTextColor),
-                      const SizedBox(width: 2),
-                      Text(
-                        time,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: secondaryTextColor,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 3), // Reduced from 4 to 3
-
-                  // Honesty rating
-                  _buildHonestyPill(honesty, isSmall: true),
-
-                  const SizedBox(height: 3), // Reduced from 4 to 3
-
-                  // Stats row
-                  Row(
-                    children: [
-                      _buildStatisticPill(
-                        icon: Icons.arrow_upward,
-                        count: upvotes,
-                        isUpvote: true,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildStatisticPill(
-                        icon: Icons.forum_outlined,
-                        count: comments,
-                      ),
-                    ],
-                  ),
-                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHonestyPill(int rating, {bool isSmall = false}) {
-    Color color;
-    if (rating >= 80) {
-      color = ThemeConstants.green;
-    } else if (rating >= 60)
-      color = ThemeConstants.orange;
-    else
-      color = ThemeConstants.red;
+  Color _getHonestyColor(int score) {
+    if (score >= 80) {
+      return Colors.green;
+    } else if (score >= 60) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
+  }
+
+  // Enhanced image URL handling with support for different path types
+  Widget _buildImage(String? imageUrl, {BoxFit fit = BoxFit.cover}) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Handle null or empty image URL
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return _buildPlaceholderImage();
+    }
+
+    // Check if it's a file path or network URL
+    if (_isFilePath(imageUrl)) {
+      return Image.file(
+        File(imageUrl),
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Error loading file image: $error');
+          return _buildPlaceholderImage();
+        },
+      );
+    } else {
+      // Handle URL path - check if it needs a base URL prefix
+      String processedUrl = imageUrl;
+      if (imageUrl.startsWith('/')) {
+        // Add domain for relative paths (like /media/images/file.jpg)
+        processedUrl = 'http://localhost:8000$imageUrl';
+      }
+
+      return Image.network(
+        processedUrl,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Error loading network image: $error');
+          return _buildPlaceholderImage();
+        },
+      );
+    }
+  }
+
+  // Helper to build consistent placeholder for missing images
+  Widget _buildPlaceholderImage() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: isSmall ? 6 : 8, vertical: isSmall ? 2 : 4),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color,
-            color.withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.verified_user_rounded,
-            size: isSmall ? 10 : 12,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            '$rating%',
-            style: TextStyle(
-              fontSize: isSmall ? 9 : 11,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatisticPill({
-    required IconData icon,
-    required int count,
-    bool isUpvote = false,
-  }) {
-    return GestureDetector(
-      onTap: isUpvote
-          ? () {
-              // Handle upvote action
-            }
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: ThemeConstants.greyLight,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+      color: isDarkMode ? Colors.grey[800] : ThemeConstants.greyLight,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              icon,
-              size: 12,
-              color: ThemeConstants.grey,
+              Icons.image_not_supported,
+              size: 48,
+              color: isDarkMode ? Colors.grey[600] : ThemeConstants.grey,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(height: 8),
             Text(
-              count.toString(),
+              "Image unavailable",
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: ThemeConstants.grey,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                fontSize: 12,
               ),
             ),
           ],
@@ -742,110 +727,26 @@ class NewsFeedSection extends StatelessWidget {
     );
   }
 
-  Widget _buildVoteButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    bool isUpvote = false,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        // Handle upvote/downvote action
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
+  // Check if the path is a file path rather than URL
+  bool _isFilePath(String path) {
+    return path.startsWith('/') ||
+        path.startsWith('file:/') ||
+        !path.contains('://');
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 18,
-          color: color,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Helper to navigate to post detail page
-  void _navigateToPostDetail(
-    BuildContext context,
-    String title,
-    String description,
-    String imageUrl,
-    String location,
-    String time,
-    int honesty,
-    int upvotes,
-    int comments,
-    bool isVerified,
-  ) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailPage(
-          title: title,
-          description: description,
-          imageUrl: imageUrl,
-          location: location,
-          time: time,
-          honesty: honesty,
-          upvotes: upvotes,
-          comments: comments,
-          isVerified: isVerified,
-        ),
-      ),
-    );
-  }
-
-  // Helper to get a category from the title
-  String _getCategoryFromTitle(String title) {
-    if (title.contains("Storm") || title.contains("Weather")) {
-      return TextStrings.weather;
+  // Get the best available image URL from a post
+  String _getBestImageUrl(Post post) {
+    // Try to get media URL first
+    if (post.hasMedia && post.mediaUrls.isNotEmpty) {
+      return post.mediaUrls.first;
     }
-    if (title.contains("Tech")) return TextStrings.technology;
-    if (title.contains("Festival") || title.contains("Concert")) {
-      return TextStrings.entertainment;
+    
+    // Then try for direct imageUrl property
+    if (post.imageUrl.isNotEmpty) {
+      return post.imageUrl;
     }
-    if (title.contains("Council") || title.contains("Mayor")) {
-      return TextStrings.politics;
-    }
-    if (title.contains("Arrest") || title.contains("Police")) {
-      return TextStrings.crime;
-    }
-    return TextStrings.localNews;
+    
+    // Return random placeholder as fallback - never return null
+    return _getRandomImageUrl();
   }
 }
