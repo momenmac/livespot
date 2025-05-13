@@ -16,6 +16,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/models/user_profile.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:flutter_application_2/models/post.dart';
+import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -219,7 +222,12 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  // Date filtering for posts
   void _filterContentByDate(DateTime date) {
+    final formattedDate =
+        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+    // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -227,13 +235,99 @@ class _ProfilePageState extends State<ProfilePage>
         duration: const Duration(seconds: 2),
       ),
     );
+
+    // Store the selected date
+    setState(() {
+      _selectedDate = date;
+    });
+
+    // We'll need to rebuild each tab with the date filter
+    // This is a cleaner approach than calling setState
+    if (_tabController.index == 0) {
+      // We're on the user posts tab, so refresh it with the date
+      _refreshPostsWithDateFilter();
+    } else if (_tabController.index == 1) {
+      // We're on the saved posts tab
+      _refreshSavedPostsWithDateFilter();
+    } else if (_tabController.index == 2) {
+      // We're on the upvoted posts tab
+      _refreshUpvotedPostsWithDateFilter();
+    }
+  }
+
+  // Method to refresh posts with date filter
+  void _refreshPostsWithDateFilter() {
+    if (_selectedDate == null) return;
+
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    if (profileProvider.currentUserProfile == null) return;
+
+    final userId = profileProvider.currentUserProfile!.account.id;
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
+    // Format the date as YYYY-MM-DD for the API
+    final formattedDate =
+        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
+
+    setState(() {
+      // Force refresh of the current tab
+    });
+  }
+
+  // Method to refresh saved posts with date filter
+  void _refreshSavedPostsWithDateFilter() {
+    if (_selectedDate == null) return;
+
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    if (profileProvider.currentUserProfile == null) return;
+
+    final userId = profileProvider.currentUserProfile!.account.id;
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
+    // Format the date as YYYY-MM-DD for the API
+    final formattedDate =
+        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
+
+    setState(() {
+      // Force refresh of the current tab
+    });
+  }
+
+  // Method to refresh upvoted posts with date filter
+  void _refreshUpvotedPostsWithDateFilter() {
+    if (_selectedDate == null) return;
+
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    if (profileProvider.currentUserProfile == null) return;
+
+    final userId = profileProvider.currentUserProfile!.account.id;
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
+    // Format the date as YYYY-MM-DD for the API
+    final formattedDate =
+        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
+
+    setState(() {
+      // Force refresh of the current tab
+    });
   }
 
   Widget _buildUserInfoSection(UserProfile? profile) {
     if (profile == null) return const SizedBox.shrink();
 
+    // Debug log to see if admin status is being properly detected
+    developer.log('Admin status in profile: ${profile.account.isAdmin}',
+        name: 'ProfilePage');
+
+    // Print additional user details for debugging
+    developer.log('Profile user ID: ${profile.account.id}',
+        name: 'ProfilePage');
+    developer.log('Profile username: ${profile.username}', name: 'ProfilePage');
+
     final activityStatus = profile.activityStatusStr;
-    final isVerified = profile.isVerified;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
@@ -244,51 +338,98 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stack(
+              Column(
                 children: [
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: ThemeConstants.primaryColorLight,
-                        width: 3,
-                      ),
-                    ),
-                    child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: profile.profilePictureUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: ThemeConstants.greyLight,
-                          child: const Icon(Icons.person,
-                              size: 50, color: ThemeConstants.grey),
+                  Stack(
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: ThemeConstants.primaryColorLight,
+                            width: 3,
+                          ),
                         ),
-                        errorWidget: (context, url, error) => Container(
-                          color: ThemeConstants.greyLight,
-                          child: const Icon(Icons.person,
-                              size: 50, color: ThemeConstants.grey),
+                        child: ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: profile.profilePictureUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: ThemeConstants.greyLight,
+                              child: const Icon(Icons.person,
+                                  size: 50, color: ThemeConstants.grey),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: ThemeConstants.greyLight,
+                              child: const Icon(Icons.person,
+                                  size: 50, color: ThemeConstants.grey),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(activityStatus),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (profile.account.isAdmin)
+                        Positioned(
+                          top: -5,
+                          right: -5,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade700,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.verified_user,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 20,
-                      height: 20,
+                  if (profile.account.isAdmin)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(activityStatus),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 3,
+                        color: Colors.blue.shade700,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'ADMIN',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(width: 16),
@@ -296,12 +437,17 @@ class _ProfilePageState extends State<ProfilePage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      profile.fullName,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          profile.fullName,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                     ),
                     Text(
                       '@${profile.username}',
@@ -310,35 +456,6 @@ class _ProfilePageState extends State<ProfilePage>
                         color: ThemeConstants.grey,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    if (isVerified)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: ThemeConstants.primaryColor.withAlpha(25),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified,
-                              size: 14,
-                              color: ThemeConstants.primaryColor,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'VERIFIED',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: ThemeConstants.primaryColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -600,31 +717,728 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildPostsTab(UserProfile? profile) {
     if (profile == null) return const SizedBox.shrink();
-    return _buildEmptyStateWithCount(
-      icon: Icons.article_outlined,
-      message: 'Your Posts',
-      count: profile.postsCount,
+
+    return FutureBuilder<List<Post>>(
+      future: Provider.of<PostsProvider>(context, listen: false)
+          .getUserPosts(profile.account.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: ThemeConstants.grey.withAlpha(51),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load posts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: ThemeConstants.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Error: ${snapshot.error.toString()}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: ThemeConstants.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {}); // Refresh
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final posts = snapshot.data ?? [];
+
+        if (posts.isEmpty) {
+          return _buildEmptyStateWithCount(
+            icon: Icons.article_outlined,
+            message: 'Your Posts',
+            count: 0,
+          );
+        }
+
+        return _buildPostsList(posts);
+      },
     );
   }
 
   Widget _buildSavedTab(UserProfile? profile) {
     if (profile == null) return const SizedBox.shrink();
-    return _buildEmptyStateWithCount(
-      icon: Icons.bookmark_border,
-      message: 'Saved Posts',
-      count: profile.savedPostsCount,
+
+    return FutureBuilder<List<Post>>(
+      future: Provider.of<PostsProvider>(context, listen: false)
+          .getSavedPosts(profile.account.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: ThemeConstants.grey.withAlpha(51),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load saved posts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: ThemeConstants.grey,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {}); // Refresh
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final posts = snapshot.data ?? [];
+
+        if (posts.isEmpty) {
+          return _buildEmptyStateWithCount(
+            icon: Icons.bookmark_border,
+            message: 'Saved Posts',
+            count: 0,
+          );
+        }
+
+        return _buildPostsList(posts);
+      },
     );
   }
 
   Widget _buildUpvotedTab(UserProfile? profile) {
     if (profile == null) return const SizedBox.shrink();
-    return _buildEmptyStateWithCount(
-      icon: Icons.thumb_up_outlined,
-      message: 'Upvoted Posts',
-      count: profile.upvotedPostsCount,
+
+    return FutureBuilder<List<Post>>(
+      future: Provider.of<PostsProvider>(context, listen: false)
+          .getUpvotedPosts(profile.account.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: ThemeConstants.grey.withAlpha(51),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load upvoted posts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: ThemeConstants.grey,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {}); // Refresh
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final posts = snapshot.data ?? [];
+
+        if (posts.isEmpty) {
+          return _buildEmptyStateWithCount(
+            icon: Icons.thumb_up_outlined,
+            message: 'Upvoted Posts',
+            count: 0,
+          );
+        }
+
+        return _buildPostsList(posts);
+      },
     );
   }
 
+  // Helper method to build a list of posts
+  Widget _buildPostsList(List<Post> posts) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        // Use Future.delayed to avoid setState during build
+        return Future.delayed(Duration.zero, () {
+          if (mounted) {
+            setState(() {}); // This will refresh the FutureBuilder
+          }
+        });
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: posts.length,
+        itemBuilder: (context, index) {
+          final post = posts[index];
+          return _buildPostCard(post);
+        },
+      ),
+    );
+  }
+
+  // Helper method to build a post card with working buttons
+  Widget _buildPostCard(Post post) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final cardBackground = isDarkMode ? Colors.grey.shade900 : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final subtitleColor =
+        isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shadowColor: Colors.black38,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Author section with gradient background
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  _getCategoryColor(post.category).withOpacity(0.1),
+                  cardBackground,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor:
+                      _getCategoryColor(post.category).withOpacity(0.2),
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundImage:
+                        post.author.profilePictureUrl?.isNotEmpty == true
+                            ? NetworkImage(post.author.profilePictureUrl!)
+                            : null,
+                    backgroundColor: cardBackground,
+                    child: post.author.profilePictureUrl?.isEmpty ?? true
+                        ? Icon(Icons.person,
+                            color: _getCategoryColor(post.category))
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            post.isAnonymous
+                                ? 'Anonymous'
+                                : (post.author.fullName ?? post.author.name),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: textColor,
+                            ),
+                          ),
+                          if (post.author.isAdmin && !post.isAnonymous)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                Icons.verified_user,
+                                size: 20,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time,
+                              size: 12, color: subtitleColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            _getTimeAgo(post.createdAt),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: subtitleColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Category badge
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _getCategoryColor(post.category).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _capitalizeFirstLetter(post.category),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _getCategoryColor(post.category),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Post content - make the InkWell only cover content section
+          InkWell(
+            onTap: () => _navigateToPostDetail(post),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Media content
+                if (post.mediaUrls.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.all(Radius.circular(0)),
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: CachedNetworkImage(
+                            imageUrl: post.mediaUrls.first,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey.shade200,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      _getCategoryColor(post.category)),
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade200,
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.image_not_supported,
+                                        size: 40, color: Colors.grey),
+                                    const SizedBox(height: 8),
+                                    Text('Image not available',
+                                        style: TextStyle(color: subtitleColor)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Honesty badge on image
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: _buildHonestyBadge(post.honestyScore),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Post content
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title with custom styling
+                      Text(
+                        post.title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Content with better contrast
+                      Text(
+                        post.content,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: subtitleColor,
+                          height: 1.3,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Location with cleaner display
+                      if (post.location.address != null)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: _getCategoryColor(post.category)
+                                  .withOpacity(0.8),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                post.location.address ?? 'Unknown location',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: subtitleColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                      // Tags with nicer styling
+                      if (post.tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: post.tags.map((tag) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getCategoryColor(post.category)
+                                      .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: _getCategoryColor(post.category)
+                                        .withOpacity(0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  '#$tag',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _getCategoryColor(post.category)
+                                        .withOpacity(0.8),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider before actions
+          Divider(height: 1, thickness: 1, color: Colors.grey.withOpacity(0.1)),
+
+          // Redesigned action buttons - Modified to only display stats, not allow direct voting
+          Container(
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.black12 : Colors.grey.shade50,
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                // Upvotes display - non-interactive
+                _buildInfoButton(
+                  icon: Icons.arrow_upward,
+                  label: post.upvotes.toString(),
+                  color: Colors.grey,
+                  onTap: () => _navigateToPostDetail(post),
+                ),
+                // Downvotes display - non-interactive
+                _buildInfoButton(
+                  icon: Icons.arrow_downward,
+                  label: post.downvotes.toString(),
+                  color: Colors.grey,
+                  onTap: () => _navigateToPostDetail(post),
+                ),
+                // Save status - non-interactive
+                _buildInfoButton(
+                  icon: post.isSaved == true
+                      ? Icons.bookmark
+                      : Icons.bookmark_outline,
+                  color: post.isSaved == true ? Colors.amber : Colors.grey,
+                  onTap: () => _navigateToPostDetail(post),
+                ),
+                // Comments - navigate to detail
+                _buildInfoButton(
+                  icon: Icons.mode_comment_outlined,
+                  color: Colors.grey,
+                  onTap: () => _navigateToPostDetail(post),
+                ),
+                // Share
+                _buildInfoButton(
+                  icon: Icons.ios_share,
+                  color: Colors.grey,
+                  onTap: () => _sharePost(post),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Info button builder for post actions
+  Widget _buildInfoButton({
+    required IconData icon,
+    String? label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: color,
+              ),
+              if (label != null) const SizedBox(height: 4),
+              if (label != null)
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Post action methods
+  void _sharePost(Post post) {
+    // Implementation for sharing post
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Sharing post: ${post.title}')),
+    );
+  }
+
+  void _reportPost(Post post) {
+    // Implementation for reporting post
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Reporting post: ${post.title}')),
+    );
+  }
+
+  // Helper method to build honesty badge
+  Widget _buildHonestyBadge(int honesty) {
+    Color color;
+    if (honesty >= 80) {
+      color = ThemeConstants.green;
+    } else if (honesty >= 60) {
+      color = ThemeConstants.orange;
+    } else {
+      color = ThemeConstants.red;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_user, size: 12, color: color),
+          const SizedBox(width: 2),
+          Text(
+            '$honesty%',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to get time ago string
+  String _getTimeAgo(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 7) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  // Helper method to get category color
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'news':
+        return ThemeConstants.primaryColor;
+      case 'alert':
+        return ThemeConstants.red;
+      case 'event':
+        return ThemeConstants.orange;
+      case 'community':
+        return ThemeConstants.green;
+      case 'traffic':
+        return Colors.amber;
+      case 'weather':
+        return Colors.blue;
+      case 'crime':
+        return Colors.purple;
+      default:
+        return ThemeConstants.grey;
+    }
+  }
+
+  // Helper method to capitalize first letter
+  String _capitalizeFirstLetter(String text) {
+    if (text.isEmpty) return '';
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  // Helper method to navigate to post detail
+  void _navigateToPostDetail(Post post) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(
+          title: post.title,
+          description: post.content,
+          imageUrl: post.hasMedia && post.mediaUrls.isNotEmpty
+              ? post.mediaUrls.first
+              : '',
+          location: post.location.address ?? "Unknown location",
+          time: _getTimeAgo(post.createdAt),
+          honesty: post.honestyScore,
+          upvotes: post.upvotes,
+          comments:
+              0, // This information might not be available in the post model
+          isVerified: post.author.isAdmin,
+          post: post,
+        ),
+      ),
+    );
+  }
+
+  // Method to open settings
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AccountSettingsPage(
+          onThemeChanged: (ThemeMode mode) {
+            // This callback will be called when theme is changed in the settings page
+            final themeProvider =
+                Provider.of<ThemeProvider>(context, listen: false);
+            themeProvider.setThemeMode(mode);
+          },
+        ),
+      ),
+    );
+  }
+
+  // Method to show edit profile modal
+  void _showEditProfileModal() {
+    final profileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    final profile = profileProvider.currentUserProfile;
+    if (profile == null) return;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Edit Profile'),
+          content: const Text(
+              'Profile editing functionality will be implemented here.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Helper method to build empty state with count
   Widget _buildEmptyStateWithCount({
     required IconData icon,
     required String message,
@@ -641,8 +1455,7 @@ class _ProfilePageState extends State<ProfilePage>
               Icon(
                 icon,
                 size: 64,
-                color: ThemeConstants.grey
-                    .withAlpha(51), // 0.2 opacity is approximately alpha 51
+                color: ThemeConstants.grey.withAlpha(51),
               ),
               const SizedBox(height: 16),
               Text(
@@ -666,549 +1479,6 @@ class _ProfilePageState extends State<ProfilePage>
         ),
       ),
     );
-  }
-
-  Future<void> _pickLocationFromMap() async {
-    final BuildContext currentContext = context;
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MapPage(
-          showBackButton: true,
-          onBackPress: () {
-            if (currentContext.mounted) {
-              Navigator.pop(currentContext);
-            }
-          },
-        ),
-      ),
-    );
-
-    if (result != null && result is String && mounted) {
-      final profileProvider =
-          Provider.of<UserProfileProvider>(context, listen: false);
-      profileProvider.updateCurrentUserProfile(location: result);
-    }
-  }
-
-  void _showEditProfileModal() {
-    final profileProvider =
-        Provider.of<UserProfileProvider>(context, listen: false);
-    final profile = profileProvider.currentUserProfile;
-    if (profile == null) return;
-
-    final nameController = TextEditingController(text: profile.fullName);
-    final usernameController = TextEditingController(text: profile.username);
-    final bioController = TextEditingController(text: profile.bio);
-    final locationController = TextEditingController(text: profile.location);
-    final websiteController =
-        TextEditingController(text: profile.website ?? '');
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Edit Profile',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: ListView(
-                    controller: scrollController,
-                    children: [
-                      const SizedBox(height: 16),
-                      Center(
-                        child: Stack(
-                          children: [
-                            Consumer<UserProfileProvider>(
-                              builder: (context, provider, _) {
-                                final profilePictureUrl = provider
-                                        .currentUserProfile
-                                        ?.profilePictureUrl ??
-                                    '';
-                                // Add a cache-busting parameter to the URL
-                                final cacheBustedUrl =
-                                    '$profilePictureUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-
-                                return CircleAvatar(
-                                  radius: 50,
-                                  backgroundColor: ThemeConstants.greyLight,
-                                  backgroundImage: profilePictureUrl.isNotEmpty
-                                      ? NetworkImage(cacheBustedUrl)
-                                      : null,
-                                  child: profilePictureUrl.isEmpty
-                                      ? Icon(Icons.person,
-                                          size: 50, color: ThemeConstants.grey)
-                                      : null,
-                                  onBackgroundImageError: (_, __) {
-                                    // Display fallback icon when error occurs
-                                  },
-                                );
-                              },
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: CircleAvatar(
-                                radius: 18,
-                                backgroundColor: ThemeConstants.primaryColor,
-                                child: IconButton(
-                                  icon: const Icon(Icons.camera_alt,
-                                      size: 18, color: Colors.white),
-                                  onPressed: () async {
-                                    // Show image source selection dialog
-                                    final ImageSource? source =
-                                        await showModalBottomSheet<ImageSource>(
-                                      context: context,
-                                      builder: (BuildContext context) {
-                                        return SafeArea(
-                                          child: Wrap(
-                                            children: <Widget>[
-                                              ListTile(
-                                                leading: const Icon(
-                                                    Icons.photo_camera),
-                                                title:
-                                                    const Text('Take a photo'),
-                                                onTap: () => Navigator.pop(
-                                                    context,
-                                                    ImageSource.camera),
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(
-                                                    Icons.photo_library),
-                                                title: const Text(
-                                                    'Choose from gallery'),
-                                                onTap: () => Navigator.pop(
-                                                    context,
-                                                    ImageSource.gallery),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    );
-
-                                    if (source == null) return;
-
-                                    try {
-                                      final ImagePicker picker = ImagePicker();
-                                      final XFile? image =
-                                          await picker.pickImage(
-                                        source: source,
-                                        maxWidth: 800,
-                                        maxHeight: 800,
-                                        imageQuality: 85,
-                                      );
-
-                                      if (image == null) return;
-
-                                      // Show uploading indicator
-                                      if (context.mounted) {
-                                        showDialog(
-                                          context: context,
-                                          barrierDismissible: false,
-                                          builder: (context) => const Dialog(
-                                            child: Padding(
-                                              padding: EdgeInsets.all(20.0),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  CircularProgressIndicator(),
-                                                  SizedBox(height: 16),
-                                                  Text(
-                                                      'Uploading profile picture...'),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }
-
-                                      final profileProvider =
-                                          Provider.of<UserProfileProvider>(
-                                              context,
-                                              listen: false);
-
-                                      final success = await profileProvider
-                                          .updateProfilePicture(image.path);
-
-                                      // Close the loading dialog
-                                      if (context.mounted) {
-                                        Navigator.pop(context);
-                                      }
-
-                                      // Force refresh the profile to ensure UI updates properly
-                                      if (success) {
-                                        await profileProvider
-                                            .refreshCurrentUserProfile();
-                                      }
-
-                                      // Show result message
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(success
-                                                ? 'Profile picture updated successfully!'
-                                                : 'Failed to update profile picture: ${profileProvider.error ?? "Unknown error"}'),
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      // Close loading dialog if open
-                                      if (context.mounted &&
-                                          Navigator.of(context).canPop()) {
-                                        Navigator.pop(context);
-                                      }
-
-                                      // Show error message
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                'Error updating profile picture: $e'),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Name',
-                          border: OutlineInputBorder(),
-                        ),
-                        enabled: false,
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: usernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          border: OutlineInputBorder(),
-                          prefixText: '@',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: bioController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Bio',
-                          border: OutlineInputBorder(),
-                          alignLabelWithHint: true,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: locationController,
-                        decoration: InputDecoration(
-                          labelText: 'Location',
-                          border: const OutlineInputBorder(),
-                          prefixIcon: const Icon(Icons.location_on),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.map),
-                            onPressed: () async {
-                              await _pickLocationFromMap();
-                              if (mounted) {
-                                final updatedProfile =
-                                    profileProvider.currentUserProfile;
-                                if (updatedProfile != null) {
-                                  locationController.text =
-                                      updatedProfile.location;
-                                }
-                              }
-                            },
-                            tooltip: 'Pick location from map',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: websiteController,
-                        decoration: const InputDecoration(
-                          labelText: 'Website',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.link),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () async {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (context) =>
-                          const Center(child: CircularProgressIndicator()),
-                    );
-
-                    final success =
-                        await profileProvider.updateCurrentUserProfile(
-                      username: usernameController.text,
-                      bio: bioController.text,
-                      location: locationController.text,
-                      website: websiteController.text,
-                    );
-
-                    if (context.mounted) Navigator.pop(context);
-
-                    if (context.mounted) Navigator.pop(context);
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(success
-                              ? 'Profile updated successfully!'
-                              : 'Failed to update profile: ${profileProvider.error}'),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ThemeConstants.primaryColor,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Save Changes'),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _openSettings() {
-    final BuildContext pageContext = context;
-
-    showModalBottomSheet(
-      context: pageContext,
-      backgroundColor: Theme.of(pageContext).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (modalContext) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.account_circle_outlined),
-                title: const Text('Account Settings'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(modalContext);
-                  Navigator.push(
-                    pageContext,
-                    MaterialPageRoute(
-                      builder: (context) => AccountSettingsPage(
-                        onThemeChanged: (ThemeMode value) {
-                          Provider.of<ThemeProvider>(context, listen: false)
-                              .setThemeMode(value);
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.notifications_outlined),
-                title: const Text('Notification Preferences'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(modalContext);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.lock_outline),
-                title: const Text('Privacy Settings'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(modalContext);
-                  Navigator.push(
-                    pageContext,
-                    MaterialPageRoute(
-                      builder: (context) => const PrivacySettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.flag_outlined),
-                title: const Text('Report History'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(modalContext);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.block),
-                title: const Text('Blocked Users'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(modalContext);
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.logout, color: ThemeConstants.red),
-                title: const Text('Log Out',
-                    style: TextStyle(color: ThemeConstants.red)),
-                onTap: () async {
-                  Navigator.pop(modalContext);
-                  _handleLogout(pageContext);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _handleLogout(BuildContext pageContext) async {
-    developer.log('--- Logout Process Start (ProfilePage) ---',
-        name: 'LogoutTrace');
-    developer.log('Showing confirmation dialog...', name: 'LogoutTrace');
-
-    final confirmed = await showDialog<bool>(
-      context: pageContext,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Confirm Logout'),
-          content: const Text('Are you sure you want to log out?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                developer.log('Logout cancelled by user.', name: 'LogoutTrace');
-                Navigator.of(dialogContext).pop(false);
-              },
-            ),
-            TextButton(
-              child: const Text('Log Out',
-                  style: TextStyle(color: ThemeConstants.red)),
-              onPressed: () {
-                developer.log('Logout confirmed by user.', name: 'LogoutTrace');
-                Navigator.of(dialogContext).pop(true);
-              },
-            ),
-          ],
-        );
-      },
-    );
-
-    developer.log('Confirmation dialog result: $confirmed',
-        name: 'LogoutTrace');
-
-    if (!pageContext.mounted) {
-      developer.log('Logout aborted: Widget is no longer mounted after dialog.',
-          name: 'LogoutTrace');
-      return;
-    }
-
-    if (confirmed == true) {
-      developer.log('Proceeding with logout call...', name: 'LogoutTrace');
-
-      try {
-        try {
-          final googleSignIn = GoogleSignIn();
-          final isSignedIn = await googleSignIn.isSignedIn();
-          developer.log('Google Sign-In status before logout: $isSignedIn',
-              name: 'LogoutTrace');
-
-          if (isSignedIn) {
-            await googleSignIn.signOut();
-            developer.log('Successfully signed out from GoogleSignIn',
-                name: 'LogoutTrace');
-
-            try {
-              await googleSignIn.disconnect();
-              developer.log('Successfully disconnected from GoogleSignIn',
-                  name: 'LogoutTrace');
-            } catch (e) {
-              developer.log('GoogleSignIn disconnect failed (non-critical): $e',
-                  name: 'LogoutTrace');
-            }
-          } else {
-            developer.log('User was not signed in with Google',
-                name: 'LogoutTrace');
-          }
-        } catch (e) {
-          developer.log('Error handling GoogleSignIn during logout: $e',
-              name: 'LogoutTrace');
-        }
-
-        final accountProvider =
-            Provider.of<AccountProvider>(pageContext, listen: false);
-
-        ResponsiveSnackBar.showInfo(
-            context: pageContext, message: 'Logging out...');
-
-        developer.log('Calling accountProvider.logout()...',
-            name: 'LogoutTrace');
-
-        await accountProvider.logout();
-
-        developer.log('accountProvider.logout() finished.',
-            name: 'LogoutTrace');
-      } catch (e, stackTrace) {
-        ResponsiveSnackBar.showError(
-          context: pageContext,
-          message: 'Logout failed: ${e.toString()}',
-        );
-
-        developer.log('Error calling accountProvider.logout(): $e',
-            name: 'LogoutTrace', error: e, stackTrace: stackTrace);
-      }
-    } else {
-      developer.log('Logout aborted (not confirmed).', name: 'LogoutTrace');
-    }
-
-    developer.log('--- Logout Process End (ProfilePage) ---',
-        name: 'LogoutTrace');
   }
 
   void _showFollowersList() {
@@ -1292,8 +1562,9 @@ class _FollowersPageState extends State<_FollowersPage> {
   List<UserProfile> _filteredUsers = [];
   bool _isLoading = false;
   String? _error;
-  final Map<int, bool> _followingStates = {}; // Track follow state for each user
-  final Map<int, bool> _loadingStates = {};  // Track loading state for each user
+  final Map<int, bool> _followingStates =
+      {}; // Track follow state for each user
+  final Map<int, bool> _loadingStates = {}; // Track loading state for each user
 
   @override
   void initState() {
@@ -1361,7 +1632,7 @@ class _FollowersPageState extends State<_FollowersPage> {
   Future<void> _toggleFollow(int userId) async {
     // Don't do anything if already loading
     if (_loadingStates[userId] == true) return;
-    
+
     // Set loading state for this user
     setState(() {
       _loadingStates[userId] = true;
@@ -1370,14 +1641,14 @@ class _FollowersPageState extends State<_FollowersPage> {
     try {
       bool success;
       final isFollowing = _followingStates[userId] ?? false;
-      
+
       if (isFollowing) {
         // User is already following, so unfollow
         success = await widget.profileProvider.unfollowUser(userId);
         if (success) {
           setState(() {
             _followingStates[userId] = false;
-            
+
             // If we're on the following page and unfollow is successful,
             // we should remove this user from the list
             if (!widget.isFollowers) {
@@ -1473,7 +1744,7 @@ class _FollowersPageState extends State<_FollowersPage> {
         final userId = user.account.id;
         final isFollowing = _followingStates[userId] ?? false;
         final isLoading = _loadingStates[userId] ?? false;
-        
+
         return ListTile(
           leading: CircleAvatar(
             backgroundImage: user.profilePictureUrl.isNotEmpty
@@ -1486,11 +1757,11 @@ class _FollowersPageState extends State<_FollowersPage> {
           title: Row(
             children: [
               Text(user.fullName),
-              if (user.isVerified)
+              if (user.account.isAdmin)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: Icon(
-                    Icons.verified,
+                    Icons.verified_user,
                     size: 16,
                     color: ThemeConstants.primaryColor,
                   ),
@@ -1504,8 +1775,7 @@ class _FollowersPageState extends State<_FollowersPage> {
               backgroundColor: isFollowing
                   ? ThemeConstants.greyLight
                   : ThemeConstants.primaryColor,
-              foregroundColor:
-                  isFollowing ? ThemeConstants.grey : Colors.white,
+              foregroundColor: isFollowing ? ThemeConstants.grey : Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -1514,12 +1784,11 @@ class _FollowersPageState extends State<_FollowersPage> {
                 vertical: 8,
               ),
             ),
-            child: isLoading 
+            child: isLoading
                 ? const SizedBox(
-                    width: 16, 
-                    height: 16, 
-                    child: CircularProgressIndicator(strokeWidth: 2)
-                  )
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(isFollowing ? 'Unfollow' : 'Follow'),
           ),
           onTap: () {
@@ -1546,7 +1815,8 @@ class _FollowersPageState extends State<_FollowersPage> {
                     'website': user.website,
                     'interests': user.interests,
                     'is_verified': user.isVerified,
-                    'isFollowing': _followingStates[user.account.id] ?? false, // Pass the current follow state
+                    'isFollowing': _followingStates[user.account.id] ??
+                        false, // Pass the current follow state
                   },
                 ),
               ),

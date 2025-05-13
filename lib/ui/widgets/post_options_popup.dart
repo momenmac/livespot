@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/models/post.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-class PostOptionsPopup extends StatelessWidget {
+class PostOptionsPopup extends StatefulWidget {
   final Post? post;
   final int postId;
 
@@ -14,7 +16,17 @@ class PostOptionsPopup extends StatelessWidget {
   });
 
   @override
+  State<PostOptionsPopup> createState() => _PostOptionsPopupState();
+}
+
+class _PostOptionsPopupState extends State<PostOptionsPopup> {
+  bool _isLoading = false;
+
+  @override
   Widget build(BuildContext context) {
+    // Get the current saved state of the post
+    final bool isSaved = widget.post?.isSaved ?? false;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -41,12 +53,15 @@ class PostOptionsPopup extends StatelessWidget {
           ),
           _buildOptionItem(
             context: context,
-            icon: Icons.bookmark_border,
-            label: 'Save Post',
-            onTap: () {
-              Navigator.pop(context);
-              _savePost(context);
-            },
+            icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+            label: isSaved ? 'Unsave Post' : 'Save Post',
+            onTap: _isLoading
+                ? null
+                : () {
+                    Navigator.pop(context);
+                    _toggleSavePost(context);
+                  },
+            isLoading: _isLoading,
           ),
           _buildOptionItem(
             context: context,
@@ -76,14 +91,21 @@ class PostOptionsPopup extends StatelessWidget {
     required BuildContext context,
     required IconData icon,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     bool isDestructive = false,
+    bool isLoading = false,
   }) {
     return ListTile(
-      leading: Icon(
-        icon,
-        color: isDestructive ? Colors.redAccent : null,
-      ),
+      leading: isLoading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              icon,
+              color: isDestructive ? Colors.redAccent : null,
+            ),
       title: Text(
         label,
         style: TextStyle(
@@ -95,17 +117,54 @@ class PostOptionsPopup extends StatelessWidget {
   }
 
   void _sharePost(BuildContext context) {
-    final String title = post?.title ?? 'Check out this post!';
+    final String title = widget.post?.title ?? 'Check out this post!';
     final String content = 'Check out this post: $title';
     Share.share(content);
   }
 
-  void _savePost(BuildContext context) {
-    // Implement save post functionality
-    ResponsiveSnackBar.showSuccess(
-      context: context,
-      message: 'Post saved successfully',
-    );
+  void _toggleSavePost(BuildContext context) async {
+    if (widget.post == null) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: 'Error: Post information is missing',
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      final bool isSaved = widget.post!.isSaved ?? false;
+
+      // Call the provider to toggle save status
+      final success = await postsProvider.toggleSavePost(widget.post!.id);
+
+      if (success) {
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: isSaved ? 'Post unsaved' : 'Post saved successfully',
+        );
+      } else {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: postsProvider.errorMessage ?? 'Failed to update save status',
+        );
+      }
+    } catch (e) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: 'Error: ${e.toString()}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _reportPost(BuildContext context) {

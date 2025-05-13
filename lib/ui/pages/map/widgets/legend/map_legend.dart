@@ -3,7 +3,7 @@ import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 
 class MapLegend extends StatefulWidget {
-  const MapLegend({Key? key}) : super(key: key);
+  const MapLegend({super.key});
 
   @override
   State<MapLegend> createState() => _MapLegendState();

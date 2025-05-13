@@ -1,17 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/story_viewer_page.dart';
-import 'package:flutter_application_2/ui/pages/home/components/sections/story_section.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:provider/provider.dart';
 
-class AllUpdatesPage extends StatelessWidget {
+class AllUpdatesPage extends StatefulWidget {
   const AllUpdatesPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Get users and their stories
-    final Map<String, List<Map<String, dynamic>>> userStories =
-        StorySection.getUserStories();
+  State<AllUpdatesPage> createState() => _AllUpdatesPageState();
+}
 
+class _AllUpdatesPageState extends State<AllUpdatesPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshStories();
+    });
+  }
+
+  Future<void> _refreshStories() async {
+    try {
+      // Refresh stories from API
+      await Provider.of<PostsProvider>(context, listen: false)
+          .fetchFollowingStories();
+    } catch (e) {
+      // Handle error
+      debugPrint('Error refreshing stories: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recent Updates'),
@@ -22,74 +43,97 @@ class AllUpdatesPage extends StatelessWidget {
               // Implement search
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshStories,
+          ),
         ],
       ),
-      body: ListView(
-        children: [
-          // Stats header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                _buildStatCard(
-                  context,
-                  'Users',
-                  userStories.length.toString(),
-                  Icons.people,
-                  ThemeConstants.primaryColor,
+      body: Consumer<PostsProvider>(
+        builder: (context, postsProvider, _) {
+          final userStories = postsProvider.userStories;
+          final isLoading = postsProvider.isLoading;
+
+          if (isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (userStories.isEmpty) {
+            return const Center(
+              child: Text('No stories available'),
+            );
+          }
+
+          return ListView(
+            children: [
+              // Stats header
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    _buildStatCard(
+                      context,
+                      'Users',
+                      userStories.length.toString(),
+                      Icons.people,
+                      ThemeConstants.primaryColor,
+                    ),
+                    const SizedBox(width: 12),
+                    _buildStatCard(
+                      context,
+                      'Updates',
+                      _countAllStories(userStories).toString(),
+                      Icons.update,
+                      ThemeConstants.green,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                _buildStatCard(
-                  context,
-                  'Updates',
-                  _countAllStories(userStories).toString(),
-                  Icons.update,
-                  ThemeConstants.green,
-                ),
-              ],
-            ),
-          ),
-
-          // Grid of user updates
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            childAspectRatio: 0.85,
-            children: userStories.entries.map((entry) {
-              final String username = entry.key;
-              final List<Map<String, dynamic>> stories = entry.value;
-
-              return _buildUserUpdatesCard(
-                context,
-                username: username,
-                stories: stories,
-                imageUrl: _getUserImageUrl(username),
-                isLive: username == 'Emily J.' || username == 'David',
-                hasMultipleStories: stories.length > 1,
-                storiesCount: stories.length,
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Latest updates header
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text(
-              'Latest Updates',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
               ),
-            ),
-          ),
 
-          // List of all updates, ordered by time
-          _buildAllUpdatesList(context, userStories),
-        ],
+              // Grid of user updates
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                childAspectRatio: 0.85,
+                children: userStories.entries.map((entry) {
+                  final String username = entry.key;
+                  final List<Map<String, dynamic>> stories = entry.value;
+
+                  return _buildUserUpdatesCard(
+                    context,
+                    username: username,
+                    stories: stories,
+                    imageUrl: _getUserImageUrl(username),
+                    isLive: username == 'Emily J.' || username == 'David',
+                    hasMultipleStories: stories.length > 1,
+                    storiesCount: stories.length,
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Latest updates header
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Text(
+                  'Latest Updates',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              // List of all updates, ordered by time
+              _buildAllUpdatesList(context, userStories),
+            ],
+          );
+        },
       ),
     );
   }
@@ -166,7 +210,8 @@ class AllUpdatesPage extends StatelessWidget {
             SizedBox(
               height: 100,
               child: Stack(
-                clipBehavior: Clip.none, // Important to allow elements to overflow
+                clipBehavior:
+                    Clip.none, // Important to allow elements to overflow
                 children: [
                   // Cover image
                   Container(
@@ -221,7 +266,7 @@ class AllUpdatesPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                  
+
                   // User profile image
                   Positioned(
                     bottom: -20,
@@ -297,7 +342,8 @@ class AllUpdatesPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 28, 16, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min, // Important to prevent overflow
+                  mainAxisSize:
+                      MainAxisSize.min, // Important to prevent overflow
                   children: [
                     const SizedBox(height: 4),
                     Text(
@@ -380,7 +426,8 @@ class AllUpdatesPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center, // Added to improve alignment
+          crossAxisAlignment:
+              CrossAxisAlignment.center, // Added to improve alignment
           children: [
             // User avatar
             CircleAvatar(
@@ -395,7 +442,8 @@ class AllUpdatesPage extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded( // Wrap in Expanded to prevent overflow
+                      Expanded(
+                        // Wrap in Expanded to prevent overflow
                         child: Text(
                           story['username'] ?? '',
                           style: const TextStyle(
@@ -432,7 +480,8 @@ class AllUpdatesPage extends StatelessWidget {
                         color: Colors.grey[600],
                       ),
                       const SizedBox(width: 4),
-                      Expanded( // Wrap location text in Expanded
+                      Expanded(
+                        // Wrap location text in Expanded
                         child: Text(
                           story['location'] ?? '',
                           style: TextStyle(
@@ -549,7 +598,7 @@ class AllUpdatesPage extends StatelessWidget {
           stories: stories,
           username: username,
           userImageUrl: userImageUrl,
-          isUserVerified: isVerified,
+          isUserAdmin: isVerified,
         ),
       ),
     );
@@ -566,7 +615,7 @@ class AllUpdatesPage extends StatelessWidget {
           stories: [story],
           username: story['username'] ?? '',
           userImageUrl: story['userImage'] ?? '',
-          isUserVerified: story['isVerified'] ?? false,
+          isUserAdmin: story['isVerified'] ?? false,
         ),
       ),
     );

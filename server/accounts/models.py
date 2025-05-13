@@ -159,6 +159,7 @@ class UserProfile(models.Model):
     followers = models.ManyToManyField('self', symmetrical=False, related_name='following', blank=True)
     interests = models.JSONField(blank=True, null=True)  # Store interests as a list of strings
     last_active = models.DateTimeField(default=timezone.now)
+    saved_posts = models.ManyToManyField('posts.Post', related_name='saved_by_profiles', blank=True)
 
     def __str__(self):
         return f"{self.user.email} - @{self.username}"
@@ -179,8 +180,7 @@ class UserProfile(models.Model):
     
     @property
     def saved_posts_count(self):
-        # Placeholder for saved posts count
-        return 0
+        return self.saved_posts.count() if hasattr(self, 'saved_posts') else 0
     
     @property
     def upvoted_posts_count(self):

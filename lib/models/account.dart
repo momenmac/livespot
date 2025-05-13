@@ -13,6 +13,7 @@ class Account {
   final String lastName;
   final String? profilePictureUrl;
   final bool isVerified;
+  final bool isAdmin;
   final String? googleId;
   final DateTime? createdAt;
   final DateTime? lastLogin;
@@ -24,6 +25,7 @@ class Account {
     required this.lastName,
     this.profilePictureUrl,
     this.isVerified = false,
+    this.isAdmin = false,
     this.googleId,
     this.createdAt,
     this.lastLogin,
@@ -109,6 +111,7 @@ class Account {
     String lastName = accountData['last_name'] ?? json['last_name'] ?? '';
     bool isVerified =
         accountData['is_verified'] ?? json['is_verified'] ?? false;
+    bool isAdmin = accountData['is_admin'] ?? json['is_admin'] ?? false;
     String? googleId = accountData['google_id'] ?? json['google_id'];
 
     // Parse dates with better error handling
@@ -139,6 +142,7 @@ class Account {
       lastName: lastName,
       profilePictureUrl: profilePictureUrl,
       isVerified: isVerified,
+      isAdmin: accountData['is_admin'] ?? json['is_admin'] ?? false,
       googleId: googleId,
       createdAt: createdAt,
       lastLogin: lastLogin,
@@ -153,6 +157,7 @@ class Account {
       'last_name': lastName,
       'profile_picture_url': profilePictureUrl,
       'is_verified': isVerified,
+      'is_admin': isAdmin,
       'google_id': googleId,
       'created_at': createdAt?.toIso8601String(),
       'last_login': lastLogin?.toIso8601String(),
@@ -171,6 +176,7 @@ class Account {
     String? lastName,
     String? profilePictureUrl,
     bool? isVerified,
+    bool? isAdmin,
     String? googleId,
     DateTime? createdAt,
     DateTime? lastLogin,
@@ -182,6 +188,7 @@ class Account {
       lastName: lastName ?? this.lastName,
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
       isVerified: isVerified ?? this.isVerified,
+      isAdmin: isAdmin ?? this.isAdmin,
       googleId: googleId ?? this.googleId,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,

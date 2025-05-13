@@ -28,6 +28,7 @@ class PostSerializer(serializers.ModelSerializer):
     location = PostCoordinatesSerializer()
     author = AccountAuthorSerializer(read_only=True)
     user_vote = serializers.IntegerField(read_only=True)
+    is_saved = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Post
@@ -36,9 +37,9 @@ class PostSerializer(serializers.ModelSerializer):
             'location', 'author', 'created_at', 'updated_at',
             'upvotes', 'downvotes', 'honesty_score', 'status',
             'thread', 'is_verified_location', 'taken_within_app',
-            'tags', 'user_vote', 'is_anonymous'
+            'tags', 'user_vote', 'is_anonymous', 'is_saved'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 'downvotes', 'honesty_score', 'user_vote']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 'downvotes', 'honesty_score', 'user_vote', 'is_saved']
         
     def create(self, validated_data):
         # Extract location data and create PostCoordinates object
@@ -87,6 +88,20 @@ class PostSerializer(serializers.ModelSerializer):
             
         return representation
     
+    def get_is_saved(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            from accounts.models import UserProfile
+            try:
+                profile = UserProfile.objects.get(user=user)
+                # Check if the profile has saved_posts attribute and if this post is in it
+                if hasattr(profile, 'saved_posts'):
+                    return profile.saved_posts.filter(id=obj.id).exists()
+            except UserProfile.DoesNotExist:
+                pass
+        return False
+
 class ThreadDetailSerializer(ThreadSerializer):
     posts = PostSerializer(many=True, read_only=True)
     

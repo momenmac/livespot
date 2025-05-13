@@ -7,6 +7,7 @@ import 'package:flutter_application_2/models/thread.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:flutter_application_2/constants/category_utils.dart'; // Added category utils import
 
 class PostsService {
   final String baseUrl;
@@ -486,5 +487,313 @@ class PostsService {
       debugPrint('Error uploading media: $e');
       throw Exception('Network error when uploading media: $e');
     }
+  }
+
+  // Get posts created by a specific user
+  Future<List<Post>> getUserPosts(int userId) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/user_posts/')
+          .replace(queryParameters: {'user_id': userId.toString()});
+      final headers = await _getHeaders();
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final dynamic decodedBody = json.decode(response.body);
+        final List<dynamic> data;
+
+        if (decodedBody is List) {
+          data = decodedBody;
+        } else if (decodedBody is Map && decodedBody.containsKey('results')) {
+          data = decodedBody['results'] ?? [];
+        } else {
+          debugPrint(
+              'Unexpected response format: ${response.body.substring(0, min(100, response.body.length))}...');
+          data = [];
+        }
+
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        debugPrint(
+            'Failed to load user posts: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to load user posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting user posts: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Get posts by a specific user on a specific date
+  Future<List<Post>> getUserPostsByDate(int userId, String date) async {
+    try {
+      // The date parameter should be in YYYY-MM-DD format
+      final queryParams = {
+        'user_id': userId.toString(),
+        'date': date,
+      };
+
+      final url = Uri.parse('$baseUrl/api/posts/user_posts/')
+          .replace(queryParameters: queryParams);
+      final headers = await _getHeaders();
+
+      debugPrint('🔍 API URL with date filter: $url');
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final dynamic decodedBody = json.decode(response.body);
+        final List<dynamic> data;
+
+        if (decodedBody is List) {
+          data = decodedBody;
+        } else if (decodedBody is Map && decodedBody.containsKey('results')) {
+          data = decodedBody['results'] ?? [];
+        } else {
+          debugPrint('Unexpected response format for date filtered posts');
+          data = [];
+        }
+
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        debugPrint(
+            'Failed to load user posts by date: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Failed to load user posts by date: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting user posts by date: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Get saved posts for a specific user
+  Future<List<Post>> getSavedPosts(int userId) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/saved/')
+          .replace(queryParameters: {'user_id': userId.toString()});
+      final headers = await _getHeaders();
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final dynamic decodedBody = json.decode(response.body);
+        final List<dynamic> data;
+
+        if (decodedBody is List) {
+          data = decodedBody;
+        } else if (decodedBody is Map && decodedBody.containsKey('results')) {
+          data = decodedBody['results'] ?? [];
+        } else {
+          debugPrint(
+              'Unexpected response format: ${response.body.substring(0, min(100, response.body.length))}...');
+          data = [];
+        }
+
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        debugPrint(
+            'Failed to load saved posts: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to load saved posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting saved posts: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Get upvoted posts for a specific user
+  Future<List<Post>> getUpvotedPosts(int userId) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/upvoted/')
+          .replace(queryParameters: {'user_id': userId.toString()});
+      final headers = await _getHeaders();
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final dynamic decodedBody = json.decode(response.body);
+        final List<dynamic> data;
+
+        if (decodedBody is List) {
+          data = decodedBody;
+        } else if (decodedBody is Map && decodedBody.containsKey('results')) {
+          data = decodedBody['results'] ?? [];
+        } else {
+          debugPrint(
+              'Unexpected response format: ${response.body.substring(0, min(100, response.body.length))}...');
+          data = [];
+        }
+
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        debugPrint(
+            'Failed to load upvoted posts: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to load upvoted posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting upvoted posts: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Toggle save/unsave a post
+  Future<Map<String, dynamic>> toggleSavePost(int postId) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/$postId/toggle_save/');
+      final headers = await _getHeaders();
+
+      // Debug the request being sent
+      debugPrint('Toggling save status for post with URL: $url');
+
+      final response = await http.post(
+        url,
+        headers: headers,
+      );
+
+      debugPrint('Save toggle response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        debugPrint('Save toggle response: $responseData');
+        return responseData;
+      } else {
+        debugPrint(
+            'Failed to toggle save status: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to toggle save status: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error toggling save status: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Get stories from users that the current user is following
+  // Get stories from following users - formatted from posts
+  Future<Map<String, List<Map<String, dynamic>>>> getFollowingStories() async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/following_posts/');
+      final headers = await _getHeaders();
+
+      debugPrint('Fetching following posts as stories with URL: $url');
+
+      debugPrint('Fetching stories from following users with URL: $url');
+      final response = await http.get(url, headers: headers);
+      debugPrint('Stories API response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        final Map<String, List<Map<String, dynamic>>> stories = {};
+
+        // Parse the response data into a map of username -> list of stories
+        responseData.forEach((username, userStories) {
+          // Skip empty keys or empty lists
+          if (username.isEmpty || userStories == null) {
+            return;
+          }
+
+          if (userStories is List) {
+            // Only add non-empty lists of stories
+            if (userStories.isNotEmpty) {
+              stories[username] = List<Map<String, dynamic>>.from(userStories);
+              debugPrint(
+                  "Added ${userStories.length} stories for user: $username");
+            }
+          }
+        });
+
+        // Enhance stories with location data
+        final enhancedStories = _enhanceStoriesWithLocationData(stories);
+        debugPrint(
+            "Enhanced stories with location data. Total users: ${enhancedStories.length}");
+
+        // Log successful loading
+        debugPrint(
+            '[StorySection] Loaded stories from API: ${enhancedStories.keys.length} users with stories');
+        return enhancedStories;
+      } else {
+        debugPrint(
+            'Failed to load stories: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Failed to load stories: ${response.statusCode} - ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      debugPrint('Error getting following stories: $e');
+      throw Exception('Network error when fetching stories: $e');
+    }
+  }
+
+  // Helper method to enhance stories with location data if missing
+  Map<String, List<Map<String, dynamic>>> _enhanceStoriesWithLocationData(
+      Map<String, List<Map<String, dynamic>>> stories) {
+    final result = <String, List<Map<String, dynamic>>>{};
+
+    stories.forEach((username, userStories) {
+      final enhancedStories = <Map<String, dynamic>>[];
+
+      for (final story in userStories) {
+        final enhancedStory = Map<String, dynamic>.from(story);
+
+        // Add location data if missing
+        if (!enhancedStory.containsKey('location') ||
+            enhancedStory['location'] == null) {
+          // Check if we have coordinates to use
+          if (enhancedStory.containsKey('latitude') &&
+              enhancedStory.containsKey('longitude') &&
+              enhancedStory['latitude'] != null &&
+              enhancedStory['longitude'] != null) {
+            enhancedStory['location'] = {
+              'coordinates': {
+                'latitude': enhancedStory['latitude'],
+                'longitude': enhancedStory['longitude']
+              },
+              'address': 'Location available'
+            };
+          }
+        } else if (enhancedStory['location'] is Map) {
+          // Ensure location map has all required fields
+          var loc = enhancedStory['location'] as Map;
+
+          // If location has no coordinates but we have lat/lng directly, add them
+          if (!loc.containsKey('coordinates') &&
+              enhancedStory.containsKey('latitude') &&
+              enhancedStory.containsKey('longitude')) {
+            loc['coordinates'] = {
+              'latitude': enhancedStory['latitude'],
+              'longitude': enhancedStory['longitude']
+            };
+          }
+
+          // Ensure address field exists
+          if (!loc.containsKey('address') ||
+              loc['address'] == null ||
+              loc['address'] == 'null') {
+            loc['address'] = 'Location available';
+          }
+        }
+
+        // Validate category data
+        if (enhancedStory.containsKey('category') &&
+            enhancedStory['category'] != null) {
+          String category = enhancedStory['category'].toString().toLowerCase();
+
+          // Check if this is a valid category
+          if (!CategoryUtils.allCategories.contains(category)) {
+            debugPrint(
+                'Warning: Unknown category in story data: $category. Setting to "other"');
+            enhancedStory['category'] = 'other';
+          }
+        } else {
+          // Set a default category if none is provided
+          enhancedStory['category'] = 'other';
+        }
+
+        enhancedStories.add(enhancedStory);
+      }
+
+      result[username] = enhancedStories;
+    });
+
+    return result;
   }
 }

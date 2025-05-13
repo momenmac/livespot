@@ -73,7 +73,7 @@ class _MapPageState extends State<MapPage> {
     _controller.addListener(() {
       // For date changes
       _fetchMapLocations();
-        });
+    });
   }
 
   @override
@@ -95,7 +95,7 @@ class _MapPageState extends State<MapPage> {
     try {
       // Format the date for the API request
       final dateParam = _controller.selectedDate != null
-          ? "${_controller.selectedDate!.year}-${_controller.selectedDate!.month.toString().padLeft(2, '0')}-${_controller.selectedDate!.day.toString().padLeft(2, '0')}"
+          ? "${_controller.selectedDate.year}-${_controller.selectedDate.month.toString().padLeft(2, '0')}-${_controller.selectedDate.day.toString().padLeft(2, '0')}"
           : null;
 
       // Create the URL with query parameters
@@ -105,7 +105,7 @@ class _MapPageState extends State<MapPage> {
       if (dateParam != null) {
         queryParams['date'] = dateParam;
       }
-      
+
       // Send all selected categories as a single comma-separated value
       // This format works with the server-side code we updated
       if (_selectedCategories.isNotEmpty) {
@@ -113,7 +113,7 @@ class _MapPageState extends State<MapPage> {
       }
 
       if (queryParams.isNotEmpty) {
-        url += '?' + queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
+        url += '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
       }
 
       // Debug the actual URL being sent
@@ -153,8 +153,17 @@ class _MapPageState extends State<MapPage> {
           _isLoadingLocations = false;
         });
 
-        // Update map markers
-        _addMarkersToMap();
+        // Always clear existing markers before adding new ones
+        _mapMarkers.clear();
+
+        // Only add markers if there are locations available
+        if (_mapLocations.isNotEmpty) {
+          _addMarkersToMap();
+        } else {
+          print(
+              'No locations found for the selected filters - markers cleared');
+          setState(() {}); // Trigger a rebuild to show the empty map
+        }
       } else {
         setState(() {
           _error =
@@ -231,19 +240,23 @@ class _MapPageState extends State<MapPage> {
     final category = post['category'] ?? 'general';
     final title = post['title'] ?? '';
     final content = post['content'] ?? post['description'] ?? '';
-    
+
     // Extract media information with improved handling for different data structures
     String? thumbnailUrl;
-    
-    if (post.containsKey('media_urls') && post['media_urls'] is List && (post['media_urls'] as List).isNotEmpty) {
+
+    if (post.containsKey('media_urls') &&
+        post['media_urls'] is List &&
+        (post['media_urls'] as List).isNotEmpty) {
       // Handle direct media_urls array
       thumbnailUrl = post['media_urls'][0];
-    } else if (post.containsKey('media') && post['media'] is List && (post['media'] as List).isNotEmpty) {
+    } else if (post.containsKey('media') &&
+        post['media'] is List &&
+        (post['media'] as List).isNotEmpty) {
       var mediaList = post['media'];
-      
+
       // Debug info
       print('Media list for post ${post['id']}: $mediaList');
-      
+
       // Check if the media item has a 'url' directly
       if (mediaList[0] is Map && mediaList[0].containsKey('url')) {
         thumbnailUrl = mediaList[0]['url'];
@@ -258,9 +271,17 @@ class _MapPageState extends State<MapPage> {
       else if (mediaList[0] is Map) {
         final mediaItem = mediaList[0];
         print('Media item is a map: $mediaItem');
-        
+
         // Try common keys for image URLs
-        for (final key in ['image_url', 'url', 'path', 'src', 'uri', 'thumb', 'thumbnail']) {
+        for (final key in [
+          'image_url',
+          'url',
+          'path',
+          'src',
+          'uri',
+          'thumb',
+          'thumbnail'
+        ]) {
           if (mediaItem.containsKey(key)) {
             thumbnailUrl = mediaItem[key];
             print('Found media URL in $key field: $thumbnailUrl');
@@ -268,7 +289,9 @@ class _MapPageState extends State<MapPage> {
           }
         }
       }
-    } else if (post.containsKey('mediaUrls') && post['mediaUrls'] is List && (post['mediaUrls'] as List).isNotEmpty) {
+    } else if (post.containsKey('mediaUrls') &&
+        post['mediaUrls'] is List &&
+        (post['mediaUrls'] as List).isNotEmpty) {
       // Handle direct mediaUrls array with camelCase
       thumbnailUrl = post['mediaUrls'][0];
       print('Found media URL in mediaUrls array: $thumbnailUrl');
@@ -281,13 +304,13 @@ class _MapPageState extends State<MapPage> {
       thumbnailUrl = post['imageUrl'];
       print('Found direct imageUrl field: $thumbnailUrl');
     }
-    
+
     // Check if thumbnailUrl is a relative URL and make it absolute if needed
     if (thumbnailUrl != null && thumbnailUrl.startsWith('/')) {
       thumbnailUrl = 'http://localhost:8000$thumbnailUrl';
       print('Converted to absolute URL: $thumbnailUrl');
     }
-    
+
     // If still no thumbnail but we have a category, we'll show a fallback icon
 
     // Fix for honesty rate - handle different possible structures and formats
@@ -341,29 +364,30 @@ class _MapPageState extends State<MapPage> {
       if (score >= 60) return ThemeConstants.orange;
       return ThemeConstants.red;
     }
-    
+
     final honestyColor = getHonestyColor(honesty);
 
     // Show overlay
     OverlayState? overlay = Overlay.of(context);
     late OverlayEntry overlayEntry; // Using late to defer initialization
-    
+
     // Create a transparent overlay to catch taps outside the popup
     // This will be used to dismiss the popup when clicking elsewhere
     final GlobalKey popupKey = GlobalKey();
-    
+
     void removeOverlay() {
       overlayEntry.remove();
     }
-    
+
     // This handler will dismiss the popup when tapping outside
     void handleTapOutside(TapDownDetails details) {
-      final RenderBox? popupBox = popupKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? popupBox =
+          popupKey.currentContext?.findRenderObject() as RenderBox?;
       if (popupBox == null) return;
-      
+
       final Offset popupPosition = popupBox.localToGlobal(Offset.zero);
       final Size popupSize = popupBox.size;
-      
+
       // Check if the tap is outside the popup bounds
       if (details.globalPosition.dx < popupPosition.dx ||
           details.globalPosition.dx > popupPosition.dx + popupSize.width ||
@@ -384,7 +408,7 @@ class _MapPageState extends State<MapPage> {
               child: Container(color: Colors.transparent),
             ),
           ),
-          
+
           // The actual popup content
           Positioned(
             top: size.height * 0.15,
@@ -420,73 +444,89 @@ class _MapPageState extends State<MapPage> {
                           AspectRatio(
                             aspectRatio: 16 / 9,
                             child: thumbnailUrl != null
-                              ? Image.network(
-                                  thumbnailUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    // Fallback for image error
-                                    return Container(
-                                      color: Theme.of(context).hoverColor,
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              CategoryUtils.getCategoryIcon(category),
-                                              color: CategoryUtils.getCategoryColor(category),
-                                              size: 40,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              category.toUpperCase(),
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: CategoryUtils.getCategoryColor(category),
+                                ? Image.network(
+                                    thumbnailUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      // Fallback for image error
+                                      return Container(
+                                        color: Theme.of(context).hoverColor,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                CategoryUtils.getCategoryIcon(
+                                                    category),
+                                                color: CategoryUtils
+                                                    .getCategoryColor(category),
+                                                size: 40,
                                               ),
-                                            )
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      color: Theme.of(context).scaffoldBackgroundColor,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                              : null,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  color: Theme.of(context).hoverColor,
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          CategoryUtils.getCategoryIcon(category),
-                                          color: CategoryUtils.getCategoryColor(category),
-                                          size: 40,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          category.toUpperCase(),
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: CategoryUtils.getCategoryColor(category),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                category.toUpperCase(),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: CategoryUtils
+                                                      .getCategoryColor(
+                                                          category),
+                                                ),
+                                              )
+                                            ],
                                           ),
-                                        )
-                                      ],
+                                        ),
+                                      );
+                                    },
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        color: Theme.of(context)
+                                            .scaffoldBackgroundColor,
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                        .cumulativeBytesLoaded /
+                                                    loadingProgress
+                                                        .expectedTotalBytes!
+                                                : null,
+                                            color:
+                                                Theme.of(context).primaryColor,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Container(
+                                    color: Theme.of(context).hoverColor,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            CategoryUtils.getCategoryIcon(
+                                                category),
+                                            color:
+                                                CategoryUtils.getCategoryColor(
+                                                    category),
+                                            size: 40,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            category.toUpperCase(),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: CategoryUtils
+                                                  .getCategoryColor(category),
+                                            ),
+                                          )
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
                           ),
 
                           // Semi-transparent gradient overlay at top for controls
@@ -589,17 +629,20 @@ class _MapPageState extends State<MapPage> {
                                     fontSize: 20,
                                   ),
                                 ),
-                                
+
                               if (title.isNotEmpty && content.isNotEmpty)
                                 const SizedBox(height: 12),
-                                
+
                               // Content text
                               if (content.isNotEmpty)
                                 Text(
                                   content,
                                   style: TextStyle(
                                     fontSize: 15,
-                                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color,
                                   ),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
@@ -632,11 +675,13 @@ class _MapPageState extends State<MapPage> {
 
                               // Honesty rating as a pill instead of a bar (more modern)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: honestyColor.withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: honestyColor.withOpacity(0.3)),
+                                  border: Border.all(
+                                      color: honestyColor.withOpacity(0.3)),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -667,26 +712,36 @@ class _MapPageState extends State<MapPage> {
                                 child: ElevatedButton.icon(
                                   onPressed: () {
                                     removeOverlay();
-                                    
+
                                     // Debug output to understand the author data structure
-                                    print('Author data from API: ${post['author']}');
-                                    print('Is anonymous flag: ${post['is_anonymous']}');
-                                    
+                                    print(
+                                        'Author data from API: ${post['author']}');
+                                    print(
+                                        'Is anonymous flag: ${post['is_anonymous']}');
+
                                     // Extract post details for navigation
-                                    final title = post['title'] ?? 'Untitled Post';
-                                    final description = post['content'] ?? post['description'] ?? '';
+                                    final title =
+                                        post['title'] ?? 'Untitled Post';
+                                    final description = post['content'] ??
+                                        post['description'] ??
+                                        '';
                                     final imageUrl = thumbnailUrl ?? '';
-                                    final location = post['location'] != null ? 
-                                        (post['location']['name'] ?? 'Unknown location') : 'Unknown location';
+                                    final location = post['location'] != null
+                                        ? (post['location']['name'] ??
+                                            'Unknown location')
+                                        : 'Unknown location';
                                     final time = formattedDate;
                                     final honestyInt = honesty.toInt();
                                     final upvotes = post['upvotes'] ?? 0;
-                                    final comments = post['comments_count'] ?? post['threads_count'] ?? 0;
-                                    final isVerified = post['is_verified'] ?? false;
-                                        
+                                    final comments = post['comments_count'] ??
+                                        post['threads_count'] ??
+                                        0;
+                                    final isVerified =
+                                        post['is_verified'] ?? false;
+
                                     // Navigate with all required parameters
                                     Navigator.push(
-                                      context, 
+                                      context,
                                       MaterialPageRoute(
                                         builder: (context) => PostDetailPage(
                                           title: title,
@@ -700,36 +755,64 @@ class _MapPageState extends State<MapPage> {
                                           isVerified: isVerified,
                                           // Create a Post object to ensure consistent marker styling
                                           post: Post(
-                                              id: post['id'] ?? 0,
-                                              title: title,
-                                              content: description,
-                                              category: category,  // Pass category for consistent marker styling
-                                              imageUrl: imageUrl,
-                                              createdAt: postDate ?? DateTime.now(),
-                                              honestyScore: honestyInt,
-                                              upvotes: upvotes,
-                                              downvotes: post['downvotes'] ?? 0,
-                                              userVote: 0,
-                                              mediaUrls: imageUrl.isNotEmpty ? [imageUrl] : [],
-                                              latitude: post['location']['latitude']?.toDouble() ?? 0.0,
-                                              longitude: post['location']['longitude']?.toDouble() ?? 0.0,
-                                              location: _createPostLocation(
-                                                location,
-                                                post['location']['latitude']?.toDouble(),
-                                                post['location']['longitude']?.toDouble(),
-                                              ),
-                                              author: _createPostAuthor(
-                                                post['author']?['id'] ?? 0,
-                                                post['is_anonymous'] == true ? 'Anonymous' : (post['author']?['display_name'] ?? post['author']?['username'] ?? 'Anonymous'),
-                                                isVerified,
-                                                profileImage: post['is_anonymous'] == true ? null : post['author']?['profile_picture'],
-                                              ),
-                                              status: post['status'] ?? 'published',
-                                              isVerifiedLocation: post['is_verified_location'] ?? true,
-                                              takenWithinApp: post['taken_within_app'] ?? true,
-                                              isAnonymous: post['is_anonymous'] ?? false, 
-                                              tags: [],
+                                            id: post['id'] ?? 0,
+                                            title: title,
+                                            content: description,
+                                            category:
+                                                category, // Pass category for consistent marker styling
+                                            imageUrl: imageUrl,
+                                            createdAt:
+                                                postDate ?? DateTime.now(),
+                                            honestyScore: honestyInt,
+                                            upvotes: upvotes,
+                                            downvotes: post['downvotes'] ?? 0,
+                                            userVote: 0,
+                                            mediaUrls: imageUrl.isNotEmpty
+                                                ? [imageUrl]
+                                                : [],
+                                            latitude: post['location']
+                                                        ['latitude']
+                                                    ?.toDouble() ??
+                                                0.0,
+                                            longitude: post['location']
+                                                        ['longitude']
+                                                    ?.toDouble() ??
+                                                0.0,
+                                            location: _createPostLocation(
+                                              location,
+                                              post['location']['latitude']
+                                                  ?.toDouble(),
+                                              post['location']['longitude']
+                                                  ?.toDouble(),
                                             ),
+                                            author: _createPostAuthor(
+                                              post['author']?['id'] ?? 0,
+                                              post['is_anonymous'] == true
+                                                  ? 'Anonymous'
+                                                  : (post['author']
+                                                          ?['display_name'] ??
+                                                      post['author']
+                                                          ?['username'] ??
+                                                      'Anonymous'),
+                                              isVerified,
+                                              profileImage:
+                                                  post['is_anonymous'] == true
+                                                      ? null
+                                                      : post['author']
+                                                          ?['profile_picture'],
+                                            ),
+                                            status:
+                                                post['status'] ?? 'published',
+                                            isVerifiedLocation:
+                                                post['is_verified_location'] ??
+                                                    true,
+                                            takenWithinApp:
+                                                post['taken_within_app'] ??
+                                                    true,
+                                            isAnonymous:
+                                                post['is_anonymous'] ?? false,
+                                            tags: [],
+                                          ),
                                         ),
                                       ),
                                     );
@@ -738,8 +821,10 @@ class _MapPageState extends State<MapPage> {
                                   label: const Text('View Details'),
                                   style: ElevatedButton.styleFrom(
                                     foregroundColor: Colors.white,
-                                    backgroundColor: Theme.of(context).primaryColor,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    backgroundColor:
+                                        Theme.of(context).primaryColor,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -766,20 +851,23 @@ class _MapPageState extends State<MapPage> {
 
   // Method to handle category selection - updated for multiple categories
   void _handleCategorySelected(List<CategoryItem> selectedCategories) {
-    print('DEBUG: Received ${selectedCategories.length} categories from MapCategories widget');
-    
-    final newCategories = selectedCategories.map((item) => item.name.toLowerCase()).toList();
-    
+    print(
+        'DEBUG: Received ${selectedCategories.length} categories from MapCategories widget');
+
+    final newCategories =
+        selectedCategories.map((item) => item.name.toLowerCase()).toList();
+
     // Log before state change
     print('DEBUG: Current categories before update: $_selectedCategories');
     print('DEBUG: New categories to set: $newCategories');
-    
+
     setState(() {
       // Direct replacement with the full list from MapCategories
       _selectedCategories = newCategories;
-      
+
       // Keep backward compatibility with _selectedCategory
-      _selectedCategory = _selectedCategories.isNotEmpty ? _selectedCategories.first : null;
+      _selectedCategory =
+          _selectedCategories.isNotEmpty ? _selectedCategories.first : null;
     });
 
     // Debug log after state change
@@ -790,7 +878,8 @@ class _MapPageState extends State<MapPage> {
   }
 
   // Helper method to create PostCoordinates instance
-  PostCoordinates _createPostLocation(String address, double? latitude, double? longitude) {
+  PostCoordinates _createPostLocation(
+      String address, double? latitude, double? longitude) {
     return PostCoordinates(
       address: address,
       latitude: latitude ?? 0.0,
@@ -799,7 +888,8 @@ class _MapPageState extends State<MapPage> {
   }
 
   // Helper method to create User instance
-  User _createPostAuthor(int id, String username, bool isVerified, {String? profileImage}) {
+  User _createPostAuthor(int id, String username, bool isVerified,
+      {String? profileImage}) {
     return User(
       id: id,
       username: username,

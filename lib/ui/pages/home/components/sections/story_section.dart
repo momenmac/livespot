@@ -2,10 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/story_viewer_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/all_updates_page.dart';
+import 'package:flutter_application_2/providers/user_profile_provider.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:provider/provider.dart';
 import 'dart:math' as math;
+import 'dart:developer' as developer;
 
-class StorySection extends StatelessWidget {
+class StorySection extends StatefulWidget {
   const StorySection({super.key});
+
+  // Method to get stories from the provider
+  static Map<String, List<Map<String, dynamic>>> getUserStories(
+      BuildContext context) {
+    return Provider.of<PostsProvider>(context, listen: false).userStories;
+  }
+
+  @override
+  State<StorySection> createState() => _StorySectionState();
+}
+
+class _StorySectionState extends State<StorySection> {
+  bool _dataLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStories();
+  }
+
+  Future<void> _loadStories() async {
+    if (!mounted) return;
+
+    try {
+      // Call the API to fetch stories
+      await Provider.of<PostsProvider>(context, listen: false)
+          .fetchFollowingStories();
+
+      // Check mounted state before updating the UI
+      if (mounted) {
+        setState(() {
+          _dataLoaded = true;
+        });
+        developer.log('Loaded stories from API', name: 'StorySection');
+      }
+    } catch (e) {
+      // Only log the error if the widget is still mounted
+      if (mounted) {
+        developer.log('Error loading stories: $e', name: 'StorySection');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,419 +111,314 @@ class StorySection extends StatelessWidget {
         // Story list
         SizedBox(
           height: 110,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              // Add story button
-              _buildAddStoryItem(),
-              // User stories
-              _buildStoryItem(
-                username: 'Emily J.',
-                imageUrl: 'https://picsum.photos/seed/user1/100/100',
-                hasMultipleStories: true,
-                storiesCount: 3,
-                isLive: true,
-                storyData: _mockStoryDataByUser['Emily J.']?.first ?? {},
-                context: context,
-              ),
-              _buildStoryItem(
-                username: 'Michael',
-                imageUrl: 'https://picsum.photos/seed/user2/100/100',
-                hasMultipleStories: true,
-                storiesCount: 2,
-                isLive: false,
-                storyData: _mockStoryDataByUser['Michael']?.first ?? {},
-                context: context,
-              ),
-              _buildStoryItem(
-                username: 'Sarah',
-                imageUrl: 'https://picsum.photos/seed/user3/100/100',
-                hasMultipleStories: false,
-                storiesCount: 1,
-                isLive: false,
-                storyData: _mockStoryDataByUser['Sarah']?.first ?? {},
-                context: context,
-              ),
-              _buildStoryItem(
-                username: 'David',
-                imageUrl: 'https://picsum.photos/seed/user4/100/100',
-                hasMultipleStories: true,
-                storiesCount: 4,
-                isLive: true,
-                storyData: _mockStoryDataByUser['David']?.first ?? {},
-                context: context,
-              ),
-              _buildStoryItem(
-                username: 'Alex',
-                imageUrl: 'https://picsum.photos/seed/user5/100/100',
-                hasMultipleStories: false,
-                storiesCount: 1,
-                isLive: false,
-                storyData: _mockStoryDataByUser['Alex']?.first ?? {},
-                context: context,
-              ),
-            ],
-          ),
+          child: Consumer<PostsProvider>(builder: (context, postsProvider, _) {
+            final isLoading = postsProvider.isLoading;
+            final userStories = postsProvider.userStories;
+
+            if (isLoading && !_dataLoaded) {
+              return Center(
+                child: CircularProgressIndicator(
+                  color: ThemeConstants.primaryColor,
+                ),
+              );
+            }
+
+            // Check if we have valid stories data
+            final List<Widget> storyWidgets = [];
+            if (userStories.isNotEmpty) {
+              try {
+                for (var entry in userStories.entries) {
+                  if (entry.key.isNotEmpty && entry.value.isNotEmpty) {
+                    storyWidgets.add(_buildUserStory(entry.key, entry.value));
+                  }
+                }
+              } catch (e) {
+                developer.log('Error building story widgets: $e',
+                    name: 'StorySection');
+              }
+            }
+
+            return ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                // Add story button (for the current user)
+                _buildAddStoryItem(),
+
+                // All stories/updates button
+                _buildAllUpdatesItem(),
+
+                // Show stories from API
+                if (storyWidgets.isEmpty && _dataLoaded)
+                  _buildEmptyStoriesWidget()
+                else
+                  ...storyWidgets,
+              ],
+            );
+          }),
         ),
       ],
     );
   }
 
   Widget _buildAddStoryItem() {
+    // Get current user profile from provider
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final userProfile = userProfileProvider.currentUserProfile;
+
     return Container(
       margin: const EdgeInsets.only(right: 12),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: ThemeConstants.greyLight,
-              shape: BoxShape.circle,
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: ThemeConstants.greyLight,
-                        width: 2,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.add,
-                      size: 30,
-                      color: ThemeConstants.grey,
-                    ),
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: ThemeConstants.grey.withOpacity(0.2),
+                    width: 2,
                   ),
                 ),
-              ],
-            ),
+                child: Padding(
+                  padding: const EdgeInsets.all(2.5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(35),
+                    child: userProfile?.profilePictureUrl != null &&
+                            userProfile!.profilePictureUrl.isNotEmpty
+                        ? Image.network(
+                            userProfile.profilePictureUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.person,
+                              size: 40,
+                              color: ThemeConstants.grey,
+                            ),
+                          )
+                        : Container(
+                            color: ThemeConstants.greyLight.withOpacity(0.3),
+                            child: Icon(
+                              Icons.person,
+                              size: 40,
+                              color: ThemeConstants.grey,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: ThemeConstants.primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              )
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           const Text(
-            'Add Story',
+            'Your story',
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              color: Colors.black,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStoryItem({
-    required String username,
-    required String imageUrl,
-    required bool hasMultipleStories,
-    required int storiesCount,
-    required bool isLive,
-    required Map<String, dynamic> storyData,
-    required BuildContext context,
-  }) {
-    // Find all stories for this user
-    final List<Map<String, dynamic>> userStories =
-        _mockStoryDataByUser[username] ?? [];
-
+  Widget _buildAllUpdatesItem() {
     return GestureDetector(
       onTap: () {
-        _navigateToStoryViewer(
+        Navigator.push(
           context,
-          userStories,
-          username,
-          imageUrl,
-          isLive,
+          MaterialPageRoute(
+            builder: (context) => const AllUpdatesPage(),
+          ),
         );
       },
       child: Container(
         margin: const EdgeInsets.only(right: 12),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: ThemeConstants.grey.withOpacity(0.2),
+                  width: 2,
+                ),
+                color: ThemeConstants.greyLight.withOpacity(0.3),
+              ),
+              child: const Icon(
+                Icons.notifications_outlined,
+                size: 30,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 5),
+            const Text(
+              'Updates',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyStoriesWidget() {
+    return Container(
+      width: 100,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.people_outline,
+            size: 32,
+            color: ThemeConstants.grey.withOpacity(0.7),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No stories available',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: ThemeConstants.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserStory(String username, List<Map<String, dynamic>> stories) {
+    if (stories.isEmpty) {
+      developer.log('Warning: Empty stories list for user: $username',
+          name: 'StorySection');
+      return const SizedBox.shrink(); // Return empty widget for empty stories
+    }
+
+    final bool hasMultipleStories = stories.length > 1;
+    String imageUrl = 'https://picsum.photos/seed/fallback/200';
+
+    try {
+      if (stories.isNotEmpty && stories.first.containsKey('imageUrl')) {
+        final dynamic urlValue = stories.first['imageUrl'];
+        if (urlValue != null && urlValue is String && urlValue.isNotEmpty) {
+          imageUrl = urlValue;
+        }
+      }
+    } catch (e) {
+      developer.log('Error getting image URL: $e', name: 'StorySection');
+    }
+
+    bool isAdmin = false;
+    try {
+      if (stories.isNotEmpty && stories.first.containsKey('is_admin')) {
+        final dynamic adminValue = stories.first['is_admin'];
+        if (adminValue != null && adminValue is bool) {
+          isAdmin = adminValue;
+        }
+      }
+    } catch (e) {
+      developer.log('Error getting admin status: $e', name: 'StorySection');
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StoryViewerPage(
+              stories: stories,
+              username: username,
+              userImageUrl: imageUrl,
+              isUserAdmin: isAdmin,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
           children: [
             SizedBox(
-              width: 68,
-              height: 68,
+              width: 70,
+              height: 70,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  // Segmented circle for multiple stories
-                  if (hasMultipleStories) _buildSegmentedCircle(storiesCount),
-                  // Single circle for one story
-                  if (!hasMultipleStories)
-                    Container(
-                      width: 68,
-                      height: 68,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            ThemeConstants.primaryColor,
-                            ThemeConstants.primaryColor.withOpacity(0.7),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  // Profile image
-                  Center(
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: ClipOval(
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.person,
-                            size: 36,
-                            color: ThemeConstants.grey.withOpacity(0.7),
+                  hasMultipleStories
+                      ? CustomPaint(
+                          painter: SegmentedCirclePainter(
+                            segments: stories.length,
+                            color: ThemeConstants.primaryColor,
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: ThemeConstants.primaryColor,
+                              width: 2,
+                            ),
                           ),
                         ),
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(35),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: ThemeConstants.greyLight.withOpacity(0.3),
+                            child: const Icon(
+                              Icons.image_not_supported,
+                              size: 30,
+                              color: Colors.grey,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
-                  // Live indicator
-                  if (isLive)
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white, width: 1.5),
-                        ),
-                        child: const Text(
-                          'LIVE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              username,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isLive ? FontWeight.bold : FontWeight.w500,
+            const SizedBox(height: 5),
+            SizedBox(
+              width: 70,
+              child: Text(
+                username,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSegmentedCircle(int segments) {
-    return SizedBox(
-      width: 68,
-      height: 68,
-      child: CustomPaint(
-        painter: SegmentedCirclePainter(
-          segments: segments,
-          colors: [
-            ThemeConstants.primaryColor,
-            ThemeConstants.primaryColor.withOpacity(0.7),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Mock data for stories by user
-  static final Map<String, List<Map<String, dynamic>>> _mockStoryDataByUser = {
-    'Emily J.': [
-      {
-        'title': 'Flash Flooding on Main Street',
-        'description':
-            'Heavy rain has caused significant flooding downtown. Several roads are now closed.',
-        'imageUrl': 'https://picsum.photos/seed/story1/800/600',
-        'location': 'Main St, Boston, MA',
-        'time': '15 minutes ago',
-        'honesty': 95,
-        'upvotes': 78,
-        'comments': 12,
-        'isVerified': true,
-      },
-      {
-        'title': 'Traffic Backed Up on Highway 95',
-        'description':
-            'Expect delays of up to 30 minutes due to construction and flooding.',
-        'imageUrl': 'https://picsum.photos/seed/story1b/800/600',
-        'location': 'Highway 95, Boston, MA',
-        'time': '25 minutes ago',
-        'honesty': 90,
-        'upvotes': 45,
-        'comments': 8,
-        'isVerified': true,
-      },
-      {
-        'title': 'Emergency Shelters Opening',
-        'description':
-            'City officials are opening emergency shelters at local schools for those affected by flooding.',
-        'imageUrl': 'https://picsum.photos/seed/story1c/800/600',
-        'location': 'City Hall, Boston, MA',
-        'time': '40 minutes ago',
-        'honesty': 98,
-        'upvotes': 112,
-        'comments': 24,
-        'isVerified': true,
-      },
-    ],
-    'Michael': [
-      {
-        'title': 'New Tech Conference Announced',
-        'description':
-            'The annual tech summit will be held downtown next month featuring speakers from major companies.',
-        'imageUrl': 'https://picsum.photos/seed/story2/800/600',
-        'location': 'Convention Center, Austin, TX',
-        'time': '1 hour ago',
-        'honesty': 88,
-        'upvotes': 45,
-        'comments': 8,
-        'isVerified': true,
-      },
-      {
-        'title': 'Tech Startup Workshop',
-        'description':
-            'Join our free workshop on funding opportunities for tech startups this weekend.',
-        'imageUrl': 'https://picsum.photos/seed/story2b/800/600',
-        'location': 'Innovation Hub, Austin, TX',
-        'time': '2 hours ago',
-        'honesty': 92,
-        'upvotes': 38,
-        'comments': 6,
-        'isVerified': true,
-      },
-    ],
-    'Sarah': [
-      {
-        'title': 'Local Restaurant Grand Opening',
-        'description':
-            'Chef Mario\'s new Italian bistro opens this weekend with special promotions.',
-        'imageUrl': 'https://picsum.photos/seed/story3/800/600',
-        'location': 'Oak St, Portland, OR',
-        'time': '3 hours ago',
-        'honesty': 85,
-        'upvotes': 32,
-        'comments': 5,
-        'isVerified': false,
-      },
-    ],
-    'David': [
-      {
-        'title': 'Traffic Accident on Highway 101',
-        'description':
-            'Multi-car collision causing major delays. Police and emergency services on scene.',
-        'imageUrl': 'https://picsum.photos/seed/story4/800/600',
-        'location': 'Highway 101, San Francisco, CA',
-        'time': '30 minutes ago',
-        'honesty': 97,
-        'upvotes': 112,
-        'comments': 28,
-        'isVerified': true,
-      },
-      {
-        'title': 'Alternate Routes Available',
-        'description':
-            'Police recommend using these alternate routes to avoid the accident on Highway 101.',
-        'imageUrl': 'https://picsum.photos/seed/story4b/800/600',
-        'location': 'San Francisco, CA',
-        'time': '45 minutes ago',
-        'honesty': 96,
-        'upvotes': 87,
-        'comments': 15,
-        'isVerified': true,
-      },
-      {
-        'title': 'Accident Cleared',
-        'description':
-            'The accident on Highway 101 has been cleared. Traffic is still heavy but moving.',
-        'imageUrl': 'https://picsum.photos/seed/story4c/800/600',
-        'location': 'Highway 101, San Francisco, CA',
-        'time': '1 hour ago',
-        'honesty': 98,
-        'upvotes': 65,
-        'comments': 10,
-        'isVerified': true,
-      },
-      {
-        'title': 'Traffic Update',
-        'description':
-            'Traffic flow has returned to normal on Highway 101 following earlier accident.',
-        'imageUrl': 'https://picsum.photos/seed/story4d/800/600',
-        'location': 'Highway 101, San Francisco, CA',
-        'time': '2 hours ago',
-        'honesty': 95,
-        'upvotes': 42,
-        'comments': 7,
-        'isVerified': true,
-      },
-    ],
-    'Alex': [
-      {
-        'title': 'Community Cleanup Event',
-        'description':
-            'Volunteers needed this Saturday for beach cleanup. Equipment will be provided.',
-        'imageUrl': 'https://picsum.photos/seed/story5/800/600',
-        'location': 'Sunset Beach, Miami, FL',
-        'time': '4 hours ago',
-        'honesty': 91,
-        'upvotes': 64,
-        'comments': 7,
-        'isVerified': false,
-      },
-    ],
-  };
-
-  // Make the mock data accessible to other classes
-  static Map<String, List<Map<String, dynamic>>> getUserStories() {
-    return _mockStoryDataByUser;
-  }
-
-  // New method to navigate to StoryViewer for multiple stories
-  void _navigateToStoryViewer(
-    BuildContext context,
-    List<Map<String, dynamic>> stories,
-    String username,
-    String userImageUrl,
-    bool isVerified,
-  ) {
-    if (stories.isEmpty) return;
-
-    // Use the new StoryViewerPage for all stories
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StoryViewerPage(
-          stories: stories,
-          username: username,
-          userImageUrl: userImageUrl,
-          isUserVerified: isVerified,
         ),
       ),
     );
@@ -487,60 +428,42 @@ class StorySection extends StatelessWidget {
 // Custom painter for segmented circle (like Telegram stories)
 class SegmentedCirclePainter extends CustomPainter {
   final int segments;
-  final List<Color> colors;
+  final Color color;
   final double strokeWidth;
   final double gapWidth;
 
   SegmentedCirclePainter({
     required this.segments,
-    required this.colors,
-    this.strokeWidth = 4.0,
-    this.gapWidth = 4.0,
+    required this.color,
+    this.strokeWidth = 2.5,
+    this.gapWidth = 3,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Rect rect = Offset.zero & size;
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(center.dx, center.dy) - strokeWidth / 2;
+    final radius = math.min(size.width, size.height) / 2;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
 
-    // Fix: Simplify the logic for drawing segments
     if (segments <= 1) {
-      // Just draw a complete circle if only one segment
-      final Paint paint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..shader = LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(rect);
-
       canvas.drawCircle(center, radius, paint);
       return;
     }
 
-    // For multiple segments
-    final double segmentAngle = 2 * math.pi / segments;
-    final double gapAngle = 0.05; // Fixed small gap between segments
-
-    final Paint paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..shader = LinearGradient(
-        colors: colors,
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(rect);
+    final segmentAngle = 2 * math.pi / segments;
+    final gapAngle = gapWidth / radius;
 
     for (int i = 0; i < segments; i++) {
-      final double startAngle = i * segmentAngle - math.pi / 2;
-      final double sweepAngle = segmentAngle - gapAngle;
+      final startAngle = i * segmentAngle + gapAngle / 2;
+      final endAngle = (i + 1) * segmentAngle - gapAngle / 2;
 
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweepAngle,
+        startAngle - math.pi / 2, // Start from top
+        endAngle - startAngle,
         false,
         paint,
       );
@@ -548,5 +471,9 @@ class SegmentedCirclePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(SegmentedCirclePainter oldDelegate) =>
+      segments != oldDelegate.segments ||
+      color != oldDelegate.color ||
+      strokeWidth != oldDelegate.strokeWidth ||
+      gapWidth != oldDelegate.gapWidth;
 }

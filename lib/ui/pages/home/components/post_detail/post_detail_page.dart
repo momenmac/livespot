@@ -8,14 +8,12 @@ import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-import 'package:flutter_application_2/ui/widgets/shimmer_loading_image.dart';
 import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:flutter_application_2/ui/widgets/thread_item.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' show sin, cos, sqrt, atan2, pi;
-import 'package:flutter_application_2/constants/category_utils.dart';
 import 'dart:io';
 
 class PostDetailPage extends StatefulWidget {
@@ -62,6 +60,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   late MapPageController _mapController;
   bool _mapInitialized = false; // Remove 'late' as it's initialized here
   bool _isLoadingVote = false; // Add loading state for vote operations
+  bool _isLoading = false; // Add loading state for save operations
 
   // Real threads data, initialized empty
   List<Map<String, dynamic>> _threads = [];
@@ -213,7 +212,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
           // Get the category from the post, or use a default
           String category = widget.post?.category.toLowerCase() ?? 'news';
-          
+
           // Set a custom marker with appropriate styling based on the category
           _mapController.setCustomMarker(
             latitude: widget.post!.latitude,
@@ -452,6 +451,67 @@ class _PostDetailPageState extends State<PostDetailPage> {
     }
   }
 
+  // Handle save post functionality with improved error handling
+  void _toggleSavePost() async {
+    if (_isLoading || widget.post == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Get the posts provider
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
+      // Optimistically update UI for better user experience
+      final previousSavedState = widget.post!.isSaved ?? false;
+      setState(() {
+        widget.post!.isSaved = !previousSavedState;
+      });
+
+      // Call API through provider
+      final success = await postsProvider.toggleSavePost(widget.post!.id);
+
+      if (!success) {
+        // Revert on API failure
+        setState(() {
+          widget.post!.isSaved = previousSavedState;
+        });
+
+        if (mounted) {
+          // Show error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  postsProvider.errorMessage ?? 'Failed to update save status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Handle exceptions
+      setState(() {
+        widget.post!.isSaved = !(widget.post!.isSaved ?? false);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   // Add thread through API
   Future<void> _addThread() async {
     // Check if image is attached - require an image to post a thread
@@ -630,13 +690,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
     // First try: Check if we have a valid post object with an imageUrl
     if (widget.post?.imageUrl != null && widget.post!.imageUrl.isNotEmpty) {
       return widget.post!.imageUrl;
-    } 
-    
+    }
+
     // Second try: Check if the post has media URLs
     if (widget.post?.hasMedia == true && widget.post!.mediaUrls.isNotEmpty) {
       return widget.post!.mediaUrls.first;
     }
-    
+
     // Third try: Use the directly provided imageUrl
     if (widget.imageUrl.isNotEmpty) {
       return widget.imageUrl;
@@ -649,9 +709,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
   // Helper method to determine if a string is a file path or URL
   bool _isFilePath(String path) {
     // This is a simple heuristic that can be enhanced based on your needs
-    return path.startsWith('/') || 
-           path.startsWith('file:/') ||
-           !path.contains('://');
+    return path.startsWith('/') ||
+        path.startsWith('file:/') ||
+        !path.contains('://');
   }
 
   // Widget to display either network image or file image based on the path
@@ -683,7 +743,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   Widget _buildImageErrorPlaceholder() {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    
+
     return Container(
       color: isDarkMode ? Colors.grey[800] : ThemeConstants.greyLight,
       child: Center(
@@ -1039,12 +1099,16 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   const SizedBox(height: 16),
 
                   // Engagement metrics
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       // Upvotes - Using arrow up instead of thumb up
                       GestureDetector(
                         onTap: widget.post != null ? _handleUpvote : null,
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               _hasUpvoted
@@ -1063,36 +1127,23 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2),
                                   )
-                                : Row(
-                                    children: [
-                                      Text(
-                                        '$_upvotes',
-                                        style: TextStyle(
-                                          color: _hasUpvoted
-                                              ? ThemeConstants.primaryColor
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Upvote',
-                                        style: TextStyle(
-                                          color: _hasUpvoted
-                                              ? ThemeConstants.primaryColor
-                                              : Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                : Text(
+                                    '$_upvotes',
+                                    style: TextStyle(
+                                      color: _hasUpvoted
+                                          ? ThemeConstants.primaryColor
+                                          : Colors.grey,
+                                    ),
                                   ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
+
                       // Downvotes - Using arrow down instead of thumb down
                       GestureDetector(
                         onTap: widget.post != null ? _handleDownvote : null,
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               _hasDownvoted
@@ -1111,38 +1162,21 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2),
                                   )
-                                : Row(
-                                    children: [
-                                      Text(
-                                        '$_downvotes',
-                                        style: TextStyle(
-                                          color: _hasDownvoted
-                                              ? Colors.redAccent
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Downvote',
-                                        style: TextStyle(
-                                          color: _hasDownvoted
-                                              ? Colors.redAccent
-                                              : Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                : Text(
+                                    '$_downvotes',
+                                    style: TextStyle(
+                                      color: _hasDownvoted
+                                          ? Colors.redAccent
+                                          : Colors.grey,
+                                    ),
                                   ),
                           ],
                         ),
                       ),
 
-                      const SizedBox(
-                          width:
-                              16), // Added more space here between downvote and thread count
-
                       // Comments count
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(
                             Icons.comment_outlined,
@@ -1156,30 +1190,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ),
                         ],
                       ),
-                      const Spacer(),
-                      // Share button
-                      GestureDetector(
-                        onTap: () {
-                          // Share post functionality
-                          Share.share(
-                            'Check out this post: ${widget.post?.title ?? widget.title}',
-                          );
-                        },
-                        child: const Row(
-                          children: [
-                            Icon(
-                              Icons.share_outlined,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Share',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
+
+                      // Share and Save buttons
+                      _buildAdditionalActionButtons(),
                     ],
                   ),
                 ],
@@ -1284,6 +1297,79 @@ class _PostDetailPageState extends State<PostDetailPage> {
     } else {
       return Colors.red;
     }
+  }
+
+  Widget _buildAdditionalActionButtons() {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 200),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Share button
+          GestureDetector(
+            onTap: () {
+              // Share post functionality
+              Share.share(
+                'Check out this post: ${widget.post?.title ?? widget.title}',
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(
+                  Icons.share_outlined,
+                  color: Colors.grey,
+                  size: 20,
+                ),
+                SizedBox(width: 4),
+                Text(
+                  'Share',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+
+          // Save button
+          if (widget.post != null)
+            GestureDetector(
+              onTap: _isLoading ? null : _toggleSavePost,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : Icon(
+                          widget.post!.isSaved == true
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                          color: widget.post!.isSaved == true
+                              ? Colors.amber
+                              : Colors.grey,
+                          size: 20,
+                        ),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.post!.isSaved == true ? 'Unsave' : 'Save',
+                    style: TextStyle(
+                      color: widget.post!.isSaved == true
+                          ? Colors.amber
+                          : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   @override

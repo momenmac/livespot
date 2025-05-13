@@ -3,6 +3,7 @@ import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/models/thread.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter_application_2/constants/category_utils.dart'; // Added import
 
 class PostsProvider with ChangeNotifier {
   final PostsService _postsService;
@@ -12,6 +13,10 @@ class PostsProvider with ChangeNotifier {
   List<Thread> _threads = [];
   bool _isLoading = false;
   String? _errorMessage;
+
+  // Map of usernames to their stories
+  Map<String, List<Map<String, dynamic>>> _userStories = {};
+  Map<String, List<Map<String, dynamic>>> get userStories => _userStories;
 
   // Getters
   List<Post> get posts => _posts;
@@ -256,6 +261,253 @@ class PostsProvider with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  // Get posts created by a specific user
+  Future<List<Post>> getUserPosts(int userId) async {
+    _setLoading(true);
+    try {
+      final posts = await _postsService.getUserPosts(userId);
+      _errorMessage = null;
+      return posts;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch user posts: $e';
+      debugPrint(_errorMessage);
+      return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Get posts by a specific user on a specific date
+  Future<List<Post>> getUserPostsByDate(int userId, String date) async {
+    _setLoading(true);
+    try {
+      final posts = await _postsService.getUserPostsByDate(userId, date);
+      _errorMessage = null;
+      return posts;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch user posts by date: $e';
+      debugPrint(_errorMessage);
+      return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Get saved posts for a specific user
+  Future<List<Post>> getSavedPosts(int userId) async {
+    _setLoading(true);
+    try {
+      final posts = await _postsService.getSavedPosts(userId);
+      _errorMessage = null;
+      return posts;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch saved posts: $e';
+      debugPrint(_errorMessage);
+      return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Get upvoted posts for a specific user
+  Future<List<Post>> getUpvotedPosts(int userId) async {
+    _setLoading(true);
+    try {
+      final posts = await _postsService.getUpvotedPosts(userId);
+      _errorMessage = null;
+      return posts;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch upvoted posts: $e';
+      debugPrint(_errorMessage);
+      return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Toggle save/unsave a post
+  Future<bool> toggleSavePost(int postId) async {
+    try {
+      // First make the API call
+      final result = await _postsService.toggleSavePost(postId);
+      final success = result['success'] ?? false;
+
+      if (success) {
+        // Only update the local state if the API call was successful
+        final postIndex = _posts.indexWhere((p) => p.id == postId);
+        if (postIndex != -1) {
+          // Use the response to set the exact state rather than toggling
+          // This ensures UI and server state are in sync
+          final bool currentState = _posts[postIndex].isSaved ?? false;
+          _posts[postIndex].isSaved = !currentState;
+
+          // Schedule notification for the next frame to avoid setState during build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            notifyListeners();
+          });
+        }
+      }
+
+      _errorMessage = null;
+      return success;
+    } catch (e) {
+      _errorMessage = 'Failed to save/unsave post: $e';
+      debugPrint(_errorMessage);
+      return false;
+    }
+  }
+
+  // Fetch stories from users the current user is following
+  Future<Map<String, List<Map<String, dynamic>>>>
+      fetchFollowingStories() async {
+    _setLoading(true);
+    try {
+      _userStories = await _postsService.getFollowingStories();
+
+      // Process stories to ensure categories and locations are valid
+      _userStories = _sanitizeStoriesData(_userStories);
+
+      _errorMessage = null;
+      notifyListeners();
+      return _userStories;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch following stories: $e';
+      debugPrint(_errorMessage);
+      return {};
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Helper method to ensure story data has valid categories and locations
+  Map<String, List<Map<String, dynamic>>> _sanitizeStoriesData(
+      Map<String, List<Map<String, dynamic>>> stories) {
+    final result = <String, List<Map<String, dynamic>>>{};
+
+    stories.forEach((username, userStories) {
+      final sanitizedStories = <Map<String, dynamic>>[];
+
+      for (final story in userStories) {
+        final sanitizedStory = Map<String, dynamic>.from(story);
+
+        // Sanitize category
+        if (sanitizedStory.containsKey('category') &&
+            sanitizedStory['category'] != null) {
+          String category = sanitizedStory['category'].toString().toLowerCase();
+
+          // Check if this is a valid category from our list
+          if (!CategoryUtils.allCategories.contains(category)) {
+            debugPrint(
+                'Warning: Unknown category in story: $category. Using "other" as fallback.');
+            sanitizedStory['category'] = 'other';
+          }
+        } else {
+          // If no category, set default
+          sanitizedStory['category'] = 'other';
+        }
+
+        sanitizedStories.add(sanitizedStory);
+      }
+
+      result[username] = sanitizedStories;
+    });
+
+    return result;
+  }
+
+  // Helper method to deduplicate stories by their ID
+  Map<String, List<Map<String, dynamic>>> _deduplicateStoriesByUserId(
+      Map<String, List<Map<String, dynamic>>> stories) {
+    final result = <String, List<Map<String, dynamic>>>{};
+
+    stories.forEach((username, userStories) {
+      // Use a set to track the IDs we've already seen
+      final seenIds = <int>{};
+      final uniqueStories = <Map<String, dynamic>>[];
+
+      for (final story in userStories) {
+        // Get the ID of the story (post)
+        final id = story['id'] is int
+            ? story['id']
+            : (story['id'] is String ? int.tryParse(story['id']) ?? -1 : -1);
+
+        // Fix honesty rating
+        if (story.containsKey('honesty_score') &&
+            story['honesty_score'] != null) {
+          story['honesty'] = story['honesty_score'];
+        } else if (story.containsKey('honesty') && story['honesty'] == 0) {
+          // Default to 50% if no honesty score is provided
+          story['honesty'] = 50;
+        }
+
+        // Fix description/content fields
+        if (!story.containsKey('description') ||
+            story['description'] == null ||
+            story['description'] == '') {
+          if (story.containsKey('content') && story['content'] != null) {
+            story['description'] = story['content'];
+          } else if (story.containsKey('caption') && story['caption'] != null) {
+            story['description'] = story['caption'];
+          }
+        }
+
+        // Add location information if missing
+        if (!story.containsKey('location') || story['location'] == null) {
+          // Try to use coordinates if available
+          if (story.containsKey('latitude') &&
+              story.containsKey('longitude') &&
+              story['latitude'] != null &&
+              story['longitude'] != null) {
+            story['location'] = {
+              'coordinates': {
+                'latitude': story['latitude'],
+                'longitude': story['longitude']
+              },
+              'address': 'Location available'
+            };
+          }
+          // Try to use category as a fallback location
+          else if (story.containsKey('category') && story['category'] != null) {
+            String category = story['category'].toString();
+            if ([
+              'event',
+              'news',
+              'traffic',
+              'weather',
+              'fire',
+              'explosion',
+              'disaster'
+            ].contains(category.toLowerCase())) {
+              story['location'] = 'Category: ${category.toUpperCase()}';
+            }
+          }
+        }
+
+        // Only add stories with unique IDs
+        if (id != -1 && !seenIds.contains(id)) {
+          seenIds.add(id);
+          uniqueStories.add(story);
+        }
+      }
+
+      // Only add users who have at least one story
+      if (uniqueStories.isNotEmpty) {
+        result[username] = uniqueStories;
+      }
+    });
+
+    debugPrint(
+        'Deduplicated stories: Original count: ${_countTotalStories(stories)}, New count: ${_countTotalStories(result)}');
+    return result;
+  }
+
+  // Helper to count total stories across all users
+  int _countTotalStories(Map<String, List<Map<String, dynamic>>> stories) {
+    int count = 0;
+    stories.forEach((_, userStories) => count += userStories.length);
+    return count;
   }
 
   // Helper method to update loading state

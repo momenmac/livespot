@@ -43,6 +43,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
         token['is_verified'] = user.is_verified
+        token['is_admin'] = user.is_admin
         
         return token
 
@@ -891,6 +892,7 @@ def all_users_minimal(request):
             "name": name,
             "email": user.email,
             "avatarUrl": avatar_url,
+            "is_admin": user.is_admin,
         })
     return add_cors_headers(JsonResponse(data, safe=False))
 

@@ -32,6 +32,7 @@ class Post {
   DateTime timePosted;
   double distance = 0.0;
   String description = '';
+  bool? isSaved; // Added isSaved field to track if post is saved by user
 
   Post({
     required this.id,
@@ -62,11 +63,15 @@ class Post {
     DateTime? timePosted,
     double? distance,
     String? description,
+    this.isSaved, // Add isSaved parameter
   })  : latitude = latitude ?? location.latitude,
         longitude = longitude ?? location.longitude,
         imageUrl = imageUrl ?? (mediaUrls.isNotEmpty ? mediaUrls[0] : ''),
         authorProfilePic = authorProfilePic ?? author.profilePictureUrl,
-        authorName = authorName ?? (isAnonymous ? 'Anonymous' : author.name), // Use Anonymous name if isAnonymous is true
+        authorName = authorName ??
+            (isAnonymous
+                ? 'Anonymous'
+                : author.name), // Use Anonymous name if isAnonymous is true
         isAuthorVerified = isAuthorVerified ?? author.isVerified,
         timePosted = timePosted ?? createdAt,
         distance = distance ?? 0.0,
@@ -74,7 +79,7 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json) {
     final bool isAnonymous = json['is_anonymous'] ?? false;
-    
+
     final post = Post(
       id: json['id'],
       title: json['title'],
@@ -101,6 +106,7 @@ class Post {
       distance: json['distance']?.toDouble() ?? 0.0,
       // If post is anonymous, use 'Anonymous' as author name
       authorName: isAnonymous ? 'Anonymous' : null,
+      isSaved: json['is_saved'], // Map isSaved from API response
     );
 
     return post;
@@ -130,6 +136,7 @@ class Post {
       'distance': distance,
       'latitude': latitude,
       'longitude': longitude,
+      'is_saved': isSaved, // Include isSaved in JSON
     };
   }
 

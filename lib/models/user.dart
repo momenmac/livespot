@@ -4,6 +4,7 @@ class User {
   final String? fullName;
   final String? profileImage;
   final bool isVerified;
+  final bool isAdmin;
 
   User({
     required this.id,
@@ -11,6 +12,7 @@ class User {
     this.fullName,
     this.profileImage,
     this.isVerified = false,
+    this.isAdmin = false,
   });
 
   // Add getters for compatibility with post_detail_page.dart
@@ -27,8 +29,8 @@ class User {
         fullName:
             '${json['first_name'] ?? ''} ${json['last_name'] ?? ''}'.trim(),
         profileImage: json['profile_picture'],
-        isVerified:
-            false, // Default since this field might not be in the new serializer
+        isVerified: json['is_verified'] ?? false, // Default to false if missing
+        isAdmin: json['is_admin'] ?? false, // Default to false if missing
       );
     } else {
       // Original format for backward compatibility
@@ -38,6 +40,7 @@ class User {
         fullName: json['full_name'],
         profileImage: json['profile_image'],
         isVerified: json['is_verified'] ?? false,
+        isAdmin: json['is_admin'] ?? false, // Default to false if missing
       );
     }
   }
@@ -49,6 +52,7 @@ class User {
       'full_name': fullName,
       'profile_image': profileImage,
       'is_verified': isVerified,
+      'is_admin': isAdmin,
     };
   }
 }

@@ -7,8 +7,8 @@ class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
         fields = ['id', 'email', 'password', 'first_name', 'last_name', 'profile_picture',
-                 'is_verified', 'google_id', 'created_at', 'last_login']
-        read_only_fields = ['id', 'is_verified', 'created_at', 'last_login']
+                 'is_verified', 'is_admin', 'google_id', 'created_at', 'last_login']
+        read_only_fields = ['id', 'is_verified', 'is_admin', 'created_at', 'last_login']
         extra_kwargs = {
             'password': {'write_only': True}
         }
@@ -31,7 +31,7 @@ class AccountAuthorSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Account
-        fields = ['id', 'email', 'first_name', 'last_name', 'profile_picture', 'display_name']
+        fields = ['id', 'email', 'first_name', 'last_name', 'profile_picture', 'display_name', 'is_admin']
     
     def get_display_name(self, obj):
         # Try to get the username from the related UserProfile
