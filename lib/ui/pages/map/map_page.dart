@@ -21,6 +21,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'dart:math';
+import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
+import 'package:collection/collection.dart'; // Import for ListEquality
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;
@@ -51,6 +53,11 @@ class _MapPageState extends State<MapPage> {
 
   // List of custom markers on the map
   final List<Marker> _mapMarkers = [];
+
+  // Add a cache for locations and filters
+  List<dynamic>? _locationsCache;
+  String? _lastCacheDateParam;
+  List<String>? _lastCacheCategories;
 
   @override
   void initState() {
@@ -87,17 +94,31 @@ class _MapPageState extends State<MapPage> {
   Future<void> _fetchMapLocations() async {
     if (!mounted) return;
 
+    // Format the date for the API request
+    final dateParam = _controller.selectedDate != null
+        ? "${_controller.selectedDate.year}-${_controller.selectedDate.month.toString().padLeft(2, '0')}-${_controller.selectedDate.day.toString().padLeft(2, '0')}"
+        : null;
+
+    // Check if we can use the cache
+    if (_locationsCache != null &&
+        _lastCacheDateParam == dateParam &&
+        _lastCacheCategories != null &&
+        ListEquality().equals(_lastCacheCategories, _selectedCategories)) {
+      setState(() {
+        _mapLocations = _locationsCache!;
+        _isLoadingLocations = false;
+        _addMarkersToMap();
+      });
+      print('✅ Loaded locations from cache.');
+      return;
+    }
+
     setState(() {
       _isLoadingLocations = true;
       _error = null;
     });
 
     try {
-      // Format the date for the API request
-      final dateParam = _controller.selectedDate != null
-          ? "${_controller.selectedDate.year}-${_controller.selectedDate.month.toString().padLeft(2, '0')}-${_controller.selectedDate.day.toString().padLeft(2, '0')}"
-          : null;
-
       // Create the URL with query parameters
       String url = 'http://localhost:8000/api/posts/';
       final queryParams = <String, String>{};
@@ -107,13 +128,13 @@ class _MapPageState extends State<MapPage> {
       }
 
       // Send all selected categories as a single comma-separated value
-      // This format works with the server-side code we updated
       if (_selectedCategories.isNotEmpty) {
         queryParams['category'] = _selectedCategories.join(',');
       }
 
       if (queryParams.isNotEmpty) {
-        url += '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+        url +=
+            '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
       }
 
       // Debug the actual URL being sent
@@ -145,7 +166,7 @@ class _MapPageState extends State<MapPage> {
         Uri.parse(url),
         headers: headers,
       );
-      
+
       // Debug response
       print('📡 Response status code: ${response.statusCode}');
       print('📝 Response headers: ${response.headers}');
@@ -160,25 +181,26 @@ class _MapPageState extends State<MapPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print('✅ Successful response data: $data');
-        
+
         // Check if response contains paginated data structure
         if (data is Map && data.containsKey('results')) {
           print('📄 Paginated response detected');
           print('📊 Total count: ${data['count']}');
           print('⏭️ Next page: ${data['next']}');
           print('⏮️ Previous page: ${data['previous']}');
-          
+
           // Get the current page results
           final List<dynamic> currentResults = data['results'];
           final String? nextPageUrl = data['next'];
-          
+
           // Add current results to our locations
-          List<dynamic> allLocations = List.from(_mapLocations)..addAll(currentResults);
-          
+          List<dynamic> allLocations = List.from(_mapLocations)
+            ..addAll(currentResults);
+
           setState(() {
             _mapLocations = allLocations;
           });
-          
+
           // Display first page results immediately
           setState(() {
             _mapLocations = currentResults;
@@ -188,7 +210,7 @@ class _MapPageState extends State<MapPage> {
           // If there's a next page, fetch remaining pages progressively
           if (nextPageUrl != null && mounted) {
             String? currentNextUrl = nextPageUrl;
-            
+
             // Fetch remaining pages one at a time
             while (currentNextUrl != null && mounted) {
               print('🔄 Fetching next page: $currentNextUrl');
@@ -196,19 +218,19 @@ class _MapPageState extends State<MapPage> {
                 Uri.parse(currentNextUrl),
                 headers: headers,
               );
-              
+
               if (nextResponse.statusCode == 200) {
                 final nextData = jsonDecode(nextResponse.body);
                 if (nextData is Map && nextData.containsKey('results')) {
                   final newResults = nextData['results'] as List;
                   print('📥 Got page with ${newResults.length} results');
-                  
+
                   // Update UI progressively with new markers
                   setState(() {
                     _mapLocations = [..._mapLocations, ...newResults];
                     _addMarkersToMap(); // Add new markers immediately
                   });
-                  
+
                   currentNextUrl = nextData['next'] as String?;
                   print('📊 Total locations so far: ${_mapLocations.length}');
                 } else {
@@ -224,7 +246,12 @@ class _MapPageState extends State<MapPage> {
           setState(() {
             _isLoadingLocations = false;
           });
-          print('✅ All pages fetched. Total locations: ${_mapLocations.length}');
+          print(
+              '✅ All pages fetched. Total locations: ${_mapLocations.length}');
+          // Cache the results
+          _locationsCache = _mapLocations;
+          _lastCacheDateParam = dateParam;
+          _lastCacheCategories = List.from(_selectedCategories);
         } else {
           print('⚠️ Non-paginated response detected');
           setState(() {
@@ -232,22 +259,28 @@ class _MapPageState extends State<MapPage> {
             _isLoadingLocations = false;
             _addMarkersToMap();
           });
+          // Cache the results
+          _locationsCache = _mapLocations;
+          _lastCacheDateParam = dateParam;
+          _lastCacheCategories = List.from(_selectedCategories);
         }
 
         if (_mapLocations.isEmpty) {
-          print('No locations found for the selected filters - markers cleared');
+          print(
+              'No locations found for the selected filters - markers cleared');
           _mapMarkers.clear();
           setState(() {}); // Trigger a rebuild to show the empty map
         }
       } else {
         print('❌ Error status code: ${response.statusCode}');
-        final errorMessage = "Failed to fetch locations: ${response.statusCode} - ${response.body}";
+        final errorMessage =
+            "Failed to fetch locations: ${response.statusCode} - ${response.body}";
         print('❌ Error message: $errorMessage');
         setState(() {
           _error = errorMessage;
           _isLoadingLocations = false;
         });
-        
+
         // Show error in snackbar
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -537,61 +570,45 @@ class _MapPageState extends State<MapPage> {
                           AspectRatio(
                             aspectRatio: 16 / 9,
                             child: thumbnailUrl != null
-                                ? Image.network(
-                                    thumbnailUrl,
+                                ? CachedNetworkImage(
+                                    imageUrl: thumbnailUrl,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      // Fallback for image error
-                                      return Container(
-                                        color: Theme.of(context).hoverColor,
-                                        child: Center(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                CategoryUtils.getCategoryIcon(
-                                                    category),
+                                    errorWidget: (context, url, error) =>
+                                        Container(
+                                      color: Theme.of(context).hoverColor,
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              CategoryUtils.getCategoryIcon(
+                                                  category),
+                                              color: CategoryUtils
+                                                  .getCategoryColor(category),
+                                              size: 40,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              category.toUpperCase(),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
                                                 color: CategoryUtils
                                                     .getCategoryColor(category),
-                                                size: 40,
                                               ),
-                                              const SizedBox(height: 12),
-                                              Text(
-                                                category.toUpperCase(),
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: CategoryUtils
-                                                      .getCategoryColor(
-                                                          category),
-                                                ),
-                                              )
-                                            ],
-                                          ),
+                                            )
+                                          ],
                                         ),
-                                      );
-                                    },
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        color: Theme.of(context)
-                                            .scaffoldBackgroundColor,
-                                        child: Center(
-                                          child: CircularProgressIndicator(
-                                            value: loadingProgress
-                                                        .expectedTotalBytes !=
-                                                    null
-                                                ? loadingProgress
-                                                        .cumulativeBytesLoaded /
-                                                    loadingProgress
-                                                        .expectedTotalBytes!
-                                                : null,
-                                            color:
-                                                Theme.of(context).primaryColor,
-                                          ),
+                                      ),
+                                    ),
+                                    placeholder: (context, url) => Container(
+                                      color: Theme.of(context)
+                                          .scaffoldBackgroundColor,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: Theme.of(context).primaryColor,
                                         ),
-                                      );
-                                    },
+                                      ),
+                                    ),
                                   )
                                 : Container(
                                     color: Theme.of(context).hoverColor,

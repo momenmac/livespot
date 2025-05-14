@@ -33,6 +33,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
   ];
 
   bool _isLoadingMore = false;
+  bool _isLoading = false;
 
   String _getRandomImageUrl() {
     final random = math.Random();
@@ -53,26 +54,54 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
   @override
   void didUpdateWidget(NewsFeedSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reload posts if the selected date changes, but use post-frame callback
-    if (oldWidget.selectedDate != widget.selectedDate) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _fetchPosts(refresh: true);
-        }
-      });
-    }
+    // Always fetch posts when widget updates (date or parent rebuild)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _fetchPosts(refresh: true);
+      }
+    });
   }
 
   Future<void> _fetchPosts({bool refresh = false}) async {
+    if (!mounted) return;
+
     try {
+      // Show loading state immediately
+      setState(() {
+        _isLoading = true;
+      });
+
       // Format date as YYYY-MM-DD for API
       final formattedDate =
           widget.selectedDate.toIso8601String().split('T').first;
 
-      await Provider.of<PostsProvider>(context, listen: false)
-          .fetchPosts(date: formattedDate, refresh: refresh);
+      final provider = Provider.of<PostsProvider>(context, listen: false);
+
+      // Wait for fetch to complete and ensure we have data
+      final success =
+          await provider.fetchPosts(date: formattedDate, refresh: refresh);
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Failed to load news. Please try again.')),
+        );
+      }
     } catch (e) {
-      // Handle any errors, but don't rethrow
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
       debugPrint('Error fetching posts: $e');
     }
   }
@@ -87,9 +116,10 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     });
 
     try {
-      final formattedDate = widget.selectedDate.toIso8601String().split('T').first;
+      final formattedDate =
+          widget.selectedDate.toIso8601String().split('T').first;
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-      
+
       if (postsProvider.hasMore && !postsProvider.isFetchingMore) {
         await postsProvider.loadMorePosts(date: formattedDate);
       }
@@ -182,7 +212,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                     Icon(
                       Icons.arrow_forward,
                       size: 16,
-                      color: ThemeConstants.primaryColor,  
+                      color: ThemeConstants.primaryColor,
                     ),
                   ],
                 ),
@@ -194,19 +224,38 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         // Posts content
         Consumer<PostsProvider>(
           builder: (context, postsProvider, child) {
-            if (postsProvider.isLoading && postsProvider.posts.isEmpty) {
+            // Show local loading state first
+            if (_isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (postsProvider.errorMessage != null && postsProvider.posts.isEmpty) {
+            final posts = postsProvider.posts;
+            final hasError = postsProvider.errorMessage != null;
+
+            // Show loading indicator for initial load or refresh
+            if (postsProvider.isLoading && posts.isNotEmpty) {
+              // Show loading indicator over existing content if we have posts
+              return Stack(
+                children: [
+                  // Existing posts with overlay
+                  Opacity(
+                    opacity: 0.6,
+                    child: _buildPostsList(posts),
+                  ),
+                  // Loading indicator
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              );
+            }
+
+            // Show error if we have one and no posts
+            if (hasError && posts.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, 
-                      size: 48, 
-                      color: ThemeConstants.grey
-                    ),
+                    const Icon(Icons.error_outline,
+                        size: 48, color: ThemeConstants.grey),
                     const SizedBox(height: 16),
                     Text(
                       'Error loading news: ${postsProvider.errorMessage}',
@@ -223,15 +272,14 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               );
             }
 
-            if (postsProvider.posts.isEmpty) {
+            // Show no news message if we have no posts and aren't loading
+            if (posts.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.article_outlined, 
-                      size: 48, 
-                      color: ThemeConstants.grey
-                    ),
+                    const Icon(Icons.article_outlined,
+                        size: 48, color: ThemeConstants.grey),
                     const SizedBox(height: 16),
                     Text(
                       'No news available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
@@ -248,64 +296,70 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               );
             }
 
-            // Get a list of posts, sorted by honesty score
-            final posts = List.of(postsProvider.posts)
-              ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
-
-            // Extract the featured post (highest honesty score)
-            final featuredPost = posts.isNotEmpty ? posts.first : null;
-            // Rest of the posts for the horizontal scroll
-            final regularPosts = posts.length > 1 ? posts.sublist(1) : [];
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Featured post
-                if (featuredPost != null) _buildFeaturedPostCard(featuredPost),
-
-                // Regular posts in horizontal scroll
-                if (regularPosts.isNotEmpty)
-                  SizedBox(
-                    height: 240,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (ScrollNotification scrollInfo) {
-                        if (!_isLoadingMore && 
-                            postsProvider.hasMore && 
-                            !postsProvider.isFetchingMore &&
-                            scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9) {
-                          _loadMorePosts();
-                        }
-                        return true;
-                      },
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        itemCount: regularPosts.length + (postsProvider.hasMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == regularPosts.length) {
-                            return Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Center(
-                                child: _isLoadingMore
-                                    ? const CircularProgressIndicator()
-                                    : const SizedBox.shrink(),
-                              ),
-                            );
-                          }
-                          final post = regularPosts[index];
-                          return SizedBox(
-                            width: 240,
-                            child: _buildRegularPostCard(post),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            );
+            return _buildPostsList(posts);
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildPostsList(List<Post> posts) {
+    // Sort posts by honesty score
+    final sortedPosts = List<Post>.from(posts)
+      ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
+
+    // Extract featured and regular posts
+    final featuredPost = sortedPosts.isNotEmpty ? sortedPosts.first : null;
+    final regularPosts =
+        sortedPosts.length > 1 ? sortedPosts.sublist(1) : <Post>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (featuredPost != null) _buildFeaturedPostCard(featuredPost),
+        if (regularPosts.isNotEmpty) _buildRegularPostsList(regularPosts),
+      ],
+    );
+  }
+
+  Widget _buildRegularPostsList(List<Post> regularPosts) {
+    final postsProvider = Provider.of<PostsProvider>(context);
+    return SizedBox(
+      height: 240,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification scrollInfo) {
+          if (!_isLoadingMore &&
+              postsProvider.hasMore &&
+              !postsProvider.isFetchingMore &&
+              scrollInfo.metrics.pixels >=
+                  scrollInfo.metrics.maxScrollExtent * 0.9) {
+            _loadMorePosts();
+          }
+          return true;
+        },
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          itemCount: regularPosts.length +
+              (Provider.of<PostsProvider>(context).hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == regularPosts.length) {
+              return Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Center(
+                  child: _isLoadingMore
+                      ? const CircularProgressIndicator()
+                      : const SizedBox.shrink(),
+                ),
+              );
+            }
+            return SizedBox(
+              width: 240,
+              child: _buildRegularPostCard(regularPosts[index]),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -824,12 +878,12 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     if (post.hasMedia && post.mediaUrls.isNotEmpty) {
       return post.mediaUrls.first;
     }
-    
+
     // Then try for direct imageUrl property
     if (post.imageUrl.isNotEmpty) {
       return post.imageUrl;
     }
-    
+
     // Return random placeholder as fallback - never return null
     return _getRandomImageUrl();
   }

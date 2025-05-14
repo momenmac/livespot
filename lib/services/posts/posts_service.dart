@@ -684,18 +684,29 @@ class PostsService {
 
   // Get stories from users that the current user is following
   // Get stories from following users - formatted from posts
-  Future<Map<String, List<Map<String, dynamic>>>> getFollowingStories() async {
+  Future<Map<String, List<Map<String, dynamic>>>> getFollowingStories({String? date}) async {
     try {
-      final url = Uri.parse('$baseUrl/api/posts/following_posts/');
+      // Build the URL with query parameters
+      final queryParams = <String, String>{};
+      
+      // Always include date parameter, using current date if none provided
+      if (date != null) {
+        queryParams['date'] = date;
+      } else {
+        // Use current date if no date provided
+        final now = DateTime.now();
+        queryParams['date'] = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      }
+      
+      final url = Uri.parse('$baseUrl/api/posts/following_posts/').replace(queryParameters: queryParams);
       final headers = await _getHeaders();
 
-      debugPrint('Fetching following posts as stories with URL: $url');
-
-      debugPrint('Fetching stories from following users with URL: $url');
+      debugPrint('Fetching stories with URL: $url');
       final response = await http.get(url, headers: headers);
       debugPrint('Stories API response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
+        // Parse the response data into a map of username -> list of stories
         final Map<String, dynamic> responseData = json.decode(response.body);
         final Map<String, List<Map<String, dynamic>>> stories = {};
 

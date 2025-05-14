@@ -29,13 +29,18 @@ class HomeContent extends StatefulWidget {
 }
 
 class _HomeContentState extends State<HomeContent> {
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
   bool _isDateFilterActive = false;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    // Initialize with today's date, set to start of day
+    final now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+    // Only set date filter active for non-current dates
+    _isDateFilterActive = false;
     _checkAuthStatus();
   }
 
@@ -68,16 +73,23 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   void _onDateSelected(DateTime date) {
+    // Normalize the selected date to start of day
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    // Always update and call setState, even if the date is the same
     setState(() {
-      _selectedDate = date;
-      _isDateFilterActive = !DateUtils.isSameDay(date, DateTime.now());
+      _selectedDate = normalizedDate;
+      _isDateFilterActive = !DateUtils.isSameDay(normalizedDate, DateTime.now());
     });
   }
 
   void _clearDateFilter() {
+    // Clear filter by setting to start of today
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     setState(() {
-      _selectedDate = DateTime.now();
-      _isDateFilterActive = false;
+      _selectedDate = today;
+      // Keep date filter active but show it's for today
+      _isDateFilterActive = true;
     });
   }
 
@@ -153,8 +165,8 @@ class _HomeContentState extends State<HomeContent> {
                 ),
               ),
 
-            // Stories Section - NEW: add at the very top
-            const StorySection(),
+            // Stories Section - with date filtering
+            StorySection(selectedDate: _selectedDate),
 
             // Add a divider after stories
             const Padding(
@@ -170,6 +182,7 @@ class _HomeContentState extends State<HomeContent> {
 
             // News Feed Section
             NewsFeedSection(
+              key: ValueKey(_selectedDate), // Force rebuild on date change
               selectedDate: _selectedDate,
               onMapToggle: widget.onMapToggle,
             ),

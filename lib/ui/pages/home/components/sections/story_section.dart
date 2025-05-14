@@ -9,7 +9,12 @@ import 'dart:math' as math;
 import 'dart:developer' as developer;
 
 class StorySection extends StatefulWidget {
-  const StorySection({super.key});
+  final DateTime selectedDate;
+  
+  const StorySection({
+    super.key,
+    required this.selectedDate,
+  });
 
   // Method to get stories from the provider
   static Map<String, List<Map<String, dynamic>>> getUserStories(
@@ -30,36 +35,82 @@ class _StorySectionState extends State<StorySection> {
     _loadStories();
   }
 
+  @override
+  void didUpdateWidget(StorySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload stories when selected date changes
+    if (!DateUtils.isSameDay(oldWidget.selectedDate, widget.selectedDate)) {
+      _loadStories();
+    }
+  }
+
   Future<void> _loadStories() async {
-    // Ensure this method won't proceed if the widget is not mounted
     if (!mounted) return;
 
     try {
-      // Schedule the provider call for the next frame to avoid build issues
+      // Initially mark as not loaded and clear stories
+      setState(() {
+        _dataLoaded = false;
+      });
+      
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      postsProvider.clearStories();
+
+      // Use addPostFrameCallback to ensure state is updated before fetching
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         
         try {
-          // Call the API to fetch stories
-          await Provider.of<PostsProvider>(context, listen: false)
-              .fetchFollowingStories();
+          final now = DateTime.now();
+          final normalizedToday = DateTime(now.year, now.month, now.day);
+          final normalizedSelected = DateTime(
+            widget.selectedDate.year,
+            widget.selectedDate.month,
+            widget.selectedDate.day
+          );
 
-          // Check mounted state before updating the UI
+          // Don't fetch stories for future dates
+          if (normalizedSelected.isAfter(normalizedToday)) {
+            if (mounted) {
+              setState(() {
+                _dataLoaded = true;
+              });
+            }
+            return;
+          }
+
+          // Always send date parameter
+          final String dateStr = widget.selectedDate.toIso8601String().split('T')[0];
+          developer.log('Fetching stories for date: $dateStr', name: 'StorySection');
+
+          // Wait a frame to ensure the UI has updated after clearing stories
+          await Future.microtask(() {});
+
+          // Fetch stories with explicit date
+          final stories = await postsProvider.fetchFollowingStories(date: dateStr);
+
+          // Ensure we clear stories again if none were found
+          if (stories.isEmpty) {
+            postsProvider.clearStories();
+            developer.log('No stories found for date: $dateStr, clearing stories', name: 'StorySection');
+          } else {
+            developer.log('Loaded ${stories.length} stories for date: $dateStr', name: 'StorySection');
+          }
+
           if (mounted) {
             setState(() {
               _dataLoaded = true;
             });
-            developer.log('Loaded stories from API', name: 'StorySection');
           }
         } catch (e) {
-          // Only log the error if the widget is still mounted
           if (mounted) {
             developer.log('Error loading stories: $e', name: 'StorySection');
+            // Ensure stories are cleared on error
+            Provider.of<PostsProvider>(context, listen: false).clearStories();
           }
         }
       });
     } catch (e) {
-      // Only log the error if the widget is still mounted
       if (mounted) {
         developer.log('Error in _loadStories: $e', name: 'StorySection');
       }

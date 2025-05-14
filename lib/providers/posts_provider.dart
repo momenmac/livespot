@@ -15,7 +15,8 @@ class PostsProvider with ChangeNotifier {
   String? _errorMessage;
   bool _hasMore = true;
   int _currentPage = 1;
-  static const int _pageSize = 20; // Load 20 posts at a time for better experience
+  static const int _pageSize =
+      20; // Load 20 posts at a time for better experience
   bool _isFetchingMore = false;
 
   // Map of usernames to their stories
@@ -37,24 +38,24 @@ class PostsProvider with ChangeNotifier {
         _locationService = locationService;
 
   // Load initial posts from API
-  Future<void> fetchPosts({
+  Future<bool> fetchPosts({
     String? category,
     String? date,
     String? tag,
     bool refresh = false,
   }) async {
-    // If refresh is true, reset pagination state
     if (refresh) {
       _currentPage = 1;
       _hasMore = true;
       _posts = [];
-      notifyListeners(); // Notify listeners about the cleared state
+    } else if (!_hasMore) {
+      return false;
     }
 
-    // Don't fetch if we're already loading or have no more pages
-    if (!_hasMore || _isLoading) return;
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
-    _setLoading(true);
     try {
       final result = await _postsService.getPosts(
         category: category,
@@ -65,27 +66,32 @@ class PostsProvider with ChangeNotifier {
       );
 
       final List<Post> newPosts = result['posts'] as List<Post>;
-      
+
       if (refresh) {
         _posts = newPosts;
       } else {
         // Filter out any duplicates when adding new posts
         final existingIds = _posts.map((p) => p.id).toSet();
-        final uniqueNewPosts = newPosts.where((p) => !existingIds.contains(p.id)).toList();
+        final uniqueNewPosts =
+            newPosts.where((p) => !existingIds.contains(p.id)).toList();
         _posts.addAll(uniqueNewPosts);
       }
-      
+
       // Update pagination state
       _hasMore = result['hasMore'] == true;
       _currentPage = result['currentPage'] + 1;
       _errorMessage = null;
 
-      debugPrint('Loaded ${newPosts.length} posts. Has more: $_hasMore, Next page: $_currentPage');
+      debugPrint(
+          'Loaded ${newPosts.length} posts. Has more: $_hasMore, Next page: $_currentPage');
+      return true;
     } catch (e) {
       _errorMessage = 'Failed to fetch posts: $e';
       debugPrint(_errorMessage);
+      return false;
     } finally {
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -97,7 +103,8 @@ class PostsProvider with ChangeNotifier {
   }) async {
     // Guard against concurrent loading or when there are no more posts
     if (!_hasMore || _isFetchingMore) {
-      debugPrint('Skipping loadMorePosts: hasMore=$_hasMore, isFetchingMore=$_isFetchingMore');
+      debugPrint(
+          'Skipping loadMorePosts: hasMore=$_hasMore, isFetchingMore=$_isFetchingMore');
       return;
     }
 
@@ -106,7 +113,7 @@ class PostsProvider with ChangeNotifier {
 
     try {
       debugPrint('Fetching page $_currentPage with pageSize $_pageSize');
-      
+
       final result = await _postsService.getPosts(
         category: category,
         date: date,
@@ -116,24 +123,26 @@ class PostsProvider with ChangeNotifier {
       );
 
       final List<Post> newPosts = result['posts'] as List<Post>;
-      
+
       if (newPosts.isNotEmpty) {
         // Filter out any duplicates before adding
         final existingIds = _posts.map((p) => p.id).toSet();
-        final uniqueNewPosts = newPosts.where((p) => !existingIds.contains(p.id)).toList();
-        
+        final uniqueNewPosts =
+            newPosts.where((p) => !existingIds.contains(p.id)).toList();
+
         _posts.addAll(uniqueNewPosts);
-        
+
         // Update pagination state
         _hasMore = result['hasMore'] == true;
         _currentPage = result['currentPage'] + 1;
-        
-        debugPrint('Added ${uniqueNewPosts.length} new posts (${newPosts.length} total, ${uniqueNewPosts.length} unique). Has more: $_hasMore, Next page: $_currentPage');
+
+        debugPrint(
+            'Added ${uniqueNewPosts.length} new posts (${newPosts.length} total, ${uniqueNewPosts.length} unique). Has more: $_hasMore, Next page: $_currentPage');
       } else {
         _hasMore = false;
         debugPrint('No more posts to load');
       }
-      
+
       _errorMessage = null;
     } catch (e) {
       _errorMessage = 'Failed to fetch more posts: $e';
@@ -474,14 +483,16 @@ class PostsProvider with ChangeNotifier {
   }
 
   // Fetch stories from users the current user is following
-  Future<Map<String, List<Map<String, dynamic>>>>
-      fetchFollowingStories() async {
+  Future<Map<String, List<Map<String, dynamic>>>> fetchFollowingStories({String? date}) async {
     _setLoading(true);
     try {
-      _userStories = await _postsService.getFollowingStories();
+      _userStories = await _postsService.getFollowingStories(date: date);
 
       // Process stories to ensure categories and locations are valid
       _userStories = _sanitizeStoriesData(_userStories);
+
+      // Deduplicate stories by their ID
+      _userStories = _deduplicateStoriesByUserId(_userStories);
 
       _errorMessage = null;
       // Use addPostFrameCallback to avoid setState during build
@@ -496,6 +507,15 @@ class PostsProvider with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  // Method to clear stories, used when switching dates or when no stories are available
+  void clearStories() {
+    _userStories = {};
+    // Use addPostFrameCallback to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   // Helper method to ensure story data has valid categories and locations
