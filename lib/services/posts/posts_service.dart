@@ -48,15 +48,20 @@ class PostsService {
     return headers;
   }
 
-  // Get all posts
-  Future<List<Post>> getPosts({
+  // Get all posts with pagination
+  Future<Map<String, dynamic>> getPosts({
     String? category,
     String? date,
     String? tag,
+    int page = 1,
+    int pageSize = 10,
   }) async {
     try {
       // Build query parameters
-      final queryParams = <String, String>{};
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'page_size': pageSize.toString(),
+      };
       if (category != null) queryParams['category'] = category;
       if (date != null) queryParams['date'] = date;
       if (tag != null) queryParams['tag'] = tag;
@@ -65,30 +70,39 @@ class PostsService {
           .replace(queryParameters: queryParams);
       final headers = await _getHeaders();
 
-      debugPrint('Fetching posts with URL: $url and headers: $headers');
+      debugPrint('Fetching posts with URL: $url');
       final response = await http.get(url, headers: headers);
       debugPrint('Posts API response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // Check if the response is a direct array or has a results field
         final dynamic decodedBody = json.decode(response.body);
-        final List<dynamic> data;
-
-        if (decodedBody is List) {
-          // Handle direct array response
-          data = decodedBody;
-        } else if (decodedBody is Map && decodedBody.containsKey('results')) {
-          // Handle response with results field
-          data = decodedBody['results'] ?? [];
+        
+        if (decodedBody is Map && decodedBody.containsKey('results')) {
+          // Parse paginated response
+          final posts = (decodedBody['results'] as List).map((json) => Post.fromJson(json)).toList();
+          final nextUrl = decodedBody['next'] as String?;
+          final totalItems = decodedBody['count'] as int?;
+          
+          // Calculate if there are more pages based on the next URL
+          final hasMore = nextUrl != null;
+          debugPrint('Loaded ${posts.length} posts, hasMore: $hasMore, totalItems: $totalItems, currentPage: $page');
+          
+          return {
+            'posts': posts,
+            'hasMore': hasMore,
+            'totalItems': totalItems ?? 0,
+            'currentPage': page,
+          };
         } else {
-          debugPrint(
-              'Unexpected response format: ${response.body.substring(0, 100)}...');
-          data = [];
+          debugPrint('Invalid response format from server, expected paginated results');
+          return {
+            'posts': <Post>[],
+            'hasMore': false,
+            'totalItems': 0,
+            'currentPage': page,
+          };
         }
-
-        return data.map((json) => Post.fromJson(json)).toList();
       } else {
-        debugPrint('Failed response body: ${response.body}');
         throw Exception('Failed to load posts: ${response.statusCode}');
       }
     } catch (e) {

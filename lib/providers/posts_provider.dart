@@ -13,6 +13,10 @@ class PostsProvider with ChangeNotifier {
   List<Thread> _threads = [];
   bool _isLoading = false;
   String? _errorMessage;
+  bool _hasMore = true;
+  int _currentPage = 1;
+  static const int _pageSize = 20; // Load 20 posts at a time for better experience
+  bool _isFetchingMore = false;
 
   // Map of usernames to their stories
   Map<String, List<Map<String, dynamic>>> _userStories = {};
@@ -23,6 +27,8 @@ class PostsProvider with ChangeNotifier {
   List<Thread> get threads => _threads;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get hasMore => _hasMore;
+  bool get isFetchingMore => _isFetchingMore;
 
   PostsProvider({
     required PostsService postsService,
@@ -30,25 +36,112 @@ class PostsProvider with ChangeNotifier {
   })  : _postsService = postsService,
         _locationService = locationService;
 
-  // Load posts from API
+  // Load initial posts from API
   Future<void> fetchPosts({
     String? category,
     String? date,
     String? tag,
+    bool refresh = false,
   }) async {
+    // If refresh is true, reset pagination state
+    if (refresh) {
+      _currentPage = 1;
+      _hasMore = true;
+      _posts = [];
+      notifyListeners(); // Notify listeners about the cleared state
+    }
+
+    // Don't fetch if we're already loading or have no more pages
+    if (!_hasMore || _isLoading) return;
+
     _setLoading(true);
     try {
-      _posts = await _postsService.getPosts(
+      final result = await _postsService.getPosts(
         category: category,
         date: date,
         tag: tag,
+        page: _currentPage,
+        pageSize: _pageSize,
       );
+
+      final List<Post> newPosts = result['posts'] as List<Post>;
+      
+      if (refresh) {
+        _posts = newPosts;
+      } else {
+        // Filter out any duplicates when adding new posts
+        final existingIds = _posts.map((p) => p.id).toSet();
+        final uniqueNewPosts = newPosts.where((p) => !existingIds.contains(p.id)).toList();
+        _posts.addAll(uniqueNewPosts);
+      }
+      
+      // Update pagination state
+      _hasMore = result['hasMore'] == true;
+      _currentPage = result['currentPage'] + 1;
       _errorMessage = null;
+
+      debugPrint('Loaded ${newPosts.length} posts. Has more: $_hasMore, Next page: $_currentPage');
     } catch (e) {
       _errorMessage = 'Failed to fetch posts: $e';
       debugPrint(_errorMessage);
     } finally {
       _setLoading(false);
+    }
+  }
+
+  // Load more posts (pagination)
+  Future<void> loadMorePosts({
+    String? category,
+    String? date,
+    String? tag,
+  }) async {
+    // Guard against concurrent loading or when there are no more posts
+    if (!_hasMore || _isFetchingMore) {
+      debugPrint('Skipping loadMorePosts: hasMore=$_hasMore, isFetchingMore=$_isFetchingMore');
+      return;
+    }
+
+    _isFetchingMore = true;
+    notifyListeners();
+
+    try {
+      debugPrint('Fetching page $_currentPage with pageSize $_pageSize');
+      
+      final result = await _postsService.getPosts(
+        category: category,
+        date: date,
+        tag: tag,
+        page: _currentPage,
+        pageSize: _pageSize,
+      );
+
+      final List<Post> newPosts = result['posts'] as List<Post>;
+      
+      if (newPosts.isNotEmpty) {
+        // Filter out any duplicates before adding
+        final existingIds = _posts.map((p) => p.id).toSet();
+        final uniqueNewPosts = newPosts.where((p) => !existingIds.contains(p.id)).toList();
+        
+        _posts.addAll(uniqueNewPosts);
+        
+        // Update pagination state
+        _hasMore = result['hasMore'] == true;
+        _currentPage = result['currentPage'] + 1;
+        
+        debugPrint('Added ${uniqueNewPosts.length} new posts (${newPosts.length} total, ${uniqueNewPosts.length} unique). Has more: $_hasMore, Next page: $_currentPage');
+      } else {
+        _hasMore = false;
+        debugPrint('No more posts to load');
+      }
+      
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch more posts: $e';
+      debugPrint(_errorMessage);
+      _hasMore = false; // Stop trying to load more on error
+    } finally {
+      _isFetchingMore = false;
+      notifyListeners();
     }
   }
 

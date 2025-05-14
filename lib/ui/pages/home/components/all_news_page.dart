@@ -20,6 +20,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
   String _searchQuery = '';
   bool _isSearching = false;
   List<Post> _searchResults = [];
+  bool _isLoadingMore = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -32,15 +33,14 @@ class _AllNewsPageState extends State<AllNewsPage> {
   ];
 
   // Track voted posts
-  final Map<int, bool?> _userVotes =
-      {}; // true for upvote, false for downvote, null for no vote
+  final Map<int, bool?> _userVotes = {}; // true for upvote, false for downvote, null for no vote
 
   @override
   void initState() {
     super.initState();
     // Schedule fetch after the widget is built to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchAllPosts();
+      _fetchAllPosts(refresh: true);
     });
   }
 
@@ -51,11 +51,42 @@ class _AllNewsPageState extends State<AllNewsPage> {
     super.dispose();
   }
 
-  Future<void> _fetchAllPosts() async {
+  Future<void> _fetchAllPosts({bool refresh = false}) async {
     try {
-      await Provider.of<PostsProvider>(context, listen: false).fetchPosts();
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      await postsProvider.fetchPosts(refresh: refresh);
     } catch (e) {
       debugPrint('Error fetching all posts: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load posts: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore) {
+      return;
+    }
+    
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      if (postsProvider.hasMore && !postsProvider.isFetchingMore) {
+        await postsProvider.loadMorePosts();
+      }
+    } catch (e) {
+      debugPrint('Error loading more posts: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
@@ -178,8 +209,6 @@ class _AllNewsPageState extends State<AllNewsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final mediaQuery = MediaQuery.of(context);
-    final topPadding = mediaQuery.padding.top;
 
     return Scaffold(
       appBar: AppBar(
@@ -202,11 +231,15 @@ class _AllNewsPageState extends State<AllNewsPage> {
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _fetchAllPosts(refresh: true),
+          ),
         ],
       ),
       body: Column(
         children: [
-          // Filter chips with improved layout
+          // Filter chips
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -220,11 +253,11 @@ class _AllNewsPageState extends State<AllNewsPage> {
               ],
             ),
             child: SizedBox(
-              height: 34, // Reduced height
+              height: 34,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _filterOptions.length,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _filterOptions.length,
                 itemBuilder: (context, index) {
                   final filter = _filterOptions[index];
                   final isSelected = filter == _selectedFilter;
@@ -235,7 +268,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
                       label: Text(
                         filter,
                         style: TextStyle(
-                          fontSize: 12, // Smaller font size
+                          fontSize: 12,
                           color: isSelected
                               ? ThemeConstants.primaryColor
                               : theme.textTheme.bodyMedium?.color,
@@ -247,7 +280,6 @@ class _AllNewsPageState extends State<AllNewsPage> {
                       onSelected: (_) {
                         setState(() {
                           _selectedFilter = filter;
-                          // Clear search when changing filters
                           _searchResults.clear();
                           _isSearching = false;
                           _searchQuery = '';
@@ -255,8 +287,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
                         });
                       },
                       backgroundColor: theme.cardColor,
-                      selectedColor:
-                          ThemeConstants.primaryColor.withOpacity(0.2),
+                      selectedColor: ThemeConstants.primaryColor.withOpacity(0.2),
                       labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                       padding: EdgeInsets.zero,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -272,68 +303,42 @@ class _AllNewsPageState extends State<AllNewsPage> {
             ),
           ),
 
-          // News content
+          // Main content
           Expanded(
             child: Consumer<PostsProvider>(
               builder: (context, postsProvider, child) {
-                // Show search results if search is active
-                if (_searchQuery.isNotEmpty) {
-                  if (postsProvider.isLoading || _isSearching) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
-                  if (_searchResults.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 64,
-                            color: ThemeConstants.grey.withOpacity(0.5),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No results found for "$_searchQuery"',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: ThemeConstants.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _searchQuery = '';
-                                _searchController.clear();
-                                _isSearching = false;
-                              });
-                            },
-                            child: const Text('Clear search'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return RefreshIndicator(
-                    onRefresh: _searchPosts,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _searchResults.length,
-                      itemBuilder: (context, index) {
-                        final post = _searchResults[index];
-                        return _buildNewsListItem(post);
-                      },
-                    ),
+                if (postsProvider.isLoading && postsProvider.posts.isEmpty) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
                   );
                 }
 
-                // Show normal filtered posts
-                if (postsProvider.isLoading) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
+                if (postsProvider.errorMessage != null && postsProvider.posts.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: ThemeConstants.grey.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error: ${postsProvider.errorMessage}',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: ThemeConstants.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        TextButton.icon(
+                          onPressed: () => _fetchAllPosts(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   );
                 }
 
@@ -354,10 +359,11 @@ class _AllNewsPageState extends State<AllNewsPage> {
                             color: ThemeConstants.grey,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _fetchAllPosts,
-                          child: const Text('Refresh'),
+                        const SizedBox(height: 24),
+                        TextButton.icon(
+                          onPressed: () => _fetchAllPosts(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
                         ),
                       ],
                     ),
@@ -366,16 +372,41 @@ class _AllNewsPageState extends State<AllNewsPage> {
 
                 final filteredPosts = _getFilteredPosts(postsProvider.posts);
 
-                // List view with refresh indicator
                 return RefreshIndicator(
-                  onRefresh: _fetchAllPosts,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredPosts.length,
-                    itemBuilder: (context, index) {
-                      final post = filteredPosts[index];
-                      return _buildNewsListItem(post);
+                  onRefresh: () => _fetchAllPosts(refresh: true),
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification scrollInfo) {
+                      if (!_isLoadingMore && 
+                          postsProvider.hasMore && 
+                          !postsProvider.isFetchingMore &&
+                          scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9) {
+                        _loadMorePosts();
+                      }
+                      return true;
                     },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredPosts.length + (postsProvider.hasMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == filteredPosts.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16.0),
+                            child: Center(
+                              child: SizedBox(
+                                height: 32,
+                                width: 32,
+                                child: _isLoadingMore
+                                    ? const CircularProgressIndicator()
+                                    : const Text('No more posts'),
+                              ),
+                            ),
+                          );
+                        }
+                        
+                        final post = filteredPosts[index];
+                        return _buildNewsListItem(post);
+                      },
+                    ),
                   ),
                 );
               },

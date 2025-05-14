@@ -32,6 +32,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     'https://picsum.photos/seed/news5/800/600',
   ];
 
+  bool _isLoadingMore = false;
+
   String _getRandomImageUrl() {
     final random = math.Random();
     return _imageUrls[random.nextInt(_imageUrls.length)];
@@ -43,7 +45,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     // Use a post-frame callback to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _fetchPosts();
+        _fetchPosts(refresh: true);
       }
     });
   }
@@ -55,23 +57,50 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     if (oldWidget.selectedDate != widget.selectedDate) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _fetchPosts();
+          _fetchPosts(refresh: true);
         }
       });
     }
   }
 
-  Future<void> _fetchPosts() async {
+  Future<void> _fetchPosts({bool refresh = false}) async {
     try {
       // Format date as YYYY-MM-DD for API
       final formattedDate =
           widget.selectedDate.toIso8601String().split('T').first;
 
       await Provider.of<PostsProvider>(context, listen: false)
-          .fetchPosts(date: formattedDate);
+          .fetchPosts(date: formattedDate, refresh: refresh);
     } catch (e) {
       // Handle any errors, but don't rethrow
       debugPrint('Error fetching posts: $e');
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final formattedDate = widget.selectedDate.toIso8601String().split('T').first;
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      
+      if (postsProvider.hasMore && !postsProvider.isFetchingMore) {
+        await postsProvider.loadMorePosts(date: formattedDate);
+      }
+    } catch (e) {
+      debugPrint('Error loading more posts: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
@@ -119,109 +148,164 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PostsProvider>(
-      builder: (context, postsProvider, child) {
-        if (postsProvider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (postsProvider.posts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline,
-                    size: 48, color: ThemeConstants.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'No news available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
-                  style: const TextStyle(color: ThemeConstants.grey),
-                ),
-                const SizedBox(height: 24),
-                TextButton.icon(
-                  onPressed: _fetchPosts,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Get a list of posts, sorted by honesty score
-        final posts = List.of(postsProvider.posts)
-          ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
-
-        // Extract the featured post (highest honesty score)
-        final featuredPost = posts.isNotEmpty ? posts.first : null;
-        // Rest of the posts for the horizontal scroll
-        final regularPosts = posts.length > 1 ? posts.sublist(1) : [];
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Unified News Feed Section Header
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
-              child: Row(
-                children: [
-                  const Text(
-                    'News Feed',
-                    style: TextStyle(
-                      fontSize: 22,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'News Feed',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _navigateToAllNews,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'View All',
-                          style: TextStyle(
-                            color: ThemeConstants.primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: 16,
-                          color: ThemeConstants.primaryColor,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
-            ),
-
-            // Featured post
-            if (featuredPost != null) _buildFeaturedPostCard(featuredPost),
-
-            // Regular posts in horizontal scroll
-            if (regularPosts.isNotEmpty) ...[
-              SizedBox(
-                height: 240,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: regularPosts.length,
-                  itemBuilder: (context, index) {
-                    final post = regularPosts[index];
-                    return SizedBox(
-                      width: 240, // Fixed width for each card
-                      child: _buildRegularPostCard(post),
-                    );
-                  },
+              TextButton(
+                onPressed: _navigateToAllNews,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(50, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        color: ThemeConstants.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: ThemeConstants.primaryColor,  
+                    ),
+                  ],
                 ),
               ),
             ],
-          ],
-        );
-      },
+          ),
+        ),
+
+        // Posts content
+        Consumer<PostsProvider>(
+          builder: (context, postsProvider, child) {
+            if (postsProvider.isLoading && postsProvider.posts.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (postsProvider.errorMessage != null && postsProvider.posts.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, 
+                      size: 48, 
+                      color: ThemeConstants.grey
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading news: ${postsProvider.errorMessage}',
+                      style: const TextStyle(color: ThemeConstants.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    TextButton.icon(
+                      onPressed: () => _fetchPosts(refresh: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (postsProvider.posts.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.article_outlined, 
+                      size: 48, 
+                      color: ThemeConstants.grey
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No news available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
+                      style: const TextStyle(color: ThemeConstants.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    TextButton.icon(
+                      onPressed: () => _fetchPosts(refresh: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // Get a list of posts, sorted by honesty score
+            final posts = List.of(postsProvider.posts)
+              ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
+
+            // Extract the featured post (highest honesty score)
+            final featuredPost = posts.isNotEmpty ? posts.first : null;
+            // Rest of the posts for the horizontal scroll
+            final regularPosts = posts.length > 1 ? posts.sublist(1) : [];
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Featured post
+                if (featuredPost != null) _buildFeaturedPostCard(featuredPost),
+
+                // Regular posts in horizontal scroll
+                if (regularPosts.isNotEmpty)
+                  SizedBox(
+                    height: 240,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (ScrollNotification scrollInfo) {
+                        if (!_isLoadingMore && 
+                            postsProvider.hasMore && 
+                            !postsProvider.isFetchingMore &&
+                            scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9) {
+                          _loadMorePosts();
+                        }
+                        return true;
+                      },
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        itemCount: regularPosts.length + (postsProvider.hasMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == regularPosts.length) {
+                            return Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Center(
+                                child: _isLoadingMore
+                                    ? const CircularProgressIndicator()
+                                    : const SizedBox.shrink(),
+                              ),
+                            );
+                          }
+                          final post = regularPosts[index];
+                          return SizedBox(
+                            width: 240,
+                            child: _buildRegularPostCard(post),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -507,8 +591,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         clipBehavior: Clip.antiAlias,
-        elevation: 3, // Add more elevation for better shadow
-        color: isDarkMode ? theme.cardColor : Colors.white,
+        elevation: isDarkMode ? 2 : 3, // Slightly less elevation in dark mode
+        color: theme.cardColor,
         child: SizedBox(
           height: 232, // Set explicit height to match parent container
           child: Column(

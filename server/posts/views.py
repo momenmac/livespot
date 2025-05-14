@@ -55,12 +55,20 @@ class PostViewSet(viewsets.ModelViewSet):
         date = self.request.query_params.get('date')
         if date:
             try:
-                queryset = queryset.filter(created_at__date=date)
+                # Filter by date but order by most recent first
+                queryset = queryset.filter(created_at__date=date).order_by('-created_at')
+                
+                # Get page size from request or use default
+                page_size = int(self.request.query_params.get('page_size', '10'))
+                
+                # Log query info for debugging
+                print(f"Date filter query: date={date}, page_size={page_size}")
+                print(f"Total posts for date: {queryset.count()}")
             except Exception as e:
                 print(f"Date filtering error: {e}")
                 # Instead of failing, provide a graceful fallback by getting recent posts
                 thirty_days_ago = timezone.now() - timedelta(days=30)
-                queryset = queryset.filter(created_at__gte=thirty_days_ago)
+                queryset = queryset.filter(created_at__gte=thirty_days_ago).order_by('-created_at')
         
         # Filter by tag if provided
         tag = self.request.query_params.get('tag')

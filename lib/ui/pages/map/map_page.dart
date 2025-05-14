@@ -132,15 +132,26 @@ class _MapPageState extends State<MapPage> {
         print('No authentication token available');
       }
 
+      // Debug headers before making request
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': accountProvider.token != null
+            ? 'Bearer ${accountProvider.token!.accessToken}'
+            : '',
+      };
+      print('🔒 Request headers: $headers');
+
       final response = await http.get(
         Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': accountProvider.token != null
-              ? 'Bearer ${accountProvider.token!.accessToken}'
-              : '',
-        },
+        headers: headers,
       );
+      
+      // Debug response
+      print('📡 Response status code: ${response.statusCode}');
+      print('📝 Response headers: ${response.headers}');
+      if (response.statusCode != 200) {
+        print('❌ Error response body: ${response.body}');
+      }
 
       print(
           'Fetching posts with URL: $url and headers: ${response.request?.headers}');
@@ -148,28 +159,110 @@ class _MapPageState extends State<MapPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          _mapLocations = data;
-          _isLoadingLocations = false;
-        });
+        print('✅ Successful response data: $data');
+        
+        // Check if response contains paginated data structure
+        if (data is Map && data.containsKey('results')) {
+          print('📄 Paginated response detected');
+          print('📊 Total count: ${data['count']}');
+          print('⏭️ Next page: ${data['next']}');
+          print('⏮️ Previous page: ${data['previous']}');
+          
+          // Get the current page results
+          final List<dynamic> currentResults = data['results'];
+          final String? nextPageUrl = data['next'];
+          
+          // Add current results to our locations
+          List<dynamic> allLocations = List.from(_mapLocations)..addAll(currentResults);
+          
+          setState(() {
+            _mapLocations = allLocations;
+          });
+          
+          // Display first page results immediately
+          setState(() {
+            _mapLocations = currentResults;
+            _addMarkersToMap(); // Add markers for first page immediately
+          });
 
-        // Always clear existing markers before adding new ones
-        _mapMarkers.clear();
-
-        // Only add markers if there are locations available
-        if (_mapLocations.isNotEmpty) {
-          _addMarkersToMap();
+          // If there's a next page, fetch remaining pages progressively
+          if (nextPageUrl != null && mounted) {
+            String? currentNextUrl = nextPageUrl;
+            
+            // Fetch remaining pages one at a time
+            while (currentNextUrl != null && mounted) {
+              print('🔄 Fetching next page: $currentNextUrl');
+              final nextResponse = await http.get(
+                Uri.parse(currentNextUrl),
+                headers: headers,
+              );
+              
+              if (nextResponse.statusCode == 200) {
+                final nextData = jsonDecode(nextResponse.body);
+                if (nextData is Map && nextData.containsKey('results')) {
+                  final newResults = nextData['results'] as List;
+                  print('📥 Got page with ${newResults.length} results');
+                  
+                  // Update UI progressively with new markers
+                  setState(() {
+                    _mapLocations = [..._mapLocations, ...newResults];
+                    _addMarkersToMap(); // Add new markers immediately
+                  });
+                  
+                  currentNextUrl = nextData['next'] as String?;
+                  print('📊 Total locations so far: ${_mapLocations.length}');
+                } else {
+                  break;
+                }
+              } else {
+                print('❌ Failed to fetch page: ${nextResponse.statusCode}');
+                break;
+              }
+            }
+          }
+          // Set loading to false after all pages are fetched
+          setState(() {
+            _isLoadingLocations = false;
+          });
+          print('✅ All pages fetched. Total locations: ${_mapLocations.length}');
         } else {
-          print(
-              'No locations found for the selected filters - markers cleared');
+          print('⚠️ Non-paginated response detected');
+          setState(() {
+            _mapLocations = data;
+            _isLoadingLocations = false;
+            _addMarkersToMap();
+          });
+        }
+
+        if (_mapLocations.isEmpty) {
+          print('No locations found for the selected filters - markers cleared');
+          _mapMarkers.clear();
           setState(() {}); // Trigger a rebuild to show the empty map
         }
       } else {
+        print('❌ Error status code: ${response.statusCode}');
+        final errorMessage = "Failed to fetch locations: ${response.statusCode} - ${response.body}";
+        print('❌ Error message: $errorMessage');
         setState(() {
-          _error =
-              "Failed to fetch locations. Server returned status code ${response.statusCode}";
+          _error = errorMessage;
           _isLoadingLocations = false;
         });
+        
+        // Show error in snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                },
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() {
