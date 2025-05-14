@@ -6,6 +6,8 @@ import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
 
 class StoryViewerPage extends StatefulWidget {
   final List<Map<String, dynamic>> stories;
@@ -130,36 +132,80 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
-  void _navigateToFullPost() {
+  void _navigateToFullPost() async {
     // Pause the timer when navigating away
     _pauseStoryTimer();
 
     final story = widget.stories[_currentIndex];
-    // Format the time string before passing to the detail page
-    final formattedTime = _formatTimeString(story['time'] ?? '');
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailPage(
-          title: story['title'] ?? '',
-          description: story['content'] ??
-              story['description'] ??
-              story['caption'] ??
-              '',
-          imageUrl: story['imageUrl'] ?? '',
-          location: story['location'] ?? '',
-          time: formattedTime,
-          honesty: story['honesty_score'] ?? story['honesty'] ?? 0,
-          upvotes: story['upvotes'] ?? 0,
-          comments: story['comments'] ?? 0,
-          isVerified: story['isVerified'] ?? false,
-        ),
-      ),
-    ).then((_) {
-      // Resume the timer when coming back
+    // Try to get postId from story
+    int? postId;
+    if (story.containsKey('id')) {
+      postId = story['id'] is int
+          ? story['id']
+          : int.tryParse(story['id'].toString());
+    }
+
+    if (postId == null) {
+      // If no postId, show error and return
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to load post details.')),
+      );
       _resumeStoryTimer();
-    });
+      return;
+    }
+
+    // Show loading indicator while fetching
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final post = await postsProvider.fetchPostDetails(postId);
+      Navigator.of(context).pop(); // Remove loading dialog
+      if (post == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load post details.')),
+        );
+        _resumeStoryTimer();
+        return;
+      }
+
+      // Format the time string before passing to the detail page
+      final formattedTime = _formatTimeString(post.timePosted.toIso8601String());
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostDetailPage(
+            title: post.title,
+            description: post.content,
+            imageUrl: post.mediaUrls.isNotEmpty ? post.mediaUrls.first : '',
+            location: post.location.address ?? '',
+            time: formattedTime,
+            honesty: post.honestyScore,
+            upvotes: post.upvotes,
+            comments: 0, // No commentsCount in Post, fallback to 0
+            isVerified: post.isVerifiedLocation,
+            post: post,
+            distance: post.distance != null ? post.distance.toString() : null,
+            authorName: post.authorName,
+          ),
+        ),
+      ).then((_) {
+        // Resume the timer when coming back
+        _resumeStoryTimer();
+      });
+    } catch (e) {
+      Navigator.of(context).pop(); // Remove loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading post details: $e')),
+      );
+      _resumeStoryTimer();
+    }
   }
 
   @override

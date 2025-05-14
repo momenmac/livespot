@@ -137,6 +137,27 @@ class PostsProvider with ChangeNotifier {
     }
   }
 
+  // Fetch details for a single post
+  Future<Post?> fetchPostDetails(int postId) async {
+    _setLoading(true);
+    try {
+      final post = await _postsService.getPostDetails(postId);
+      _errorMessage = null;
+      // Optionally update the post in the list if it exists
+      final index = _posts.indexWhere((p) => p.id == postId);
+      if (index != -1) {
+        _posts[index] = post;
+      }
+      return post;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch post details: $e';
+      debugPrint(_errorMessage);
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // Vote on a post
   Future<Map<String, dynamic>> voteOnPost(Post post, bool isUpvote) async {
     try {

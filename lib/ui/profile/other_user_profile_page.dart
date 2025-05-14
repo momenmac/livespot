@@ -13,9 +13,6 @@ import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
-import 'package:flutter_application_2/models/user_profile.dart';
-import 'package:flutter_application_2/models/account.dart';
-import 'package:flutter_application_2/services/user_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/models/post.dart';
@@ -104,12 +101,26 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
             updatedProfileImage = originalProfileImage;
           }
 
+          // Extract is_admin and is_verified from nested account object if present
+          bool? isAdmin;
+          bool? isVerified;
+          if (completeProfileData['account'] != null) {
+            final account = completeProfileData['account'];
+            if (account is Map<String, dynamic>) {
+              isAdmin = account['is_admin'] ?? account['isAdmin'];
+              isVerified = account['is_verified'] ?? account['isVerified'];
+            }
+          }
+
           // Create updated user data
           _userData = {
             ...completeProfileData, // Add complete profile data
             'isFollowing': wasFollowing, // Preserve follow status
-            'profileImage':
-                updatedProfileImage, // Use properly formatted image URL
+            'profileImage': updatedProfileImage, // Use properly formatted image URL
+            if (isAdmin != null) 'is_admin': isAdmin,
+            if (isAdmin != null) 'isAdmin': isAdmin,
+            if (isVerified != null) 'is_verified': isVerified,
+            if (isVerified != null) 'isVerified': isVerified,
           };
 
           developer.log(
@@ -240,7 +251,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       final String username = _userData['username'] ?? '';
       final String? profileImage = _userData['profileImage'];
       final String displayName = _userData['name'] ?? username;
-      final String email = _userData['email'] ?? '';
+      // final String email = _userData['email'] ?? '';
 
       // Show loading dialog
       showDialog(
@@ -713,19 +724,15 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Clean admin badge without text or shadow
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade700,
-                            shape: BoxShape.circle,
+                        if (_userData['is_admin'] == true || _userData['isAdmin'] == true)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8.0),
+                            child: Icon(
+                              Icons.verified,
+                              color: ThemeConstants.primaryColor,
+                              size: 20,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.verified_user,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                        ),
                       ],
                     ),
                     Text(

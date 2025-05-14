@@ -796,4 +796,21 @@ class PostsService {
 
     return result;
   }
+
+  // Get post details by ID
+  Future<Post> getPostDetails(int postId) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/$postId/');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers);
+      if (response.statusCode == 200) {
+        return Post.fromJson(json.decode(response.body));
+      } else {
+        throw Exception('Failed to load post details: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting post details: $e');
+      throw Exception('Network error: $e');
+    }
+  }
 }

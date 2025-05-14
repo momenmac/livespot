@@ -16,6 +16,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'dart:math' show sin, cos, sqrt, atan2, pi;
 import 'dart:io';
+import 'package:flutter_application_2/services/location/location_service.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String title;
@@ -80,7 +81,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     _fetchThreads();
   }
 
-  void _initializePostData() {
+  void _initializePostData() async {
     // Use real post data if available
     if (widget.post != null) {
       setState(() {
@@ -101,10 +102,30 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       });
 
+      // Always recalculate distance from user's current location if not set or zero
+      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN) &&
+          widget.post!.latitude != null && widget.post!.longitude != null) {
+        final locationService = LocationService();
+        try {
+          final userPosition = await locationService.getCurrentPosition();
+          final double calculatedDistance = locationService.calculateDistance(
+            userPosition.latitude,
+            userPosition.longitude,
+            widget.post!.latitude,
+            widget.post!.longitude,
+          );
+          setState(() {
+            widget.post!.distance = calculatedDistance; // Store in meters
+          });
+        } catch (e) {
+          // Could not get user location, leave distance as 0
+        }
+      }
+
       // Log initialization for debugging
       developer.log(
         'Initialized post detail with: upvotes=$_upvotes, downvotes=$_downvotes, '
-        'userVote=${widget.post!.userVote}, hasUpvoted=$_hasUpvoted, hasDownvoted=$_hasDownvoted',
+        'userVote=${widget.post!.userVote}, hasUpvoted=$_hasUpvoted, hasDownvoted=$_hasDownvoted, distance=${widget.post!.distance}',
         name: 'PostDetailPage',
       );
     }
@@ -592,8 +613,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
-        // For a real app, here you would upload the image to your server/storage
-        // and get back a URL. For now, we'll just store the local path.
         setState(() {
           _threadImageUrl = image.path;
         });
@@ -625,8 +644,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
       final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
 
       if (video != null) {
-        // For a real app, here you would upload the video to your server/storage
-        // and get back a URL. For now, we'll just store the local path.
         setState(() {
           _threadImageUrl = video.path; // Using same variable for simplicity
         });
@@ -739,17 +756,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Helper method to format distance properly in km or m
   String _formatDistance(double? distanceInMeters) {
-    // First check if we have an actual distance value from the post
+    // Always use post.distance in meters if available
     if (widget.post?.distance != null && widget.post!.distance > 0) {
-      double meters =
-          widget.post!.distance * 1609.34; // Convert miles to meters
+      double meters = widget.post!.distance;
       if (meters < 1000) {
         return '${meters.toInt()} m';
       } else {
         return '${(meters / 1000).toStringAsFixed(1)} km';
       }
     }
-
     // Then check if we're given a valid distance parameter
     if (distanceInMeters != null && distanceInMeters > 0) {
       if (distanceInMeters < 1000) {
@@ -758,15 +773,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         return '${(distanceInMeters / 1000).toStringAsFixed(1)} km';
       }
     }
-
-    // Try to extract distance from the distance string if available
+    // Try to extract distance from the distance string if available (legacy)
     if (widget.distance != null && widget.distance!.isNotEmpty) {
       final RegExp regex = RegExp(r'(\d+\.?\d*)');
       final match = regex.firstMatch(widget.distance!);
       if (match != null) {
         try {
-          final double miles = double.parse(match.group(1)!);
-          final double meters = miles * 1609.34; // Convert miles to meters
+          final double meters = double.parse(match.group(1)!);
           if (meters < 1000) {
             return '${meters.toInt()} m';
           } else {
@@ -777,56 +790,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       }
     }
-
-    // Try to calculate distance from coordinates if available
-    if (widget.post?.latitude != null && widget.post?.longitude != null) {
-      try {
-        // Try to get the current location
-        _mapController.getUserLocation().then((userLocation) {
-          if (userLocation != null) {
-            // Calculate distance between user and post
-            double calculatedDistance = _calculateDistance(
-                userLocation.latitude,
-                userLocation.longitude,
-                widget.post!.latitude,
-                widget.post!.longitude);
-
-            // Update post distance
-            widget.post!.distance =
-                calculatedDistance / 1609.34; // Store in miles for consistency
-
-            // Force rebuild UI with new distance
-            if (mounted) setState(() {});
-          }
-        });
-      } catch (e) {
-        debugPrint("Error calculating distance: $e");
-      }
-    }
-
-    // Default: show 300m instead of "Nearby" as requested
+    // Default: show 300m instead of "Nearby"
     return '300 m';
-  }
-
-  // Calculate distance between two coordinates in meters
-  double _calculateDistance(
-      double lat1, double lon1, double lat2, double lon2) {
-    const int radiusOfEarth = 6371000; // Earth's radius in meters
-    double latDistance = _toRadians(lat2 - lat1);
-    double lonDistance = _toRadians(lon2 - lon1);
-
-    double a = (sin(latDistance / 2) * sin(latDistance / 2)) +
-        (cos(_toRadians(lat1)) *
-            cos(_toRadians(lat2)) *
-            sin(lonDistance / 2) *
-            sin(lonDistance / 2));
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-    return radiusOfEarth * c; // Distance in meters
-  }
-
-  double _toRadians(double degree) {
-    return degree * (pi / 180);
   }
 
   // Navigate to the user's profile

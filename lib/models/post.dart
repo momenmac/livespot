@@ -67,7 +67,8 @@ class Post {
   })  : latitude = latitude ?? location.latitude,
         longitude = longitude ?? location.longitude,
         imageUrl = imageUrl ?? (mediaUrls.isNotEmpty ? mediaUrls[0] : ''),
-        authorProfilePic = authorProfilePic ?? author.profilePictureUrl,
+        authorProfilePic =
+            authorProfilePic ?? (isAnonymous ? '' : author.profilePictureUrl),
         authorName = authorName ??
             (isAnonymous
                 ? 'Anonymous'
