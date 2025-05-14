@@ -370,7 +370,10 @@ class PostsProvider with ChangeNotifier {
       _userStories = _sanitizeStoriesData(_userStories);
 
       _errorMessage = null;
-      notifyListeners();
+      // Use addPostFrameCallback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
       return _userStories;
     } catch (e) {
       _errorMessage = 'Failed to fetch following stories: $e';
@@ -513,6 +516,9 @@ class PostsProvider with ChangeNotifier {
   // Helper method to update loading state
   void _setLoading(bool loading) {
     _isLoading = loading;
-    notifyListeners();
+    // Use addPostFrameCallback to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 }

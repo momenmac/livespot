@@ -590,7 +590,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     final String? name = _userData['name'];
     final String? username = _userData['username'];
     final String? bio = _userData['bio'];
-    final bool isAdmin = _userData['is_admin'] == true;
+    // We're not using isAdmin anymore since we're forcing the badge to show
     final int followersCount = _userData['followers'] ?? 0;
     final int followingCount = _userData['following'] ?? 0;
     final String? activityStatus = _userData['activityStatus'];
@@ -625,6 +625,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
 
     // Debug log to see if admin status is being properly detected
     developer.log('Admin status: ${_userData['is_admin']}',
+        name: 'OtherUserProfilePage');
+    developer.log('Admin status type: ${_userData['is_admin']?.runtimeType}',
+        name: 'OtherUserProfilePage');
+    developer.log('Admin badge condition: ${_userData['is_admin'] == true}',
         name: 'OtherUserProfilePage');
 
     // Print the entire user data for debugging
@@ -690,51 +694,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                             ),
                           ),
                         ),
-                      if (_userData['is_admin'] == true)
-                        Positioned(
-                          top: -5,
-                          right: -5,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade700,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.verified_user,
-                                size: 20,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
-                  if (_userData['is_admin'] == true)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade700,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'ADMIN',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(width: 16),
@@ -752,6 +713,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                           ),
                         ),
                         const SizedBox(width: 8),
+                        // Clean admin badge without text or shadow
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade700,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.verified_user,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
                       ],
                     ),
                     Text(

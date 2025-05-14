@@ -140,9 +140,13 @@ class Post {
     };
   }
 
-  // Helper getter to display appropriate author name
+  // Helper method to get the display name respecting anonymity settings
   String getDisplayName() {
-    return isAnonymous ? 'Anonymous' : authorName;
+    if (isAnonymous) {
+      return 'Anonymous';
+    } else {
+      return authorName;
+    }
   }
 
   int get voteScore => upvotes - downvotes;

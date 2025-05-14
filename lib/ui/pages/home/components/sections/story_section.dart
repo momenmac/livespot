@@ -31,24 +31,37 @@ class _StorySectionState extends State<StorySection> {
   }
 
   Future<void> _loadStories() async {
+    // Ensure this method won't proceed if the widget is not mounted
     if (!mounted) return;
 
     try {
-      // Call the API to fetch stories
-      await Provider.of<PostsProvider>(context, listen: false)
-          .fetchFollowingStories();
+      // Schedule the provider call for the next frame to avoid build issues
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        
+        try {
+          // Call the API to fetch stories
+          await Provider.of<PostsProvider>(context, listen: false)
+              .fetchFollowingStories();
 
-      // Check mounted state before updating the UI
-      if (mounted) {
-        setState(() {
-          _dataLoaded = true;
-        });
-        developer.log('Loaded stories from API', name: 'StorySection');
-      }
+          // Check mounted state before updating the UI
+          if (mounted) {
+            setState(() {
+              _dataLoaded = true;
+            });
+            developer.log('Loaded stories from API', name: 'StorySection');
+          }
+        } catch (e) {
+          // Only log the error if the widget is still mounted
+          if (mounted) {
+            developer.log('Error loading stories: $e', name: 'StorySection');
+          }
+        }
+      });
     } catch (e) {
       // Only log the error if the widget is still mounted
       if (mounted) {
-        developer.log('Error loading stories: $e', name: 'StorySection');
+        developer.log('Error in _loadStories: $e', name: 'StorySection');
       }
     }
   }

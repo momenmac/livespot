@@ -4,8 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
 
 class AccountSettingsPage extends StatefulWidget {
-  const AccountSettingsPage(
-      {super.key, required Null Function(ThemeMode value) onThemeChanged});
+  final Function(ThemeMode value) onThemeChanged;
+
+  const AccountSettingsPage({
+    super.key,
+    required this.onThemeChanged,
+  });
 
   @override
   State<AccountSettingsPage> createState() => _AccountSettingsPageState();
@@ -278,5 +282,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     setState(() {
       _currentThemeMode = mode;
     });
+    widget.onThemeChanged(mode);
   }
 }

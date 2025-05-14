@@ -13,6 +13,7 @@ import 'package:flutter_application_2/ui/widgets/thread_item.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'dart:math' show sin, cos, sqrt, atan2, pi;
 import 'dart:io';
 
@@ -145,53 +146,21 @@ class _PostDetailPageState extends State<PostDetailPage> {
           }
         } catch (e) {
           debugPrint('Error loading threads: $e');
+          // Show error to user
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to load comments: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } else {
-        // Fallback to mock data for backward compatibility
+        // No mock data - just show empty threads list
         if (mounted) {
           setState(() {
-            _threads = [
-              {
-                'author': 'Emily Johnson',
-                'text':
-                    'This is really concerning. Has anyone heard if evacuations are being ordered yet?',
-                'time': '45m ago',
-                'likes': 24,
-                'replies': 3,
-                'isVerified': true,
-                'distance': '0.3 mi away',
-              },
-              {
-                'author': 'Michael Chen',
-                'text':
-                    'I live close to the area and we\'ve already been told to prepare. The wind is picking up significantly.',
-                'time': '32m ago',
-                'likes': 18,
-                'replies': 1,
-                'isVerified': false,
-                'distance': '0.1 mi away',
-              },
-              {
-                'author': 'Sarah Williams',
-                'text':
-                    'Just heard from a friend working at the emergency services - they\'re setting up shelters at the community center and high school.',
-                'time': '25m ago',
-                'likes': 32,
-                'replies': 5,
-                'isVerified': false,
-                'distance': '0.5 mi away',
-              },
-              {
-                'author': 'David Rodriguez',
-                'text':
-                    'My brother works at the weather station, and he says this could be worse than initially predicted. Everyone please stay safe!',
-                'time': '18m ago',
-                'likes': 15,
-                'replies': 2,
-                'isVerified': true,
-                'distance': '0.2 mi away',
-              },
-            ];
+            _threads = [];
           });
         }
       }
@@ -860,6 +829,65 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return degree * (pi / 180);
   }
 
+  // Navigate to the user's profile
+  void _navigateToUserProfile() {
+    // Don't navigate for anonymous users
+    if (widget.post != null && widget.post!.isAnonymous) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot view anonymous user's profile"),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    // Check if we have a post with author information
+    if (widget.post != null) {
+      // Create the user data map required by OtherUserProfilePage
+      Map<String, dynamic> userData = {
+        'id': widget.post!.author.id,
+        'username': widget.post!.authorName,
+        'profile_pic': widget.post!.authorProfilePic ?? '', // Ensure not null
+        'is_verified': widget.post?.isAuthorVerified ?? widget.isVerified,
+      };
+      
+      // Add extra fields if they are available
+      if (widget.post!.author.fullName != null && widget.post!.author.fullName!.isNotEmpty) {
+        userData['full_name'] = widget.post!.author.fullName;
+      }
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtherUserProfilePage(userData: userData),
+        ),
+      );
+    } else if (widget.authorName != null && widget.authorName!.isNotEmpty) {
+      // Fallback if we only have the author name
+      Map<String, dynamic> userData = {
+        'username': widget.authorName,
+        'is_verified': widget.isVerified,
+        'profile_pic': '', // Provide empty string as default
+      };
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtherUserProfilePage(userData: userData),
+        ),
+      );
+    } else {
+      // Show a message if we can't navigate to the profile
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot view anonymous user's profile"),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final honestyScore = widget.post?.honestyScore ?? widget.honesty;
@@ -945,17 +973,20 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   right: 16,
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        backgroundImage:
-                            widget.post?.authorProfilePic != null &&
-                                    widget.post!.authorProfilePic!.isNotEmpty
-                                ? NetworkImage(widget.post!.authorProfilePic!)
-                                : null,
-                        radius: 18,
-                        child: (widget.post?.authorProfilePic == null ||
-                                widget.post!.authorProfilePic!.isEmpty)
-                            ? const Icon(Icons.person)
-                            : null,
+                      GestureDetector(
+                        onTap: _navigateToUserProfile,
+                        child: CircleAvatar(
+                          backgroundImage:
+                              widget.post?.authorProfilePic != null &&
+                                      widget.post!.authorProfilePic!.isNotEmpty
+                                  ? NetworkImage(widget.post!.authorProfilePic!)
+                                  : null,
+                          radius: 18,
+                          child: (widget.post?.authorProfilePic == null ||
+                                  widget.post!.authorProfilePic!.isEmpty)
+                              ? const Icon(Icons.person)
+                              : null,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -964,15 +995,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  // Use getDisplayName helper to respect isAnonymous flag
-                                  widget.post?.getDisplayName() ??
-                                      widget.authorName ??
-                                      "Anonymous",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                                GestureDetector(
+                                  onTap: _navigateToUserProfile,
+                                  child: Text(
+                                    // Use getDisplayName helper to respect isAnonymous flag
+                                    widget.post?.getDisplayName() ??
+                                        widget.authorName ??
+                                        "Anonymous",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                                 if (widget.post?.isAuthorVerified == true ||
