@@ -75,18 +75,22 @@ class PostsService {
       debugPrint('Posts API response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
-        
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
+
         if (decodedBody is Map && decodedBody.containsKey('results')) {
           // Parse paginated response
-          final posts = (decodedBody['results'] as List).map((json) => Post.fromJson(json)).toList();
+          final posts = (decodedBody['results'] as List)
+              .map((json) => Post.fromJson(json))
+              .toList();
           final nextUrl = decodedBody['next'] as String?;
           final totalItems = decodedBody['count'] as int?;
-          
+
           // Calculate if there are more pages based on the next URL
           final hasMore = nextUrl != null;
-          debugPrint('Loaded ${posts.length} posts, hasMore: $hasMore, totalItems: $totalItems, currentPage: $page');
-          
+          debugPrint(
+              'Loaded ${posts.length} posts, hasMore: $hasMore, totalItems: $totalItems, currentPage: $page');
+
           return {
             'posts': posts,
             'hasMore': hasMore,
@@ -94,7 +98,8 @@ class PostsService {
             'currentPage': page,
           };
         } else {
-          debugPrint('Invalid response format from server, expected paginated results');
+          debugPrint(
+              'Invalid response format from server, expected paginated results');
           return {
             'posts': <Post>[],
             'hasMore': false,
@@ -131,8 +136,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        // Check if the response is a direct array or has a results field
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -168,6 +173,7 @@ class PostsService {
     List<String> mediaUrls = const [],
     List<String> tags = const [],
     int? threadId,
+    bool isAnonymous = false, // Added isAnonymous parameter
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/posts/');
@@ -179,11 +185,12 @@ class PostsService {
         'location': {
           'latitude': latitude,
           'longitude': longitude,
-          if (address != null) 'address': address,
+          if (address != null) 'address': Uri.encodeFull(address),
         },
         'category': category,
         'media_urls': mediaUrls,
         'tags': tags,
+        'is_anonymous': isAnonymous, // Add to request payload
         if (threadId != null) 'thread': threadId,
       };
 
@@ -194,7 +201,8 @@ class PostsService {
       );
 
       if (response.statusCode == 201) {
-        return Post.fromJson(json.decode(response.body));
+        final String responseBody = utf8.decode(response.bodyBytes);
+        return Post.fromJson(json.decode(responseBody));
       } else {
         throw Exception('Failed to create post: ${response.statusCode}');
       }
@@ -226,7 +234,8 @@ class PostsService {
       debugPrint('Vote response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final responseData = json.decode(responseBody);
         debugPrint('Vote response: $responseData');
         return responseData;
       } else {
@@ -262,8 +271,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        // Check if the response is a direct array or has a results field
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -298,7 +307,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        return Thread.fromJson(json.decode(response.body));
+        final String responseBody = utf8.decode(response.bodyBytes);
+        return Thread.fromJson(json.decode(responseBody));
       } else {
         throw Exception(
             'Failed to load thread details: ${response.statusCode}');
@@ -341,7 +351,8 @@ class PostsService {
       );
 
       if (response.statusCode == 201) {
-        return Post.fromJson(json.decode(response.body));
+        final String responseBody = utf8.decode(response.bodyBytes);
+        return Post.fromJson(json.decode(responseBody));
       } else {
         throw Exception('Failed to add post to thread: ${response.statusCode}');
       }
@@ -361,8 +372,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        // Check if the response is a direct array or has a results field
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -400,8 +411,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        // Check if the response is a direct array or has a results field
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -455,7 +466,8 @@ class PostsService {
       );
 
       if (response.statusCode == 201) {
-        return json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        return json.decode(responseBody);
       } else {
         debugPrint(
             'Failed to create thread: ${response.statusCode} - ${response.body}');
@@ -470,7 +482,7 @@ class PostsService {
   // Upload media for post or thread
   Future<String> uploadMedia(String filePath) async {
     try {
-      final url = Uri.parse('$baseUrl/api/media/upload/');
+      final url = Uri.parse('$baseUrl/media-api/upload/');
       final headers = await _getHeaders();
 
       // Create a multipart request
@@ -479,19 +491,37 @@ class PostsService {
       // Add authorization headers
       request.headers.addAll(headers);
 
+      // Add file with content type
+      final fileName = filePath.split('/').last;
+      String contentType = 'image';
+      if (fileName.toLowerCase().endsWith('.mp4') ||
+          fileName.toLowerCase().endsWith('.mov')) {
+        contentType = 'video';
+      }
+
       // Add file
       request.files.add(await http.MultipartFile.fromPath(
         'file',
         filePath,
       ));
 
+      // Add content type field
+      request.fields['content_type'] = contentType;
+
       // Send the request
       final response = await request.send();
       final responseString = await response.stream.bytesToString();
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final responseData = json.decode(responseString);
-        return responseData['file_url']; // The URL of the uploaded file
+        final String responseBody = utf8.decode(responseString.codeUnits);
+        final responseData = json.decode(responseBody);
+
+        // Try to get the Firebase URL first, then fall back to local URL
+        String? url = responseData['firebase_url'] ?? responseData['url'];
+        if (url == null || url.isEmpty) {
+          throw Exception('No valid URL in upload response');
+        }
+        return url;
       } else {
         debugPrint(
             'Failed to upload media: ${response.statusCode} - $responseString');
@@ -513,7 +543,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -556,7 +587,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -591,7 +623,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -626,7 +659,8 @@ class PostsService {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
         final List<dynamic> data;
 
         if (decodedBody is List) {
@@ -668,7 +702,8 @@ class PostsService {
       debugPrint('Save toggle response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final responseData = json.decode(responseBody);
         debugPrint('Save toggle response: $responseData');
         return responseData;
       } else {
@@ -684,21 +719,24 @@ class PostsService {
 
   // Get stories from users that the current user is following
   // Get stories from following users - formatted from posts
-  Future<Map<String, List<Map<String, dynamic>>>> getFollowingStories({String? date}) async {
+  Future<Map<String, List<Map<String, dynamic>>>> getFollowingStories(
+      {String? date}) async {
     try {
       // Build the URL with query parameters
       final queryParams = <String, String>{};
-      
+
       // Always include date parameter, using current date if none provided
       if (date != null) {
         queryParams['date'] = date;
       } else {
         // Use current date if no date provided
         final now = DateTime.now();
-        queryParams['date'] = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        queryParams['date'] =
+            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
       }
-      
-      final url = Uri.parse('$baseUrl/api/posts/following_posts/').replace(queryParameters: queryParams);
+
+      final url = Uri.parse('$baseUrl/api/posts/following_posts/')
+          .replace(queryParameters: queryParams);
       final headers = await _getHeaders();
 
       debugPrint('Fetching stories with URL: $url');
@@ -706,8 +744,8 @@ class PostsService {
       debugPrint('Stories API response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // Parse the response data into a map of username -> list of stories
-        final Map<String, dynamic> responseData = json.decode(response.body);
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final Map<String, dynamic> responseData = json.decode(responseBody);
         final Map<String, List<Map<String, dynamic>>> stories = {};
 
         // Parse the response data into a map of username -> list of stories
@@ -789,11 +827,24 @@ class PostsService {
             };
           }
 
-          // Ensure address field exists
+          // Handle address field
           if (!loc.containsKey('address') ||
               loc['address'] == null ||
               loc['address'] == 'null') {
             loc['address'] = 'Location available';
+          } else {
+            // Ensure address is properly decoded if it's a string
+            final address = loc['address'];
+            if (address is String && address.isNotEmpty) {
+              try {
+                // Try to decode if it's URL encoded
+                final decodedAddress = Uri.decodeFull(address);
+                loc['address'] = decodedAddress;
+              } catch (e) {
+                debugPrint('Error decoding address: $e');
+                // Keep original address if decoding fails
+              }
+            }
           }
         }
 
@@ -829,7 +880,8 @@ class PostsService {
       final headers = await _getHeaders();
       final response = await http.get(url, headers: headers);
       if (response.statusCode == 200) {
-        return Post.fromJson(json.decode(response.body));
+        final String responseBody = utf8.decode(response.bodyBytes);
+        return Post.fromJson(json.decode(responseBody));
       } else {
         throw Exception('Failed to load post details: ${response.statusCode}');
       }

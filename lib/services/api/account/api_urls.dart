@@ -7,7 +7,7 @@ class ApiUrls {
     if (kIsWeb) {
       return 'http://localhost:8000'; // For web development
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.3:8000'; // For Android emulator
+      return 'http://192.168.1.17:8000'; // For Android emulator
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'http://localhost:8000'; // For iOS simulator
     } else {
@@ -62,4 +62,9 @@ class ApiUrls {
       '$baseUrl/api/threads/$threadId/';
   static String addPostToThread(int threadId) =>
       '$baseUrl/api/threads/$threadId/add_post/';
+
+  // Maps endpoints
+  static String get openStreetMapTiles => 'https://tile.openstreetmap.org';
+  static String get osrmRouting => 'http://router.project-osrm.org';
+  static String get nominatimSearch => 'https://nominatim.openstreetmap.org';
 }

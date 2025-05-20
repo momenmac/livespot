@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'sections/map_preview_section.dart';
-import 'sections/categories_section.dart';
 import 'sections/news_feed_section.dart';
 import 'sections/live_streams_section.dart';
 import 'sections/external_news_section.dart';
@@ -173,10 +172,8 @@ class _HomeContentState extends State<HomeContent> {
               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: Divider(height: 1),
             ),
-
+          
             // Categories Section
-            const CategoriesSection(),
-
             // Map Preview Section
             const MapPreviewSection(),
 

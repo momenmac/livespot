@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -12,133 +13,161 @@ class PermissionService {
   // Check and request photo permission specifically
   Future<bool> requestPhotoPermission(BuildContext context) async {
     try {
-      // On Android 13+ we need READ_MEDIA_IMAGES, on older Android we need storage permissions
-      // On iOS we need photos permission
-      Permission requiredPermission;
+      if (kIsWeb) return true; // Web platform doesn't need permissions
+
+      debugPrint('🔒 Requesting photo permission...');
+
+      if (Platform.isIOS) {
+        debugPrint('🔒 iOS platform detected');
+        final photoStatus = await Permission.photos.status;
+
+        if (photoStatus.isGranted) {
+          debugPrint('🔒 Photo permission already granted');
+          return true;
+        }
+
+        if (photoStatus.isPermanentlyDenied) {
+          debugPrint(
+              '🔒 Photo permission permanently denied, showing settings dialog');
+          if (context.mounted) {
+            await _showOpenSettingsDialog(
+              context: context,
+              title: 'Photo Access Required',
+              message:
+                  'Please enable photo access in your device settings to continue.',
+            );
+          }
+          return false;
+        }
+
+        final requestedStatus = await Permission.photos.request();
+        debugPrint(
+            '🔒 Photo permission request result: ${requestedStatus.name}');
+        return requestedStatus.isGranted;
+      }
 
       if (Platform.isAndroid) {
-        // Simply check the Android version directly instead of using the plugin's detection
-        final androidVersion =
-            int.tryParse(Platform.operatingSystemVersion.split(' ').first) ?? 0;
-        debugPrint('🔒 Android version detected: $androidVersion');
+        debugPrint('🔒 Android platform detected');
 
-        if (androidVersion >= 33) {
-          // Android 13 is API 33
-          debugPrint('🔒 Using READ_MEDIA_IMAGES permission for Android 13+');
-          // For Android 13+, directly request the permission without checking
-          final status = await Permission.photos.request();
-          return status.isGranted;
-        } else {
-          debugPrint('🔒 Using storage permission for Android 12 or below');
-          // For Android 12 and below, use storage permission
-          requiredPermission = Permission.storage;
+        // For Android 13+ (API 33+), try photos permission first
+        final photosStatus = await Permission.photos.request();
+        if (photosStatus.isGranted) {
+          debugPrint('🔒 Photos permission granted on Android 13+');
+          return true;
         }
-      } else if (Platform.isIOS) {
-        requiredPermission = Permission.photos;
-      } else {
-        // Other platforms - assume permission is granted
-        return true;
-      }
 
-      // Check permission status
-      final status = await requiredPermission.status;
+        // For Android 12 and below, or if photos permission failed
+        final storageStatus = await Permission.storage.request();
+        if (storageStatus.isGranted) {
+          debugPrint('🔒 Storage permission granted on Android');
+          return true;
+        }
 
-      if (status.isGranted) {
-        return true;
-      }
+        // If both permissions are permanently denied
+        if (storageStatus.isPermanentlyDenied ||
+            photosStatus.isPermanentlyDenied) {
+          debugPrint(
+              '🔒 Permissions permanently denied, showing settings dialog');
+          if (context.mounted) {
+            await _showOpenSettingsDialog(
+              context: context,
+              title: 'Storage Access Required',
+              message:
+                  'Please enable storage access in your device settings to continue.',
+            );
+          }
+          return false;
+        }
 
-      if (status.isPermanentlyDenied) {
-        _showOpenSettingsDialog(
-          context: context,
-          title: 'Photo Access Required',
-          message:
-              'This app needs access to your photos to share images. Please enable it in settings.',
-        );
+        debugPrint('🔒 All permission requests failed');
         return false;
       }
 
-      // Request permission
-      final result = await requiredPermission.request();
-      return result.isGranted;
+      // Other platforms
+      return true;
     } catch (e) {
       debugPrint('🔒 Error requesting photo permission: $e');
-      // Fallback to using image_picker directly which has its own permission handling
-      return true;
-    }
-  }
-
-  // New method specifically for saving to gallery
-  Future<bool> requestSaveToGalleryPermission(BuildContext context) async {
-    try {
-      Permission requiredPermission;
-
-      if (Platform.isAndroid) {
-        final androidVersion =
-            int.tryParse(Platform.operatingSystemVersion.split(' ').first) ?? 0;
-
-        if (androidVersion >= 33) {
-          // For Android 13+, directly request the permission
-          final status = await Permission.photos.request();
-          return status.isGranted;
-        } else {
-          requiredPermission = Permission.storage;
-        }
-      } else if (Platform.isIOS) {
-        requiredPermission = Permission.photos;
-      } else {
-        return true;
-      }
-
-      final status = await requiredPermission.status;
-
-      if (status.isGranted) {
-        return true;
-      }
-
-      if (status.isPermanentlyDenied) {
-        if (context.mounted) {
-          _showOpenSettingsDialog(
-            context: context,
-            title: 'Gallery Access Required',
-            message:
-                'Permission to access your gallery is required to save images. Please enable it in settings.',
-          );
-        }
-        return false;
-      }
-
-      // Request permission
-      final result = await requiredPermission.request();
-      return result.isGranted;
-    } catch (e) {
-      debugPrint('🔒 Error requesting save to gallery permission: $e');
-      return true;
+      return false;
     }
   }
 
   // Check and request camera permission
   Future<bool> requestCameraPermission(BuildContext context) async {
     try {
-      final permissionStatus = await Permission.camera.status;
+      if (kIsWeb) return true;
 
-      if (permissionStatus.isGranted) {
+      debugPrint('🔒 Requesting camera permission...');
+
+      final status = await Permission.camera.status;
+
+      if (status.isGranted) {
+        debugPrint('🔒 Camera permission already granted');
         return true;
       }
 
-      if (permissionStatus.isPermanentlyDenied) {
-        _showOpenSettingsDialog(
+      if (status.isPermanentlyDenied) {
+        debugPrint(
+            '🔒 Camera permission permanently denied, showing settings dialog');
+        if (context.mounted) {
+          await _showOpenSettingsDialog(
             context: context,
             title: 'Camera Access Required',
             message:
-                'This app needs access to your camera to take photos. Please enable it in settings.');
+                'Please enable camera access in your device settings to continue.',
+          );
+        }
         return false;
       }
 
       final result = await Permission.camera.request();
+      debugPrint('🔒 Camera permission request result: ${result.name}');
       return result.isGranted;
     } catch (e) {
       debugPrint('🔒 Error requesting camera permission: $e');
+      return false;
+    }
+  }
+
+  // Method specifically for saving to gallery
+  Future<bool> requestSaveToGalleryPermission(BuildContext context) async {
+    try {
+      if (kIsWeb) return true;
+
+      debugPrint('🔒 Requesting save to gallery permission...');
+
+      if (Platform.isIOS) {
+        final status = await Permission.photos.request();
+        if (!status.isGranted && context.mounted) {
+          await _showOpenSettingsDialog(
+            context: context,
+            title: 'Gallery Access Required',
+            message: 'Please enable gallery access to save photos.',
+          );
+        }
+        return status.isGranted;
+      }
+
+      if (Platform.isAndroid) {
+        // Try photos permission first (Android 13+)
+        final photosStatus = await Permission.photos.request();
+        if (photosStatus.isGranted) return true;
+
+        // Fall back to storage permission
+        final storageStatus = await Permission.storage.request();
+        if (!storageStatus.isGranted && context.mounted) {
+          await _showOpenSettingsDialog(
+            context: context,
+            title: 'Storage Access Required',
+            message: 'Please enable storage access to save photos.',
+          );
+        }
+        return storageStatus.isGranted;
+      }
+
       return true;
+    } catch (e) {
+      debugPrint('🔒 Error requesting save to gallery permission: $e');
+      return false;
     }
   }
 
@@ -148,6 +177,7 @@ class PermissionService {
     required ImageSource source,
   }) async {
     try {
+      debugPrint('🔒 Attempting to pick image from ${source.name}');
       bool permissionGranted = false;
 
       if (source == ImageSource.gallery) {
@@ -164,33 +194,27 @@ class PermissionService {
       // Permission granted, proceed with image selection
       final picker = ImagePicker();
       debugPrint('🔒 Picking image from ${source.name}');
-      return await picker.pickImage(source: source);
+      final XFile? pickedFile = await picker.pickImage(source: source);
+
+      if (pickedFile == null) {
+        debugPrint('🔒 No image was picked');
+      } else {
+        debugPrint('🔒 Image picked successfully: ${pickedFile.path}');
+      }
+
+      return pickedFile;
     } catch (e) {
       debugPrint('🔒 Error picking image: $e');
-
-      // If there was a permission error but we have the manifest permissions,
-      // try again with image_picker's built-in permission handling as fallback
-      try {
-        final picker = ImagePicker();
-        return await picker.pickImage(source: source);
-      } catch (innerError) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error selecting image: ${e.toString()}')),
-          );
-        }
-        return null;
-      }
+      return null;
     }
   }
 
-  // Show dialog to open settings
-  void _showOpenSettingsDialog({
+  Future<void> _showOpenSettingsDialog({
     required BuildContext context,
     required String title,
     required String message,
-  }) {
-    showDialog(
+  }) async {
+    await showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(

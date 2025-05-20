@@ -7,7 +7,6 @@ import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer' as developer;
-// Add new imports for messaging functionality
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
 import 'package:flutter_application_2/ui/pages/messages/chat_detail_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
@@ -16,7 +15,6 @@ import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/models/post.dart';
-// Add the missing imports
 import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -47,61 +45,44 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     _tabController = TabController(length: 3, vsync: this);
     _userData = Map.from(widget.userData);
 
-    // If the follow status is already known from a previous screen, use it
     if (_userData.containsKey('isFollowing')) {
       _isFollowing = _userData['isFollowing'] == true;
     }
 
-    // Always check the follow status to be sure
     _checkFollowingStatus();
-
-    // Fetch complete profile data if we only have basic data
     _fetchCompleteProfileData();
   }
 
-  // Fetch more complete profile data
   Future<void> _fetchCompleteProfileData() async {
     final int userId = _userData['id'] as int;
     final profileProvider =
         Provider.of<UserProfileProvider>(context, listen: false);
 
     try {
-      // Store the original profile image before fetching new data
       final originalProfileImage = _userData['profileImage'];
       developer.log(
           'Original profile image before update: $originalProfileImage',
           name: 'OtherUserProfilePage');
 
-      // Fetch the complete user profile data
       final completeProfileData =
           await profileProvider.fetchUserProfile(userId);
 
       if (completeProfileData != null && mounted) {
         setState(() {
-          // Preserve the following status
           final wasFollowing = _isFollowing;
 
-          // Handle profile image URL format differences
           String? updatedProfileImage;
           final newProfileImage = completeProfileData['profileImage'] ??
               completeProfileData['profile_picture'] ??
               completeProfileData['profile_picture_url'];
 
-          // If we have a new profile image and it's a relative path (starts with /)
           if (newProfileImage != null &&
               newProfileImage.toString().isNotEmpty) {
-            if (newProfileImage.toString().startsWith('/')) {
-              // Convert relative path to absolute URL if needed
-              updatedProfileImage = '${ApiUrls.baseUrl}$newProfileImage';
-            } else {
-              updatedProfileImage = newProfileImage.toString();
-            }
+            updatedProfileImage = _getFixedImageUrl(newProfileImage.toString());
           } else {
-            // Keep the original if no new valid image URL
             updatedProfileImage = originalProfileImage;
           }
 
-          // Extract is_admin and is_verified from nested account object if present
           bool? isAdmin;
           bool? isVerified;
           if (completeProfileData['account'] != null) {
@@ -112,11 +93,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
             }
           }
 
-          // Create updated user data
           _userData = {
-            ...completeProfileData, // Add complete profile data
-            'isFollowing': wasFollowing, // Preserve follow status
-            'profileImage': updatedProfileImage, // Use properly formatted image URL
+            ...completeProfileData,
+            'isFollowing': wasFollowing,
+            'profileImage': updatedProfileImage,
             if (isAdmin != null) 'is_admin': isAdmin,
             if (isAdmin != null) 'isAdmin': isAdmin,
             if (isVerified != null) 'is_verified': isVerified,
@@ -134,7 +114,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     } catch (e) {
       developer.log('Error fetching complete profile data: $e',
           name: 'OtherUserProfilePage');
-      // Continue with the basic profile data we already have
     }
   }
 
@@ -158,7 +137,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     try {
       final isFollowing = await profileProvider.checkFollowing(userId);
 
-      // Debug log to track follow status check
       developer.log('User $userId follow status check: $isFollowing',
           name: 'OtherUserProfilePage');
 
@@ -193,24 +171,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     try {
       bool success;
       if (_isFollowing) {
-        // Unfollow user
         success = await profileProvider.unfollowUser(userId);
         if (success && mounted) {
           setState(() {
             _isFollowing = false;
-            // Update followers count
             _userData['followers'] = (_userData['followers'] ?? 1) - 1;
           });
           developer.log('Unfollowed user: $userId',
               name: 'OtherUserProfilePage');
         }
       } else {
-        // Follow user
         success = await profileProvider.followUser(userId);
         if (success && mounted) {
           setState(() {
             _isFollowing = true;
-            // Update followers count
             _userData['followers'] = (_userData['followers'] ?? 0) + 1;
           });
           developer.log('Followed user: $userId', name: 'OtherUserProfilePage');
@@ -239,21 +213,17 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     }
   }
 
-  // Open message conversation with this user
   void _openMessageConversation() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Extract user information to create conversation
       final int userId = _userData['id'] as int;
       final String username = _userData['username'] ?? '';
       final String? profileImage = _userData['profileImage'];
       final String displayName = _userData['name'] ?? username;
-      // final String email = _userData['email'] ?? '';
 
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -274,7 +244,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         ),
       );
 
-      // Get current user information from SharedPreferences or another source
       final firestore = FirebaseFirestore.instance;
       final currentUserId = await _getCurrentUserId();
 
@@ -282,14 +251,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         throw Exception('Current user ID is not available');
       }
 
-      // First try to find existing conversation
       final query = await firestore
           .collection('conversations')
           .where('isGroup', isEqualTo: false)
           .where('participants', arrayContains: currentUserId)
           .get();
 
-      // Check each conversation for the target user
       String? existingConversationId;
       for (final doc in query.docs) {
         final data = doc.data();
@@ -305,18 +272,15 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         }
       }
 
-      // Create conversation object
       Conversation conversation;
 
       if (existingConversationId != null) {
-        // Get existing conversation
         final docSnapshot = await firestore
             .collection('conversations')
             .doc(existingConversationId)
             .get();
         final data = docSnapshot.data() ?? {};
 
-        // Get last message data safely
         final lastMessageData =
             data['lastMessage'] as Map<String, dynamic>? ?? {};
 
@@ -333,7 +297,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
               id: userId.toString(),
               name: displayName,
               avatarUrl: profileImage ?? "",
-              isOnline: false, // We don't know their status
+              isOnline: false,
             ),
           ],
           messages: [],
@@ -354,11 +318,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           isArchived: data['isArchived'] ?? false,
         );
       } else {
-        // Create new conversation
         final newDoc = firestore.collection('conversations').doc();
         final now = DateTime.now();
 
-        // Store all IDs as strings in the document
         final conversationData = {
           'id': newDoc.id,
           'participants': [currentUserId, userId.toString()],
@@ -413,14 +375,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         );
       }
 
-      // Close loading dialog
       Navigator.pop(context);
 
-      // Create a new controller instance for ChatDetailPage
       final messagesController = MessagesController();
       messagesController.selectConversation(conversation);
 
-      // Navigate directly to ChatDetailPage
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -431,11 +390,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         ),
       );
     } catch (e) {
-      // Log error and show error message
       developer.log('Error creating conversation: $e',
           name: 'OtherUserProfilePage', error: e);
 
-      // Close loading dialog if it's open
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
@@ -455,10 +412,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     }
   }
 
-  // Helper method to get current user ID from provider or shared preferences
   Future<String> _getCurrentUserId() async {
     try {
-      // Get the current user ID from the provider
       final profileProvider =
           Provider.of<UserProfileProvider>(context, listen: false);
       final currentUserProfile = profileProvider.currentUserProfile;
@@ -473,62 +428,18 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     }
   }
 
-  // Format join date string to Month Year format
-  String _formatJoinDate(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) {
-      return ''; // Return empty string if null or empty
+  String _getFixedImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
     }
-
-    try {
-      // Try to parse the date from ISO format
-      DateTime? date;
-
-      // Since we've confirmed dateStr is not null, we now have a non-nullable String
-      String nonNullDateStr = dateStr;
-
-      // Remove time part if present
-      if (nonNullDateStr.contains('T')) {
-        nonNullDateStr = nonNullDateStr.split('T')[0];
-      }
-
-      // Try to parse different date formats
-      try {
-        date = DateTime.parse(nonNullDateStr);
-      } catch (e) {
-        // Try to parse other formats like "2025-05-06"
-        final parts = nonNullDateStr.split('-');
-        if (parts.length == 3) {
-          date = DateTime(
-              int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        }
-      }
-
-      if (date != null) {
-        final months = [
-          'January',
-          'February',
-          'March',
-          'April',
-          'May',
-          'June',
-          'July',
-          'August',
-          'September',
-          'October',
-          'November',
-          'December'
-        ];
-        return '${months[date.month - 1]} ${date.year}';
-      }
-
-      // If we couldn't parse it, just return the original string
-      return nonNullDateStr;
-    } catch (e) {
-      developer.log('Error formatting join date: $e',
-          name: 'OtherUserProfilePage');
-      // Use the non-nullable version which we know is valid at this point
-      return dateStr;
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
     }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
   }
 
   @override
@@ -585,38 +496,26 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   }
 
   Widget _buildUserInfoSection() {
-    // Log the userData for debugging purposes
     developer.log(
         'Building user info with data: ${_userData.toString().substring(0, _userData.toString().length > 150 ? 150 : _userData.toString().length)}...',
         name: 'OtherUserProfilePage');
 
-    // Log specific fields of interest for debugging
     developer.log('Raw honesty data: ${_userData['honesty']}',
         name: 'OtherUserProfilePage');
     developer.log('Raw honesty_score data: ${_userData['honesty_score']}',
         name: 'OtherUserProfilePage');
 
-    // Existing code to extract user data
     final String? profileImage = _userData['profileImage'];
+    final String fixedProfileImage = _getFixedImageUrl(profileImage);
     final String? name = _userData['name'];
     final String? username = _userData['username'];
     final String? bio = _userData['bio'];
-    // We're not using isAdmin anymore since we're forcing the badge to show
     final int followersCount = _userData['followers'] ?? 0;
     final int followingCount = _userData['following'] ?? 0;
     final String? activityStatus = _userData['activityStatus'];
-
-    // Ensure we get location regardless of the field name
     final String location = _userData['location'] ?? '';
-
-    // Format join date properly using our helper method
-    final String formattedJoinDate =
-        _formatJoinDate(_userData['joinDate'] ?? _userData['join_date'] ?? '');
-
-    // Get website if available
     final String website = _userData['website'] ?? '';
 
-    // Handle honesty score from different possible field names - with improved parsing
     int honestyScore = 0;
     if (_userData['honesty'] is int) {
       honestyScore = _userData['honesty'];
@@ -630,11 +529,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       honestyScore = int.tryParse(_userData['honesty_score'].toString()) ?? 0;
     }
 
-    // Debug log to see if honesty score is being properly detected
     developer.log('Final parsed honesty score: $honestyScore',
         name: 'OtherUserProfilePage');
 
-    // Debug log to see if admin status is being properly detected
     developer.log('Admin status: ${_userData['is_admin']}',
         name: 'OtherUserProfilePage');
     developer.log('Admin status type: ${_userData['is_admin']?.runtimeType}',
@@ -642,7 +539,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     developer.log('Admin badge condition: ${_userData['is_admin'] == true}',
         name: 'OtherUserProfilePage');
 
-    // Print the entire user data for debugging
     developer.log('Full user data: ${_userData.toString()}',
         name: 'OtherUserProfilePage');
 
@@ -670,9 +566,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                           ),
                         ),
                         child: ClipOval(
-                          child: profileImage != null && profileImage.isNotEmpty
+                          child: fixedProfileImage.isNotEmpty
                               ? Image.network(
-                                  profileImage,
+                                  fixedProfileImage,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Container(
                                     color: ThemeConstants.greyLight,
@@ -724,7 +620,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (_userData['is_admin'] == true || _userData['isAdmin'] == true)
+                        if (_userData['is_admin'] == true ||
+                            _userData['isAdmin'] == true)
                           Padding(
                             padding: const EdgeInsets.only(left: 8.0),
                             child: Icon(
@@ -755,8 +652,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
               style: const TextStyle(fontSize: 15),
             ),
           const SizedBox(height: 12),
-
-          // Location and Join Date row - make it more flexible with null checks
           Wrap(
             spacing: 16,
             runSpacing: 8,
@@ -770,22 +665,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                     const SizedBox(width: 4),
                     Text(
                       location,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: ThemeConstants.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              if (formattedJoinDate.isNotEmpty)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 14, color: ThemeConstants.grey),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Joined $formattedJoinDate',
                       style: TextStyle(
                         fontSize: 14,
                         color: ThemeConstants.grey,
@@ -810,7 +689,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                 ),
             ],
           ),
-
           const SizedBox(height: 16),
           Row(
             children: [
@@ -853,7 +731,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                 ],
               ),
               const Spacer(),
-              // Always show honesty rating, even if it's 0
               _buildHonestyRating(honestyScore),
               const SizedBox(width: 16),
               IconButton(
@@ -1000,7 +877,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() {}); // Refresh
+                    setState(() {});
                   },
                   child: const Text('Retry'),
                 ),
@@ -1009,7 +886,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           );
         }
 
-        // Get all posts and filter out anonymous posts (since we're viewing another user's profile)
         final allPosts = snapshot.data ?? [];
         final publicPosts =
             allPosts.where((post) => !post.isAnonymous).toList();
@@ -1060,7 +936,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() {}); // Refresh
+                    setState(() {});
                   },
                   child: const Text('Retry'),
                 ),
@@ -1069,7 +945,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           );
         }
 
-        // Get all saved posts and filter out anonymous posts
         final allPosts = snapshot.data ?? [];
         final publicPosts =
             allPosts.where((post) => !post.isAnonymous).toList();
@@ -1120,7 +995,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() {}); // Refresh
+                    setState(() {});
                   },
                   child: const Text('Retry'),
                 ),
@@ -1129,7 +1004,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
           );
         }
 
-        // Get all upvoted posts and filter out anonymous posts
         final allPosts = snapshot.data ?? [];
         final publicPosts =
             allPosts.where((post) => !post.isAnonymous).toList();
@@ -1147,14 +1021,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     );
   }
 
-  // Helper method to build a list of posts
   Widget _buildPostsList(List<Post> posts) {
     return RefreshIndicator(
       onRefresh: () async {
-        // Use Future.delayed to avoid setState during build
         return Future.delayed(Duration.zero, () {
           if (mounted) {
-            setState(() {}); // This will refresh the FutureBuilder
+            setState(() {});
           }
         });
       },
@@ -1169,7 +1041,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     );
   }
 
-  // Helper method to build a post card with the new design
   Widget _buildPostCard(Post post) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final cardBackground = isDarkMode ? Colors.grey.shade900 : Colors.white;
@@ -1185,7 +1056,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Author section with gradient background
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -1208,10 +1078,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                       _getCategoryColor(post.category).withOpacity(0.2),
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundImage:
-                        post.author.profilePictureUrl?.isNotEmpty == true
-                            ? NetworkImage(post.author.profilePictureUrl!)
-                            : null,
+                    backgroundImage: post
+                                .author.profilePictureUrl?.isNotEmpty ==
+                            true
+                        ? NetworkImage(
+                            _getFixedImageUrl(post.author.profilePictureUrl!))
+                        : null,
                     backgroundColor: cardBackground,
                     child: post.author.profilePictureUrl?.isEmpty ?? true
                         ? Icon(Icons.person,
@@ -1264,7 +1136,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                     ],
                   ),
                 ),
-                // Category badge
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1284,14 +1155,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
               ],
             ),
           ),
-
-          // Post content - make the InkWell cover content section
           InkWell(
             onTap: () => _navigateToPostDetail(post),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Media content
                 if (post.mediaUrls.isNotEmpty)
                   ClipRRect(
                     borderRadius: const BorderRadius.all(Radius.circular(0)),
@@ -1301,7 +1169,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                         AspectRatio(
                           aspectRatio: 16 / 9,
                           child: Image.network(
-                            post.mediaUrls.first,
+                            _getFixedImageUrl(post.mediaUrls.isNotEmpty
+                                ? post.mediaUrls.first
+                                : ''),
                             fit: BoxFit.cover,
                             errorBuilder: (context, url, error) => Container(
                               color: Colors.grey.shade200,
@@ -1320,7 +1190,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                             ),
                           ),
                         ),
-                        // Honesty badge on image
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: _buildHonestyBadge(post.honestyScore),
@@ -1328,14 +1197,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                       ],
                     ),
                   ),
-
-                // Post content
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title with custom styling
                       Text(
                         post.title,
                         style: TextStyle(
@@ -1347,8 +1213,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 8),
-
-                      // Content with better contrast
                       Text(
                         post.content,
                         style: TextStyle(
@@ -1360,8 +1224,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 16),
-
-                      // Location with cleaner display
                       if (post.location.address != null)
                         Row(
                           children: [
@@ -1385,8 +1247,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                             ),
                           ],
                         ),
-
-                      // Tags with nicer styling
                       if (post.tags.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -1425,11 +1285,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
               ],
             ),
           ),
-
-          // Divider before actions
           Divider(height: 1, thickness: 1, color: Colors.grey.withOpacity(0.1)),
-
-          // Redesigned action buttons - All are non-interactive stats display, except share
           Container(
             decoration: BoxDecoration(
               color: isDarkMode ? Colors.black12 : Colors.grey.shade50,
@@ -1440,21 +1296,18 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Upvotes display - non-interactive
                 _buildInfoButton(
                   icon: Icons.arrow_upward,
                   label: post.upvotes.toString(),
                   color: Colors.grey,
                   onTap: () => _navigateToPostDetail(post),
                 ),
-                // Downvotes display - non-interactive
                 _buildInfoButton(
                   icon: Icons.arrow_downward,
                   label: post.downvotes.toString(),
                   color: Colors.grey,
                   onTap: () => _navigateToPostDetail(post),
                 ),
-                // Save status - non-interactive
                 _buildInfoButton(
                   icon: post.isSaved == true
                       ? Icons.bookmark
@@ -1462,13 +1315,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                   color: post.isSaved == true ? Colors.amber : Colors.grey,
                   onTap: () => _navigateToPostDetail(post),
                 ),
-                // Comments - navigate to detail
                 _buildInfoButton(
                   icon: Icons.mode_comment_outlined,
                   color: Colors.grey,
                   onTap: () => _navigateToPostDetail(post),
                 ),
-                // Share - this one can be interactive
                 _buildInfoButton(
                   icon: Icons.ios_share,
                   color: Colors.grey,
@@ -1484,7 +1335,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     );
   }
 
-  // Info button builder for post actions
   Widget _buildInfoButton({
     required IconData icon,
     String? label,
@@ -1594,7 +1444,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     return TimeFormatter.getFormattedTime(dateTime);
   }
 
-  // Navigate to post detail page
   void _navigateToPostDetail(Post post) {
     Navigator.push(
       context,
@@ -1602,20 +1451,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
         builder: (context) => PostDetailPage(
           title: post.title,
           description: post.content,
-          imageUrl: post.mediaUrls.isNotEmpty ? post.mediaUrls[0] : '',
+          imageUrl: _getFixedImageUrl(
+              post.mediaUrls.isNotEmpty ? post.mediaUrls[0] : ''),
           location: post.location.address ?? 'Unknown location',
           time: TimeFormatter.getFormattedTime(post.createdAt),
           honesty: post.honestyScore,
           upvotes: post.upvotes,
-          comments: 0, // This would come from a threads count
+          comments: 0,
           isVerified: post.author.isAdmin,
-          post: post, // Pass the whole post object
+          post: post,
         ),
       ),
     );
   }
 
-  // Build a honesty score badge with appropriate color based on score
   Widget _buildHonestyBadge(int score) {
     Color color;
 
@@ -1624,7 +1473,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     } else if (score >= 60) {
       color = ThemeConstants.primaryColor;
     } else if (score >= 40) {
-      color = Colors.amber; // Changed from ThemeConstants.amber to Colors.amber
+      color = Colors.amber;
     } else {
       color = ThemeConstants.red;
     }

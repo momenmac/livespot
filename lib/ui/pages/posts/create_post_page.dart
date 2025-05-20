@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
@@ -25,6 +26,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   bool _isLoading = false;
   final ImagePicker _imagePicker = ImagePicker();
   String? _currentAddress;
+  Position? _currentPosition;
 
   final List<Map<String, dynamic>> _categories = [
     {'value': 'general', 'label': 'General', 'icon': Icons.article},
@@ -54,6 +56,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<void> _getCurrentAddress() async {
+    if (!mounted) return;
+
     try {
       setState(() => _isLoading = true);
 
@@ -61,15 +65,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
           Provider.of<LocationService>(context, listen: false);
       final position = await locationService.getCurrentPosition();
 
+      if (!mounted) return;
+
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
-      if (placemarks.isNotEmpty) {
+      if (placemarks.isNotEmpty && mounted) {
         final place = placemarks.first;
 
         setState(() {
+          _currentPosition = position;
           _currentAddress = [
             place.street,
             place.locality,
@@ -79,9 +86,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       debugPrint('Error getting address: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -164,19 +174,26 @@ class _CreatePostPageState extends State<CreatePostPage> {
           mediaUrls.add(image.path);
         }
 
+        if (_currentPosition == null) {
+          throw Exception('Location is required to create a post');
+        }
+
         // Create the post
         final post =
             await Provider.of<PostsProvider>(context, listen: false).createPost(
           title: _titleController.text,
           content: _contentController.text,
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
           address: _currentAddress,
           category: _selectedCategory,
           mediaUrls: mediaUrls,
           tags: _selectedTags,
         );
 
+        if (!mounted) return;
+
         if (post != null) {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Post created successfully!'),
@@ -186,7 +203,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
           Navigator.pop(context);
         } else {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to create post. Please try again.'),
@@ -204,7 +220,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
           ),
         );
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }

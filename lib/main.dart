@@ -588,7 +588,7 @@ class _MyAppState extends State<MyApp> {
     final firebaseStatus = Provider.of<FirebaseStatusNotifier>(context);
 
     return SessionMonitor(
-      child: Consumer<ThemeProvider>(
+      child: Consumer<ThemeProvider>( 
         builder: (context, themeProvider, child) {
           return MaterialApp(
             title: 'Optimized Flutter App',

@@ -45,6 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos for posts</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Access is needed to select photos for sharing in messages and posts</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Access is needed to save photos to your gallery</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We do not need microphone access, this permission is part of the camera system</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

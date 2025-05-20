@@ -7,6 +7,7 @@ import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:io';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 
 class NewsFeedSection extends StatefulWidget {
   final DateTime selectedDate;
@@ -796,6 +797,21 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     }
   }
 
+  // Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
+  String _getFixedImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+    }
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+    }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
+  }
+
   // Enhanced image URL handling with support for different path types
   Widget _buildImage(String? imageUrl, {BoxFit fit = BoxFit.cover}) {
     final theme = Theme.of(context);
@@ -817,13 +833,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         },
       );
     } else {
-      // Handle URL path - check if it needs a base URL prefix
-      String processedUrl = imageUrl;
-      if (imageUrl.startsWith('/')) {
-        // Add domain for relative paths (like /media/images/file.jpg)
-        processedUrl = 'http://localhost:8000$imageUrl';
-      }
-
+      // Always fix the image URL
+      String processedUrl = _getFixedImageUrl(imageUrl);
       return Image.network(
         processedUrl,
         fit: fit,

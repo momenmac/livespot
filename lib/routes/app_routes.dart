@@ -6,7 +6,7 @@ import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart'
 import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:flutter_application_2/ui/auth/password/forgot_password_screen.dart';
 import 'package:flutter_application_2/ui/auth/password/reset_password_screen.dart';
-import 'package:flutter_application_2/ui/pages/camera_page.dart';
+import 'package:flutter_application_2/ui/pages/camera/custom_camera_page.dart';
 import 'package:flutter_application_2/ui/pages/home.dart';
 import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
@@ -52,7 +52,7 @@ class AppRoutes {
         resetToken: args['resetToken'],
       );
     },
-    camera: (args) => const CameraPage(),
+    camera: (args) => const CustomCameraPage(),
     map: (args) => const MapPage(),
     messages: (args) => const MessagesPage(),
     networkTest: (args) => const NetworkTestPage(),

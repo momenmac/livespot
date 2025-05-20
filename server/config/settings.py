@@ -31,7 +31,7 @@ SECRET_KEY = "django-insecure-h=_g7*7--tj2kxm^o^5lskc&e(&l=4ca_pkr04k!dh+nyi*)co
 DEBUG = True
 
 # Update ALLOWED_HOSTS to include the Android emulator's special IP
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.3', '192.168.1.x']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.17', '192.168.1.x']
 
 # Base URL for serving uploaded media files - needed for web file upload
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
@@ -136,7 +136,11 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'config.pagination.DefaultPagination',
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 10,
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_CHARSET': 'utf-8',
 }
 
 # JWT settings - streamlined

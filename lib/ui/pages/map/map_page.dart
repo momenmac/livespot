@@ -20,6 +20,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
 import 'package:collection/collection.dart'; // Import for ListEquality
@@ -120,7 +121,7 @@ class _MapPageState extends State<MapPage> {
 
     try {
       // Create the URL with query parameters
-      String url = 'http://localhost:8000/api/posts/';
+      String url = ApiUrls.posts;
       final queryParams = <String, String>{};
 
       if (dateParam != null) {
@@ -433,7 +434,7 @@ class _MapPageState extends State<MapPage> {
 
     // Check if thumbnailUrl is a relative URL and make it absolute if needed
     if (thumbnailUrl != null && thumbnailUrl.startsWith('/')) {
-      thumbnailUrl = 'http://localhost:8000$thumbnailUrl';
+      thumbnailUrl = '${ApiUrls.baseUrl}$thumbnailUrl';
       print('Converted to absolute URL: $thumbnailUrl');
     }
 

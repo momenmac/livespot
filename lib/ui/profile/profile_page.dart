@@ -5,7 +5,6 @@ import 'package:flutter_application_2/services/api/account/account_provider.dart
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/ui/profile/settings/account_settings_page.dart';
-import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/profile/profile_search_page.dart';
 import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
 import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart';
@@ -22,6 +21,22 @@ import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
+
+// Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
+String _getFixedImageUrl(String? url) {
+  if (url == null || url.isEmpty) return '';
+  if (url.startsWith('http://localhost:8000')) {
+    return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+  }
+  if (url.startsWith('http://127.0.0.1:8000')) {
+    return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+  }
+  if (url.startsWith('/')) {
+    return ApiUrls.baseUrl + url;
+  }
+  return url;
+}
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -35,7 +50,6 @@ class _ProfilePageState extends State<ProfilePage>
   late TabController _tabController;
   DateTime? _selectedDate;
   bool _showDiscoverPeople = true;
-  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -54,7 +68,6 @@ class _ProfilePageState extends State<ProfilePage>
         !profileProvider.isLoading) {
       profileProvider.fetchCurrentUserProfile();
     }
-    _isInitialized = true;
   }
 
   @override
@@ -225,9 +238,6 @@ class _ProfilePageState extends State<ProfilePage>
 
   // Date filtering for posts
   void _filterContentByDate(DateTime date) {
-    final formattedDate =
-        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-
     // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -236,22 +246,14 @@ class _ProfilePageState extends State<ProfilePage>
         duration: const Duration(seconds: 2),
       ),
     );
-
-    // Store the selected date
     setState(() {
       _selectedDate = date;
     });
-
-    // We'll need to rebuild each tab with the date filter
-    // This is a cleaner approach than calling setState
     if (_tabController.index == 0) {
-      // We're on the user posts tab, so refresh it with the date
       _refreshPostsWithDateFilter();
     } else if (_tabController.index == 1) {
-      // We're on the saved posts tab
       _refreshSavedPostsWithDateFilter();
     } else if (_tabController.index == 2) {
-      // We're on the upvoted posts tab
       _refreshUpvotedPostsWithDateFilter();
     }
   }
@@ -259,61 +261,19 @@ class _ProfilePageState extends State<ProfilePage>
   // Method to refresh posts with date filter
   void _refreshPostsWithDateFilter() {
     if (_selectedDate == null) return;
-
-    final profileProvider =
-        Provider.of<UserProfileProvider>(context, listen: false);
-    if (profileProvider.currentUserProfile == null) return;
-
-    final userId = profileProvider.currentUserProfile!.account.id;
-    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-
-    // Format the date as YYYY-MM-DD for the API
-    final formattedDate =
-        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
-
-    setState(() {
-      // Force refresh of the current tab
-    });
+    setState(() {});
   }
 
   // Method to refresh saved posts with date filter
   void _refreshSavedPostsWithDateFilter() {
     if (_selectedDate == null) return;
-
-    final profileProvider =
-        Provider.of<UserProfileProvider>(context, listen: false);
-    if (profileProvider.currentUserProfile == null) return;
-
-    final userId = profileProvider.currentUserProfile!.account.id;
-    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-
-    // Format the date as YYYY-MM-DD for the API
-    final formattedDate =
-        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
-
-    setState(() {
-      // Force refresh of the current tab
-    });
+    setState(() {});
   }
 
   // Method to refresh upvoted posts with date filter
   void _refreshUpvotedPostsWithDateFilter() {
     if (_selectedDate == null) return;
-
-    final profileProvider =
-        Provider.of<UserProfileProvider>(context, listen: false);
-    if (profileProvider.currentUserProfile == null) return;
-
-    final userId = profileProvider.currentUserProfile!.account.id;
-    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-
-    // Format the date as YYYY-MM-DD for the API
-    final formattedDate =
-        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
-
-    setState(() {
-      // Force refresh of the current tab
-    });
+    setState(() {});
   }
 
   Widget _buildUserInfoSection(UserProfile? profile) {
@@ -327,8 +287,6 @@ class _ProfilePageState extends State<ProfilePage>
     developer.log('Profile user ID: ${profile.account.id}',
         name: 'ProfilePage');
     developer.log('Profile username: ${profile.username}', name: 'ProfilePage');
-
-    final activityStatus = profile.activityStatusStr;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
@@ -355,7 +313,8 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                         child: ClipOval(
                           child: CachedNetworkImage(
-                            imageUrl: profile.profilePictureUrl,
+                            imageUrl:
+                                _getFixedImageUrl(profile.profilePictureUrl),
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
                               color: ThemeConstants.greyLight,
@@ -377,7 +336,7 @@ class _ProfilePageState extends State<ProfilePage>
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color: _getStatusColor(activityStatus),
+                            color: _getStatusColor(profile.activityStatusStr),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: Theme.of(context).scaffoldBackgroundColor,
@@ -929,10 +888,12 @@ class _ProfilePageState extends State<ProfilePage>
                       _getCategoryColor(post.category).withOpacity(0.2),
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundImage:
-                        post.author.profilePictureUrl?.isNotEmpty == true
-                            ? NetworkImage(post.author.profilePictureUrl!)
-                            : null,
+                    backgroundImage: post
+                                .author.profilePictureUrl?.isNotEmpty ==
+                            true
+                        ? NetworkImage(
+                            _getFixedImageUrl(post.author.profilePictureUrl))
+                        : null,
                     backgroundColor: cardBackground,
                     child: post.author.profilePictureUrl?.isEmpty ?? true
                         ? Icon(Icons.person,
@@ -1022,7 +983,7 @@ class _ProfilePageState extends State<ProfilePage>
                         AspectRatio(
                           aspectRatio: 16 / 9,
                           child: CachedNetworkImage(
-                            imageUrl: post.mediaUrls.first,
+                            imageUrl: _getFixedImageUrl(post.mediaUrls.first),
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
                               color: Colors.grey.shade200,
@@ -1259,13 +1220,6 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  void _reportPost(Post post) {
-    // Implementation for reporting post
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Reporting post: ${post.title}')),
-    );
-  }
-
   // Helper method to build honesty badge
   Widget _buildHonestyBadge(int honesty) {
     Color color;
@@ -1354,7 +1308,7 @@ class _ProfilePageState extends State<ProfilePage>
           title: post.title,
           description: post.content,
           imageUrl: post.hasMedia && post.mediaUrls.isNotEmpty
-              ? post.mediaUrls.first
+              ? _getFixedImageUrl(post.mediaUrls.first)
               : '',
           location: post.location.address ?? "Unknown location",
           time: _getTimeAgo(post.createdAt),
@@ -1579,7 +1533,7 @@ class _ProfilePageState extends State<ProfilePage>
             }
           }
 
-          // Function to save profile updates
+          // Function to save profile changes
           Future<void> saveProfileChanges() async {
             // Set button to loading state
             setModalState(() {
@@ -1712,7 +1666,8 @@ class _ProfilePageState extends State<ProfilePage>
                           backgroundImage: selectedImage != null
                               ? FileImage(File(selectedImage!.path))
                               : (profile.profilePictureUrl.isNotEmpty
-                                  ? NetworkImage(profile.profilePictureUrl)
+                                  ? NetworkImage(_getFixedImageUrl(
+                                          profile.profilePictureUrl))
                                       as ImageProvider
                                   : null),
                           child: (selectedImage == null &&
@@ -2155,7 +2110,7 @@ class _FollowersPageState extends State<_FollowersPage> {
         return ListTile(
           leading: CircleAvatar(
             backgroundImage: user.profilePictureUrl.isNotEmpty
-                ? NetworkImage(user.profilePictureUrl)
+                ? NetworkImage(_getFixedImageUrl(user.profilePictureUrl))
                 : null,
             child: user.profilePictureUrl.isEmpty
                 ? const Icon(Icons.person)
@@ -2170,7 +2125,6 @@ class _FollowersPageState extends State<_FollowersPage> {
                   child: Icon(
                     Icons.verified_user,
                     size: 16,
-                    color: ThemeConstants.primaryColor,
                   ),
                 ),
             ],

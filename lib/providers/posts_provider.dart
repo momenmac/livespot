@@ -202,33 +202,32 @@ class PostsProvider with ChangeNotifier {
   Future<Post?> createPost({
     required String title,
     required String content,
+    required double latitude,
+    required double longitude,
     String? address,
     String category = 'general',
     List<String> mediaUrls = const [],
     List<String> tags = const [],
-    int? threadId,
+    bool isAnonymous = false, // New parameter
   }) async {
-    _setLoading(true);
     try {
-      final position = await _locationService.getCurrentPosition();
+      _setLoading(true);
 
       final post = await _postsService.createPost(
         title: title,
         content: content,
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: latitude,
+        longitude: longitude,
         address: address,
         category: category,
         mediaUrls: mediaUrls,
         tags: tags,
-        threadId: threadId,
+        isAnonymous: isAnonymous, // Pass the parameter to the service
       );
 
-      // Add the new post to our list
+      // Add the new post to the beginning of our list
       _posts.insert(0, post);
-      notifyListeners();
 
-      _errorMessage = null;
       return post;
     } catch (e) {
       _errorMessage = 'Failed to create post: $e';
@@ -236,6 +235,7 @@ class PostsProvider with ChangeNotifier {
       return null;
     } finally {
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -386,6 +386,22 @@ class PostsProvider with ChangeNotifier {
     }
   }
 
+  // Upload media from local file path
+  Future<String?> uploadMedia(String filePath) async {
+    try {
+      _setLoading(true);
+      final mediaUrl = await _postsService.uploadMedia(filePath);
+      return mediaUrl;
+    } catch (e) {
+      _errorMessage = 'Failed to upload media: $e';
+      debugPrint(_errorMessage);
+      return null;
+    } finally {
+      _setLoading(false);
+      notifyListeners();
+    }
+  }
+
   // Get posts created by a specific user
   Future<List<Post>> getUserPosts(int userId) async {
     _setLoading(true);
@@ -483,7 +499,8 @@ class PostsProvider with ChangeNotifier {
   }
 
   // Fetch stories from users the current user is following
-  Future<Map<String, List<Map<String, dynamic>>>> fetchFollowingStories({String? date}) async {
+  Future<Map<String, List<Map<String, dynamic>>>> fetchFollowingStories(
+      {String? date}) async {
     _setLoading(true);
     try {
       _userStories = await _postsService.getFollowingStories(date: date);

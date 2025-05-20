@@ -12,11 +12,10 @@ import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:flutter_application_2/ui/widgets/thread_item.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
-import 'dart:math' show sin, cos, sqrt, atan2, pi;
 import 'dart:io';
 import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String title;
@@ -69,21 +68,48 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Variables to track media attachment for thread
   String? _threadImageUrl;
-  bool _isAttachingMedia = false;
 
   @override
   void initState() {
     super.initState();
     // Initialize with values from widget
     _upvotes = widget.upvotes;
+
+    // Debug prints for Arabic text
+    developer.log('🔍 Initializing Post Detail Page with:',
+        name: 'ArabicDebug');
+    developer.log('Title: "${widget.title}"', name: 'ArabicDebug');
+    developer.log('Description: "${widget.description}"', name: 'ArabicDebug');
+    developer.log('Location: "${widget.location}"', name: 'ArabicDebug');
+
+    // Print raw bytes for debugging
+    developer.log('Title bytes: ${widget.title.codeUnits}',
+        name: 'ArabicDebug');
+    developer.log('Description bytes: ${widget.description.codeUnits}',
+        name: 'ArabicDebug');
+
     _initializePostData();
     _initializeMap();
     _fetchThreads();
   }
 
   void _initializePostData() async {
+    // Add debug prints for text content
+    debugPrint('🔍 Post Title: ${widget.title}');
+    debugPrint('🔍 Post Description: ${widget.description}');
+    debugPrint('🔍 Post Location: ${widget.location}');
+
+    // Print the raw bytes of the text to check encoding
+    debugPrint('📝 Title bytes: ${widget.title.codeUnits}');
+    debugPrint('📝 Description bytes: ${widget.description.codeUnits}');
+
     // Use real post data if available
     if (widget.post != null) {
+      debugPrint('📦 Post object data:');
+      debugPrint('   - ID: ${widget.post!.id}');
+      debugPrint('   - Title: ${widget.post!.title}');
+      debugPrint('   - Content: ${widget.post!.content}');
+
       setState(() {
         // Initialize vote counts from the actual post data
         _upvotes = widget.post!.upvotes;
@@ -103,8 +129,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       });
 
       // Always recalculate distance from user's current location if not set or zero
-      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN) &&
-          widget.post!.latitude != null && widget.post!.longitude != null) {
+      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN)) {
         final locationService = LocationService();
         try {
           final userPosition = await locationService.getCurrentPosition();
@@ -502,112 +527,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
     }
   }
 
-  // Add thread through API
-  Future<void> _addThread() async {
-    // Check if image is attached - require an image to post a thread
-    if (_threadImageUrl == null) {
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Please attach an image to create a thread",
-      );
-      return;
-    }
-
-    // Check if content is provided
-    if (_threadController.text.trim().isEmpty) {
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Please add some text to your thread",
-      );
-      return;
-    }
-
-    // Verify location if this is a real post
-    if (widget.post != null) {
-      try {
-        final postsProvider =
-            Provider.of<PostsProvider>(context, listen: false);
-
-        // First verify the user's location before adding thread
-        bool locationVerified = await postsProvider.verifyUserLocation(
-          latitude: widget.post!.latitude,
-          longitude: widget.post!.longitude,
-          maxDistanceInMeters:
-              1000, // Allow threads within 1km of the post location
-        );
-
-        if (!locationVerified) {
-          ResponsiveSnackBar.showError(
-            context: context,
-            message: "You must be near the post location to add a thread",
-          );
-          return;
-        }
-
-        // Upload the image first and get the URL
-        final String? mediaUrl =
-            await postsProvider.uploadThreadMedia(_threadImageUrl!);
-
-        if (mediaUrl == null) {
-          ResponsiveSnackBar.showError(
-            context: context,
-            message: "Failed to upload media. Please try again.",
-          );
-          return;
-        }
-
-        // Create thread with the uploaded media
-        final newThread = await postsProvider.createThread(
-          postId: widget.post!.id,
-          content: _threadController.text,
-          mediaUrl: mediaUrl,
-        );
-
-        if (mounted) {
-          setState(() {
-            _threads.insert(0, newThread);
-            _threadController.clear();
-            _threadImageUrl = null; // Clear the image after posting
-          });
-
-          ResponsiveSnackBar.showSuccess(
-            context: context,
-            message: "Thread posted successfully!",
-          );
-        }
-      } catch (e) {
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: "Failed to post thread: ${e.toString()}",
-        );
-      }
-    } else {
-      // Fallback to mock behavior for testing
-      setState(() {
-        _threads.insert(0, {
-          'author': 'You',
-          'text': _threadController.text,
-          'time': 'Just now',
-          'likes': 0,
-          'replies': 0,
-          'isVerified': false,
-          'distance': '0.0 mi away',
-          'media_url': _threadImageUrl,
-        });
-        _threadController.clear();
-        _threadImageUrl = null; // Clear the image after posting
-      });
-    }
-    // Hide keyboard
-    FocusScope.of(context).unfocus();
-  }
-
   // Function to handle image selection
   Future<void> _selectThreadImage() async {
-    setState(() {
-      _isAttachingMedia = true;
-    });
-
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
@@ -626,19 +547,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
         context: context,
         message: "Error attaching image: $e",
       );
-    } finally {
-      setState(() {
-        _isAttachingMedia = false;
-      });
     }
   }
 
   // Function to handle video selection
   Future<void> _selectThreadVideo() async {
-    setState(() {
-      _isAttachingMedia = true;
-    });
-
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
@@ -657,10 +570,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
         context: context,
         message: "Error attaching video: $e",
       );
-    } finally {
-      setState(() {
-        _isAttachingMedia = false;
-      });
     }
   }
 
@@ -671,21 +580,36 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
   }
 
+  // Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
+  String _getFixedImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+    }
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+    }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
+  }
+
   // Enhanced method to get appropriate image URL or path with better fallback handling
   String _getImageUrl() {
     // First try: Check if we have a valid post object with an imageUrl
     if (widget.post?.imageUrl != null && widget.post!.imageUrl.isNotEmpty) {
-      return widget.post!.imageUrl;
+      return _getFixedImageUrl(widget.post!.imageUrl);
     }
 
     // Second try: Check if the post has media URLs
     if (widget.post?.hasMedia == true && widget.post!.mediaUrls.isNotEmpty) {
-      return widget.post!.mediaUrls.first;
+      return _getFixedImageUrl(widget.post!.mediaUrls.first);
     }
 
     // Third try: Use the directly provided imageUrl
     if (widget.imageUrl.isNotEmpty) {
-      return widget.imageUrl;
+      return _getFixedImageUrl(widget.imageUrl);
     }
 
     // Final fallback: Use a placeholder image
@@ -702,10 +626,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Widget to display either network image or file image based on the path
   Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover}) {
-    if (_isFilePath(imageUrl)) {
-      // Handle file paths (useful for locally picked images)
+    final String fixedImageUrl = _getFixedImageUrl(imageUrl);
+    if (_isFilePath(fixedImageUrl)) {
       return Image.file(
-        File(imageUrl),
+        File(fixedImageUrl),
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
           debugPrint('Error loading file image: $error');
@@ -713,9 +637,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         },
       );
     } else {
-      // Handle network URLs
       return Image.network(
-        imageUrl,
+        fixedImageUrl,
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
           debugPrint('Error loading network image: $error');
@@ -806,7 +729,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       );
       return;
     }
-    
+
     // Check if we have a post with author information
     if (widget.post != null) {
       // Create the user data map required by OtherUserProfilePage
@@ -816,12 +739,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         'profile_pic': widget.post!.authorProfilePic ?? '', // Ensure not null
         'is_verified': widget.post?.isAuthorVerified ?? widget.isVerified,
       };
-      
+
       // Add extra fields if they are available
-      if (widget.post!.author.fullName != null && widget.post!.author.fullName!.isNotEmpty) {
+      if (widget.post!.author.fullName != null &&
+          widget.post!.author.fullName!.isNotEmpty) {
         userData['full_name'] = widget.post!.author.fullName;
       }
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -835,7 +759,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         'is_verified': widget.isVerified,
         'profile_pic': '', // Provide empty string as default
       };
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -944,7 +868,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           backgroundImage:
                               widget.post?.authorProfilePic != null &&
                                       widget.post!.authorProfilePic!.isNotEmpty
-                                  ? NetworkImage(widget.post!.authorProfilePic!)
+                                  ? NetworkImage(_getFixedImageUrl(
+                                      widget.post!.authorProfilePic!))
                                   : null,
                           radius: 18,
                           child: (widget.post?.authorProfilePic == null ||
@@ -1042,22 +967,14 @@ class _PostDetailPageState extends State<PostDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Post title
                   Text(
-                    widget.post?.title ?? widget.title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    widget.title,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
-                  // Post description
                   Text(
-                    widget.post?.description ?? widget.description,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[800],
-                    ),
+                    widget.description,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 8),
 
@@ -1237,7 +1154,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 isVerified:
                     thread['is_verified'] ?? thread['isVerified'] ?? false,
                 distance: thread['distance'] ?? '0.0 mi away',
-                profilePic: thread['author_profile_pic'],
+                profilePic: _getFixedImageUrl(thread['author_profile_pic']),
               ),
             ),
             const SizedBox(height: 24),

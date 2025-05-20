@@ -33,7 +33,7 @@ class _MapPreviewSectionState extends State<MapPreviewSection> {
       await _mapController.initializeLocation();
 
       // Allow a moment for the map to initialize
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 800));
 
       if (mounted) {
         setState(() {
@@ -42,6 +42,12 @@ class _MapPreviewSectionState extends State<MapPreviewSection> {
       }
     } catch (e) {
       debugPrint('Error initializing map: $e');
+      // Set map ready even on error, to show a fallback view
+      if (mounted) {
+        setState(() {
+          _isMapReady = true;
+        });
+      }
     }
   }
 
@@ -102,8 +108,22 @@ class _MapPreviewSectionState extends State<MapPreviewSection> {
                       onTap: () => _openFullMap(context),
                     )
                   : Center(
-                      child: CircularProgressIndicator(
-                        color: ThemeConstants.primaryColor,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            color: ThemeConstants.primaryColor,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Loading map...",
+                            style: TextStyle(
+                              color:
+                                  Theme.of(context).textTheme.bodyMedium?.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
             ),

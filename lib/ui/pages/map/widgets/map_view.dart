@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/custom_event_marker.dart';
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
@@ -64,13 +65,12 @@ class MapWidget extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          // Use a direct URL without subdomains to avoid the OSM warning
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          // Remove subdomains parameter
+          urlTemplate: '${ApiUrls.openStreetMapTiles}/{z}/{x}/{y}.png',
           tileProvider: CancellableNetworkTileProvider(),
-          // Add user agent to identify your app to OSM - this is good practice
+          userAgentPackageName: 'flutter_application_2',
+          keepBuffer: 5,
           additionalOptions: const {
-            'User-Agent': 'Flutter Map App/1.0',
+            'User-Agent': 'Flutter Application 2/1.0',
           },
         ),
         // Custom markers from the map page
@@ -83,25 +83,19 @@ class MapWidget extends StatelessWidget {
                 mapController.destination != null)
               Marker(
                 point: mapController.destination!,
-                child: mapController.markerEventType != null
-                    ? CustomEventMarker.forEvent(
-                        location: mapController.destination!,
-                        eventType: mapController.markerEventType,
-                        onTap: () {
-                          // Show info about the marker when tapped
-                          if (mapController.markerDescription != null) {
-                            ResponsiveSnackBar.showInfo(
-                              context: context,
-                              message: mapController.markerDescription!,
-                            );
-                          }
-                        },
-                      )
-                    : const Icon(
-                        Icons.location_on,
-                        color: Colors.red,
-                        size: 30,
-                      ),
+                child: CustomEventMarker.forEvent(
+                  location: mapController.destination!,
+                  eventType: mapController.markerEventType,
+                  onTap: () {
+                    // Show info about the marker when tapped
+                    if (mapController.markerDescription != null) {
+                      ResponsiveSnackBar.showInfo(
+                        context: context,
+                        message: mapController.markerDescription!,
+                      );
+                    }
+                  },
+                ),
               ),
             if (mapController.showMarkersAndRoute &&
                 mapController.currentLocation != null)

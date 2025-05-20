@@ -69,6 +69,7 @@ dependencies:
   path: ^1.8.3 # For path manipulation
   timeago: ^3.2.2
   shimmer: ^3.0.0 # Added for shimmer loading effects
+  camera: ^0.11.1
 
 dev_dependencies:
   flutter_test:
@@ -106,9 +107,9 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
-  # fonts:
-  #   - family: Poppins
-  #     fonts:
-  #       - asset: assets/fonts/Poppins-Regular.ttf
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package

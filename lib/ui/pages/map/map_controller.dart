@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_categories.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -52,6 +53,7 @@ class MapPageController extends ChangeNotifier {
   void setMapReady() {
     if (!_mapReadyCompleter.isCompleted) {
       _mapReadyCompleter.complete();
+      _safeNotifyListeners(); // Add this to trigger a refresh
     }
   }
 
@@ -59,16 +61,18 @@ class MapPageController extends ChangeNotifier {
   Future<void> _moveMapWhenReady(LatLng target, double zoom) async {
     if (_isDisposed) return; // Safety check
     try {
-      await _mapReadyCompleter.future;
+      await _mapReadyCompleter.future.timeout(const Duration(seconds: 5),
+          onTimeout: () => debugPrint('Map ready timed out'));
       if (!_isDisposed) {
         try {
           mapController.move(target, zoom);
+          _safeNotifyListeners(); // Add this to trigger a refresh
         } catch (e) {
-          print('Error moving map: $e');
+          debugPrint('Error moving map: $e');
         }
       }
     } catch (e) {
-      print('Error waiting for map ready: $e');
+      debugPrint('Error waiting for map ready: $e');
     }
   }
 
@@ -105,14 +109,47 @@ class MapPageController extends ChangeNotifier {
     try {
       bool hasPermission = await _checkPermissions();
       if (!hasPermission) {
+        // Set a default location if no permission
+        currentLocation =
+            LatLng(31.5017, 34.4668); // Gaza coordinates as default
+        _moveMapWhenReady(currentLocation!, 10);
+        hasInitializedLocation = true;
+        _safeNotifyListeners();
         return;
       }
 
-      // For web, get position first
-      if (kIsWeb) {
-        final position = await Geolocator.getCurrentPosition();
+      try {
+        // Get position first for all platforms
+        final Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint("Position request timed out, using default");
+            return Position(
+              latitude: 31.5017,
+              longitude: 34.4668,
+              timestamp: DateTime.now(),
+              accuracy: 0,
+              altitude: 0,
+              heading: 0,
+              speed: 0,
+              speedAccuracy: 0,
+              altitudeAccuracy: 0,
+              headingAccuracy: 0,
+            );
+          },
+        );
+
         currentLocation = LatLng(position.latitude, position.longitude);
         // Use helper to move map when ready
+        _moveMapWhenReady(currentLocation!, 10);
+        hasInitializedLocation = true;
+        _safeNotifyListeners();
+      } catch (e) {
+        debugPrint("Error getting initial position: $e");
+        // Fallback to default location
+        currentLocation = LatLng(31.5017, 34.4668);
         _moveMapWhenReady(currentLocation!, 10);
         hasInitializedLocation = true;
         _safeNotifyListeners();
@@ -140,15 +177,16 @@ class MapPageController extends ChangeNotifier {
           }
         },
         onError: (error) {
-          if (!_isDisposed) {
-            showErrorMessage('Error getting location: $error');
-          }
+          debugPrint('Error getting location stream: $error');
         },
       );
     } catch (e) {
-      if (!_isDisposed) {
-        showErrorMessage('${TextStrings.failedToInitializeLocationServices}$e');
-      }
+      debugPrint('Failed to initialize location services: $e');
+      // Set a default location on error
+      currentLocation = LatLng(31.5017, 34.4668);
+      _moveMapWhenReady(currentLocation!, 10);
+      hasInitializedLocation = true;
+      _safeNotifyListeners();
     }
   }
 
@@ -226,7 +264,7 @@ class MapPageController extends ChangeNotifier {
     if (_isDisposed) return; // Safety check
 
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=$location&format=json&limit=1');
+        '${ApiUrls.nominatimSearch}/search?q=$location&format=json&limit=1');
 
     try {
       final response = await http.get(url);
@@ -272,7 +310,7 @@ class MapPageController extends ChangeNotifier {
     if (_isDisposed) return; // Safety check
     if (currentLocation == null || destination == null) return;
 
-    final url = Uri.parse("http://router.project-osrm.org/route/v1/driving/"
+    final url = Uri.parse("${ApiUrls.osrmRouting}/route/v1/driving/"
         "${currentLocation!.longitude},${currentLocation!.latitude};"
         "${destination!.longitude},${destination!.latitude}?overview=full&geometries=polyline");
 
@@ -421,7 +459,7 @@ class MapPageController extends ChangeNotifier {
     }
 
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?format=json&q=$query&limit=5');
+        '${ApiUrls.nominatimSearch}/search?format=json&q=$query&limit=5');
 
     try {
       final response = await http.get(url);

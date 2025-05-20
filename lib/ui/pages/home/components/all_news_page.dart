@@ -7,6 +7,7 @@ import 'package:flutter_application_2/ui/pages/home/components/news_search_page.
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/constants/category_utils.dart';
 import 'dart:io';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 
 class AllNewsPage extends StatefulWidget {
   const AllNewsPage({super.key});
@@ -33,7 +34,8 @@ class _AllNewsPageState extends State<AllNewsPage> {
   ];
 
   // Track voted posts
-  final Map<int, bool?> _userVotes = {}; // true for upvote, false for downvote, null for no vote
+  final Map<int, bool?> _userVotes =
+      {}; // true for upvote, false for downvote, null for no vote
 
   @override
   void initState() {
@@ -69,7 +71,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
     if (_isLoadingMore) {
       return;
     }
-    
+
     setState(() {
       _isLoadingMore = true;
     });
@@ -287,7 +289,8 @@ class _AllNewsPageState extends State<AllNewsPage> {
                         });
                       },
                       backgroundColor: theme.cardColor,
-                      selectedColor: ThemeConstants.primaryColor.withOpacity(0.2),
+                      selectedColor:
+                          ThemeConstants.primaryColor.withOpacity(0.2),
                       labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                       padding: EdgeInsets.zero,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -313,7 +316,8 @@ class _AllNewsPageState extends State<AllNewsPage> {
                   );
                 }
 
-                if (postsProvider.errorMessage != null && postsProvider.posts.isEmpty) {
+                if (postsProvider.errorMessage != null &&
+                    postsProvider.posts.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -376,17 +380,19 @@ class _AllNewsPageState extends State<AllNewsPage> {
                   onRefresh: () => _fetchAllPosts(refresh: true),
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (ScrollNotification scrollInfo) {
-                      if (!_isLoadingMore && 
-                          postsProvider.hasMore && 
+                      if (!_isLoadingMore &&
+                          postsProvider.hasMore &&
                           !postsProvider.isFetchingMore &&
-                          scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9) {
+                          scrollInfo.metrics.pixels >=
+                              scrollInfo.metrics.maxScrollExtent * 0.9) {
                         _loadMorePosts();
                       }
                       return true;
                     },
                     child: ListView.builder(
                       padding: const EdgeInsets.all(16),
-                      itemCount: filteredPosts.length + (postsProvider.hasMore ? 1 : 0),
+                      itemCount: filteredPosts.length +
+                          (postsProvider.hasMore ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index == filteredPosts.length) {
                           return Padding(
@@ -402,7 +408,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
                             ),
                           );
                         }
-                        
+
                         final post = filteredPosts[index];
                         return _buildNewsListItem(post);
                       },
@@ -662,14 +668,29 @@ class _AllNewsPageState extends State<AllNewsPage> {
     }
   }
 
+  // Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
+  String _getFixedImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+    }
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+    }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
+  }
+
   // Enhanced image handling for various path formats
   Widget _buildPostImage(Post post, {BoxFit fit = BoxFit.cover}) {
-    final imageUrl = _getPostImageUrl(post);
-    
-    if (imageUrl == null) {
+    final imageUrl = _getFixedImageUrl(_getPostImageUrl(post));
+
+    if (imageUrl.isEmpty) {
       return _buildImagePlaceholder();
     }
-    
+
     if (_isFilePath(imageUrl)) {
       // Handle local file paths
       return Image.file(
@@ -681,14 +702,9 @@ class _AllNewsPageState extends State<AllNewsPage> {
         },
       );
     } else {
-      // Handle network URLs, checking for relative paths
-      String processedUrl = imageUrl;
-      if (imageUrl.startsWith('/')) {
-        processedUrl = 'http://localhost:8000$imageUrl';
-      }
-      
+      // Always fix the image URL
       return Image.network(
-        processedUrl,
+        imageUrl,
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
           debugPrint('Error loading network image: $error');
@@ -697,7 +713,7 @@ class _AllNewsPageState extends State<AllNewsPage> {
       );
     }
   }
-  
+
   // Consistent placeholder for missing images
   Widget _buildImagePlaceholder() {
     return Container(
@@ -711,26 +727,26 @@ class _AllNewsPageState extends State<AllNewsPage> {
       ),
     );
   }
-  
+
   // Check if a path is a file path rather than a URL
   bool _isFilePath(String path) {
-    return path.startsWith('/') || 
-           path.startsWith('file:/') ||
-           !path.contains('://');
+    return path.startsWith('/') ||
+        path.startsWith('file:/') ||
+        !path.contains('://');
   }
-  
+
   // Get the best available image URL for a post
   String? _getPostImageUrl(Post post) {
     // Try to get media URLs first
     if (post.hasMedia && post.mediaUrls.isNotEmpty) {
       return post.mediaUrls.first;
     }
-    
+
     // Then try direct imageUrl property
     if (post.imageUrl.isNotEmpty) {
       return post.imageUrl;
     }
-    
+
     // Fallback to a generated placeholder
     return 'https://picsum.photos/seed/news${post.id}/800/600';
   }

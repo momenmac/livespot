@@ -54,6 +54,21 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
+  // Helper to fix story image URLs that use localhost
+  String _getFixedStoryImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+    }
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+    }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -175,7 +190,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       }
 
       // Format the time string before passing to the detail page
-      final formattedTime = _formatTimeString(post.timePosted.toIso8601String());
+      final formattedTime =
+          _formatTimeString(post.timePosted.toIso8601String());
 
       Navigator.push(
         context,
@@ -1159,7 +1175,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           // Story image
           Center(
             child: Image.network(
-              story['imageUrl'] ?? '',
+              _getFixedStoryImageUrl(story['imageUrl']),
               fit: BoxFit.contain,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
@@ -1352,327 +1368,41 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     );
   }
 
-  // Debug function to print profile URL information
-  void _debugProfileUrl(
-      String username, String originalUrl, String processedUrl) {
-    print('\n==== PROFILE URL DEBUGGING ====');
-    print('👤 Username: $username');
-    print('🔗 Original URL: "$originalUrl"');
-    print('🔄 Processed URL: "$processedUrl"');
-
-    // Analyze the URL structure
-    print('📊 URL Analysis:');
-    if (originalUrl.isEmpty) {
-      print('  - Empty original URL, using avatar placeholder');
-    } else {
-      if (originalUrl.startsWith('http://') ||
-          originalUrl.startsWith('https://')) {
-        print('  - Full URL detected (starts with http:// or https://)');
-      } else if (originalUrl.startsWith('/media/')) {
-        print('  - Relative path with leading slash (/media/...)');
-      } else if (originalUrl.startsWith('media/')) {
-        print('  - Relative path without leading slash (media/...)');
-      } else if (originalUrl.contains('profile_pics')) {
-        print('  - Contains profile_pics directory reference');
-
-        // Check for user ID folder pattern
-        RegExp userIdFolderPattern = RegExp(r'profile_pics/(\d+)/');
-        Match? match = userIdFolderPattern.firstMatch(originalUrl);
-        if (match != null) {
-          print('  - User ID folder detected: ${match.group(1)}');
-
-          // Special note for Layla's profile which should be in folder 13
-          if (username.toLowerCase().contains('layla') &&
-              match.group(1) != '13') {
-            print(
-                '  ⚠️ WARNING: Layla\'s profile pic should be in folder 13, but found in ${match.group(1)}');
-          }
-        } else {
-          print('  - No user ID folder detected in profile_pics path');
-        }
-      } else {
-        print('  - Other format: ${originalUrl.split('/').first}');
-      }
-    }
-
-    print('🌐 Base URL being used: ${ApiUrls.baseUrl}');
-
-    // Additional debug info for Layla
-    if (username.toLowerCase().contains('layla')) {
-      print('👤 Layla\'s profile debug:');
-      print('  - Expected folder: media/profile_pics/13/');
-
-      // Extract filename for verification
-      String filename = originalUrl.split('/').last;
-      print('  - Image filename: $filename');
-      print(
-          '  - Complete expected URL: ${ApiUrls.baseUrl}/media/profile_pics/13/$filename');
-    }
-
-    print('============================\n');
-  }
-
-  // Browser existing profiles structure
-  void _debugMediaFolders() {
-    print('\n📂 DEBUG MEDIA FOLDERS 📁');
-    print('⭐ Looking for Layla\'s Profile Picture');
-    print(
-        'Server media structure should be: /media/profile_pics/{user_id}/{image_filename}');
-    print(
-        'Known user folders in profile_pics/: 1/, 10/, 11/, 12/, 13/, 14/, 15/, etc.');
-    print('Base URL: ${ApiUrls.baseUrl}');
-
-    // For Layla, try multiple possible paths using the most common user IDs
-    final List<String> testUserIds = ['13', '14', '12', '1', '5'];
-    final String testFilename = widget.userImageUrl.split('/').last;
-
-    print('Current username: ${widget.username}');
-    print('Original URL value: ${widget.userImageUrl}');
-    print('Extracted filename: $testFilename');
-
-    for (String id in testUserIds) {
-      final String testUrl =
-          '${ApiUrls.baseUrl}/media/profile_pics/$id/$testFilename';
-      print('Testing path: $testUrl');
-    }
-
-    print('📁 End folder debug 📁\n');
-  }
-
-  // Special helper method for Layla's profile picture with direct file reference
-  String _getLaylaProfileUrl() {
-    print('\n🌟 LAYLA PROFILE DIRECT ACCESS 🌟');
-
-    // We know that Layla's profile is in folder 13 with a specific filename
-    const String laylaProfileFilename =
-        'be577573-c435-4e73-a725-5ff01a5e4fe8.jpg';
-    final String directLaylaProfileUrl =
-        '${ApiUrls.baseUrl}/media/profile_pics/13/$laylaProfileFilename';
-
-    print('📸 Using direct file reference for Layla\'s profile');
-    print('🔗 Direct URL: $directLaylaProfileUrl');
-
-    return directLaylaProfileUrl;
-  }
-
-  // Ensures profile image URLs are valid and complete
+  // Ensures profile image URLs are valid and complete, and logs the result
   String _getFixedProfileUrl(String url) {
-    print('\n🔍 Processing profile URL for ${widget.username}: "$url"');
-
-    // Special case for Layla using the direct file reference approach
-    if (widget.username.toLowerCase().contains('layla')) {
-      print(
-          '🔍 Special handling for Layla profile - using direct file reference');
-      _debugMediaFolders();
-      return _getLaylaProfileUrl();
+    if (url.isEmpty) return '';
+    String finalUrl = url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      finalUrl = url;
+    } else if (url.startsWith('/')) {
+      // Use ApiUrls.baseUrl for relative URLs
+      finalUrl = ApiUrls.baseUrl + url;
     }
-
-    String result;
-    if (url.isEmpty || url == 'null' || url == 'undefined') {
-      print('⚠️ Empty or invalid URL detected for user: ${widget.username}');
-      // Generate a placeholder with user's initials
-      result = _getAvatarPlaceholder(widget.username);
-      _debugProfileUrl(widget.username, url, result);
-      return result;
-    }
-
-    try {
-      // Fix profile_pics URLs - these come from server/accounts/models.py
-      if (url.contains('profile_pics') && !url.startsWith('http')) {
-        // Handle the numbered subfolder structure: profile_pics/1/, profile_pics/2/, etc.
-        RegExp userIdFolderPattern = RegExp(r'profile_pics/(\d+)/');
-        Match? match = userIdFolderPattern.firstMatch(url);
-
-        // If URL already contains a numeric subfolder like 'profile_pics/23/'
-        if (match != null) {
-          debugPrint('📂 User ID subfolder detected: ${match.group(1)}');
-          // If it starts with /media/ already
-          if (url.startsWith('/media/')) {
-            result = '${ApiUrls.baseUrl}$url';
-          }
-          // If it's the relative path without the leading slash
-          else if (url.startsWith('media/')) {
-            result = '${ApiUrls.baseUrl}/$url';
-          } else {
-            result = '${ApiUrls.baseUrl}/media/$url';
-          }
-          _debugProfileUrl(widget.username, url, result);
-          return result;
-        }
-
-        // Handle paths that don't include the numbered subfolder
-        if (url.startsWith('/media/profile_pics/')) {
-          result = '${ApiUrls.baseUrl}$url';
-          _debugProfileUrl(widget.username, url, result);
-          return result;
-        } else if (url.startsWith('media/profile_pics/')) {
-          result = '${ApiUrls.baseUrl}/$url';
-          _debugProfileUrl(widget.username, url, result);
-          return result;
-        } else if (url.startsWith('profile_pics/')) {
-          result = '${ApiUrls.baseUrl}/media/$url';
-          _debugProfileUrl(widget.username, url, result);
-          return result;
-        }
-        // If it's just a filename, assume it should be in profile_pics
-        else if (!url.contains('/')) {
-          // Special handling for Layla's profile pic - enhanced debugging
-          if (widget.username.toLowerCase().contains('layla')) {
-            print('🔄 Special handling for Layla\'s profile pic');
-            print('⭐ Trying multiple user ID folders for Layla\'s profile');
-
-            // First try folder ID 13 which is known to be Layla's user ID
-            result = '${ApiUrls.baseUrl}/media/profile_pics/13/$url';
-            print('🔍 Trying URL path: $result');
-
-            // Log additional potential paths for debugging
-            final List<String> potentialUserIds = ['13', '14', '12', '1'];
-            for (String id in potentialUserIds) {
-              if (id != '13') {
-                // Already logged 13 above
-                print(
-                    '📎 Alternative path option: ${ApiUrls.baseUrl}/media/profile_pics/$id/$url');
-              }
-            }
-
-            _debugProfileUrl(widget.username, url, result);
-            return result;
-          }
-
-          result = '${ApiUrls.baseUrl}/media/profile_pics/$url';
-          _debugProfileUrl(widget.username, url, result);
-          return result;
-        }
-      }
-
-      // Fix relative URLs by adding the base URL
-      if (url.startsWith('/')) {
-        result = '${ApiUrls.baseUrl}$url';
-        _debugProfileUrl(widget.username, url, result);
-        return result;
-      }
-
-      // Fix URLs that have media path but no domain
-      if (url.startsWith('media/')) {
-        result = '${ApiUrls.baseUrl}/$url';
-        _debugProfileUrl(widget.username, url, result);
-        return result;
-      }
-
-      // If the URL already starts with the base URL, keep it as is
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        // Replace localhost URLs with the appropriate base URL
-        if (url.contains('localhost') ||
-            url.contains('127.0.0.1') ||
-            url.contains('192.168.')) {
-          try {
-            final Uri uri = Uri.parse(url);
-            final String path = uri.path;
-            result = '${ApiUrls.baseUrl}$path';
-            _debugProfileUrl(widget.username, url, result);
-            return result;
-          } catch (e) {
-            debugPrint('⚠️ Error parsing URL: $e');
-            _debugProfileUrl(widget.username, url,
-                url); // Log the original URL as return value
-            return url; // Return original URL if parsing fails
-          }
-        }
-        _debugProfileUrl(widget.username, url,
-            url); // Log that we're returning URL unchanged
-        return url;
-      }
-
-      // If we get here, assume it's a relative URL that should go under media
-      result = '${ApiUrls.baseUrl}/media/$url';
-      _debugProfileUrl(widget.username, url, result);
-      return result;
-    } catch (e) {
-      debugPrint('⚠️ Error processing profile URL: $e');
-      debugPrint('⚠️ Original URL was: $url');
-      result = _getAvatarPlaceholder(widget.username);
-      _debugProfileUrl(widget.username, url, result);
-      return result;
-    }
+    // Remove any double slashes after the protocol (except for '://')
+    finalUrl = finalUrl.replaceFirstMapped(
+      RegExp(r'^(https?:\/\/)(.+)'),
+      (match) =>
+          match.group(1)! + match.group(2)!.replaceAll(RegExp(r'\/\/'), '/'),
+    );
+    // Debug log
+    debugPrint('[StoryViewer] Profile image URL: ' + finalUrl);
+    return finalUrl;
   }
 
-  // Generate a more stable and better looking placeholder avatar
-  String _getAvatarPlaceholder(String username) {
-    // Extract initials: up to 2 characters
-    String initials = '';
-    if (username.isNotEmpty) {
-      List<String> nameParts = username.trim().split(RegExp(r'\s+'));
-      if (nameParts.isNotEmpty) {
-        // First character of first name
-        if (nameParts[0].isNotEmpty) {
-          initials += nameParts[0][0].toUpperCase();
-        }
-
-        // First character of last name (if available)
-        if (nameParts.length > 1 && nameParts[1].isNotEmpty) {
-          initials += nameParts[1][0].toUpperCase();
-        }
-      }
-    }
-
-    // Default to a single character if we couldn't extract initials
-    if (initials.isEmpty && username.isNotEmpty) {
-      initials = username[0].toUpperCase();
-    }
-
-    // If still empty, use a default
-    if (initials.isEmpty) {
-      initials = 'U';
-    }
-
-    // Use a consistent color based on username for better recognition
-    int hashCode = username.isEmpty ? 0 : username.hashCode.abs();
-    List<String> backgrounds = [
-      '007AFF', // Blue
-      '4CD964', // Green
-      'FF9500', // Orange
-      'FF2D55', // Red
-      '5856D6', // Purple
-      'FF3B30', // Bright Red
-      '5AC8FA', // Light Blue
-      'FFCC00', // Yellow
-    ];
-    String background = backgrounds[hashCode % backgrounds.length];
-
-    return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(initials)}&background=$background&color=ffffff&bold=true&size=150';
-  }
-
-  // Builds an avatar with the user's initials for when there's no profile picture
+  // Build an avatar with the user's initials for when there's no profile picture
   Widget _buildInitialsAvatar() {
-    // Extract initials: up to 2 characters
     String initials = '';
     if (widget.username.isNotEmpty) {
-      List<String> nameParts = widget.username.trim().split(RegExp(r'\s+'));
-      if (nameParts.isNotEmpty) {
-        // First character of first name
-        if (nameParts[0].isNotEmpty) {
-          initials += nameParts[0][0].toUpperCase();
-        }
-
-        // First character of last name (if available)
-        if (nameParts.length > 1 && nameParts[1].isNotEmpty) {
-          initials += nameParts[1][0].toUpperCase();
-        }
+      final parts = widget.username.trim().split(' ');
+      initials = parts
+          .map((part) => part.isNotEmpty ? part[0].toUpperCase() : '')
+          .join();
+      if (initials.length > 2) {
+        initials = initials.substring(0, 2);
       }
     }
-
-    // Default to a single character if we couldn't extract initials
-    if (initials.isEmpty && widget.username.isNotEmpty) {
-      initials = widget.username[0].toUpperCase();
-    }
-
-    // If still empty, use a default
-    if (initials.isEmpty) {
-      initials = 'U';
-    }
-
     return Text(
-      initials,
+      initials.isNotEmpty ? initials : '?',
       style: const TextStyle(
         color: Colors.white,
         fontWeight: FontWeight.bold,
