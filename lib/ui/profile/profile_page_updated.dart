@@ -1,25 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/providers/theme_provider.dart';
-import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
-import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
-import 'package:flutter_application_2/ui/profile/settings/account_settings_page.dart';
-import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/profile/profile_search_page.dart';
 import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
-import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/models/user_profile.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/models/post.dart';
-import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 

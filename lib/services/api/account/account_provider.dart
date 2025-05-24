@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart'; // Add this import
+import 'package:flutter_application_2/services/auth/token_manager.dart'; // Add TokenManager import
 import '../../../models/account.dart';
 import '../../../models/jwt_token.dart';
 import 'auth_service.dart';
@@ -13,6 +14,7 @@ import 'dart:developer' as developer; // Import developer for logging
 
 class AccountProvider extends ChangeNotifier {
   final SessionManager _sessionManager = SessionManager();
+  final TokenManager _tokenManager = TokenManager();
   bool _isLoading = false;
 
   // Debounce mechanism to prevent rapid state changes
@@ -31,10 +33,13 @@ class AccountProvider extends ChangeNotifier {
   String? get error => _sessionManager.error;
   bool get isAuthenticated => _sessionManager.isAuthenticated;
   Account? get currentUser => _sessionManager.user;
-  JwtToken? get token => _sessionManager.token;
+  JwtToken? get token => _tokenManager.currentToken;
   bool get isUserVerified => _sessionManager.isUserVerified;
-  bool get shouldRefreshToken => _sessionManager.shouldRefreshToken;
+  bool get shouldRefreshToken => _tokenManager.needsRefresh;
   bool get inAuthStateTransition => _inAuthStateTransition;
+
+  // Check if current user is an admin
+  bool get isAdmin => currentUser?.isAdmin ?? false;
 
   // Add this getter for compatibility with main.dart navigation logic
   bool get isEmailVerified {
@@ -147,6 +152,9 @@ class AccountProvider extends ChangeNotifier {
         if (result['tokens'] != null) {
           final token = JwtToken.fromJson(result['tokens']);
 
+          // Set token in TokenManager
+          await _tokenManager.setToken(token);
+
           // Save preferences
           if (rememberMe) {
             await SharedPrefs.saveJwtToken(token);
@@ -199,64 +207,18 @@ class AccountProvider extends ChangeNotifier {
     _isLoading = true;
     _debouncedNotify(); // Notify UI that loading has started
 
-    final currentToken = await SharedPrefs.getJwtToken();
-    String? refreshToken = currentToken?.refreshToken;
-    String? accessToken = currentToken?.accessToken;
-    developer.log(
-        'Retrieved tokens: Access=${accessToken != null}, Refresh=${refreshToken != null}',
-        name: 'LogoutTrace');
+    try {
+      // Use TokenManager's logout method which handles server logout and local cleanup
+      await _tokenManager.logout();
+      developer.log('TokenManager logout completed', name: 'LogoutTrace');
 
-    if (refreshToken != null && accessToken != null) {
-      final logoutUrl = ApiUrls.logout;
-      developer.log('Attempting server logout to URL: $logoutUrl',
-          name: 'LogoutTrace');
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $accessToken',
-      };
-      final body = jsonEncode({'refresh': refreshToken});
-      developer.log('Headers: $headers', name: 'LogoutTrace');
-      developer.log('Body: $body', name: 'LogoutTrace');
-
-      try {
-        final response = await http
-            .post(
-              Uri.parse(logoutUrl),
-              headers: headers,
-              body: body,
-            )
-            .timeout(const Duration(seconds: 15)); // Increased timeout slightly
-
-        developer.log('Server response status: ${response.statusCode}',
-            name: 'LogoutTrace');
-        developer.log('Server response body: ${response.body}',
-            name: 'LogoutTrace');
-
-        if (response.statusCode == 200) {
-          developer.log('Server logout successful.', name: 'LogoutTrace');
-        } else if (response.statusCode == 401) {
-          developer.log(
-              'Server logout failed: 401 Unauthorized. Proceeding with local logout.',
-              name: 'LogoutTrace');
-        } else {
-          developer.log(
-              'Server logout failed with status ${response.statusCode}. Proceeding with local logout.',
-              name: 'LogoutTrace');
-        }
-      } catch (e, stackTrace) {
-        developer.log('Error during server logout HTTP request: $e',
-            name: 'LogoutTrace', error: e, stackTrace: stackTrace);
-        // Continue with local logout even if server communication fails
-      }
-    } else {
-      developer.log('Missing refresh or access token. Skipping server logout.',
-          name: 'LogoutTrace');
+      // Clear session manager state
+      await _sessionManager.clearSession();
+      developer.log('SessionManager cleared', name: 'LogoutTrace');
+    } catch (e, stackTrace) {
+      developer.log('Error during logout: $e',
+          name: 'LogoutTrace', error: e, stackTrace: stackTrace);
     }
-
-    // Always clear local session regardless of server response
-    developer.log('Calling _clearSession()...', name: 'LogoutTrace');
-    await _clearSession();
-    developer.log('_clearSession() finished.', name: 'LogoutTrace');
 
     _isLoading = false;
     developer.log('Local session cleared. Setting isLoading=false.',
@@ -276,24 +238,6 @@ class AccountProvider extends ChangeNotifier {
     developer.log('--- Logout End (AccountProvider) ---', name: 'LogoutTrace');
   }
 
-  // Clear session data
-  Future<void> _clearSession() async {
-    developer.log('--- Clear Session Start (AccountProvider) ---',
-        name: 'LogoutTrace');
-    developer.log('Calling _sessionManager.clearSession()...',
-        name: 'LogoutTrace');
-    await _sessionManager.clearSession(); // Clear session manager state
-    developer.log('_sessionManager.clearSession() finished.',
-        name: 'LogoutTrace');
-
-    developer.log('Calling SharedPrefs.clearSession()...', name: 'LogoutTrace');
-    await SharedPrefs.clearSession(); // Clear relevant shared preferences
-    developer.log('SharedPrefs.clearSession() finished.', name: 'LogoutTrace');
-    developer.log('--- Clear Session End (AccountProvider) ---',
-        name: 'LogoutTrace');
-    // No need to notify here, logout method will notify
-  }
-
   // Record activity
   Future<void> recordActivity() async {
     await _sessionManager.recordActivity();
@@ -302,153 +246,28 @@ class AccountProvider extends ChangeNotifier {
 
   // Validate the token with the server and refresh if needed
   Future<bool> validateToken() async {
-    developer.log('Validating token with server: ${ApiUrls.tokenValidate}',
-        name: 'TokenValidation');
-
-    if (token == null) {
-      developer.log('No token to validate', name: 'TokenValidation');
-      return false;
-    }
-
-    try {
-      // Check if token is expired based on expiration date
-      final now = DateTime.now().millisecondsSinceEpoch / 1000;
-      final expiryTime = token!.expiration;
-
-      // If token is about to expire (or expired), try to refresh it first
-      if (expiryTime - now < 300) {
-        // Less than 5 minutes remaining
-        developer.log(
-            'Token expiring soon (${expiryTime - now} seconds left), attempting refresh',
-            name: 'TokenRefresh');
-
-        final refreshed = await refreshToken();
-        if (refreshed) {
-          developer.log('Token refreshed successfully before validation',
-              name: 'TokenRefresh');
-          return true; // Token was successfully refreshed
-        } else {
-          developer.log('Token refresh failed, will try direct validation',
-              name: 'TokenRefresh');
-        }
-      }
-
-      // Validate current token with server
-      final response = await http.post(
-        Uri.parse(ApiUrls.tokenValidate),
-        headers: {
-          'Authorization': 'Bearer ${token!.accessToken}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({}),
-      );
-
-      developer.log('Token validation response: ${response.statusCode}',
-          name: 'TokenValidation');
-
-      if (response.statusCode == 200) {
-        developer.log('Token validated successfully with server',
-            name: 'TokenValidation');
-        return true;
-      } else if (response.statusCode == 401) {
-        developer.log('Token validation failed (401), trying to refresh token',
-            name: 'TokenValidation');
-        return await refreshToken();
-      } else {
-        developer.log(
-            'Token validation failed with status: ${response.statusCode}',
-            name: 'TokenValidation');
-        return false;
-      }
-    } catch (e) {
-      developer.log('Error validating token: $e', name: 'TokenValidation');
-      // Try refreshing token as a last resort if validation fails
-      return await refreshToken();
-    }
+    return await _tokenManager.validateTokenIfNeeded();
   }
 
   // Refresh the JWT token using the refresh token
   Future<bool> refreshToken() async {
-    developer.log('Attempting to refresh token', name: 'TokenRefresh');
-
-    if (token == null || token!.refreshToken.isEmpty) {
-      developer.log('No refresh token available', name: 'TokenRefresh');
-      return false;
-    }
-
-    try {
-      final response = await http.post(
-        Uri.parse(ApiUrls.tokenRefresh),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'refresh': token!.refreshToken,
-        }),
-      );
-
-      developer.log('Token refresh response received', name: 'TokenRefresh');
-
-      if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
-        final newAccessToken = responseBody['access'];
-
-        // Use the existing refresh token unless a new one was provided
-        final newRefreshToken = responseBody['refresh'] ?? token!.refreshToken;
-        final expiryTime = JwtToken.getExpirationFromToken(newAccessToken);
-
-        final refreshedToken = JwtToken(
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-          expiration: expiryTime,
-        );
-
-        // Save the updated token
-        await SharedPrefs.saveJwtToken(refreshedToken);
-
-        developer.log(
-            'Token refreshed successfully. New expiry: ${DateTime.fromMillisecondsSinceEpoch(expiryTime * 1000)}',
-            name: 'TokenRefresh');
-
-        // Force notifyListeners since authentication state actually didn't change,
-        // but we want to make sure the new token is used
-        _sessionManager.setSession(token: refreshedToken, user: currentUser!);
+    final accessToken = await _tokenManager.getValidAccessToken();
+    if (accessToken != null) {
+      // Update SessionManager with the new token
+      final newToken = _tokenManager.currentToken;
+      if (newToken != null && currentUser != null) {
+        _sessionManager.setSession(token: newToken, user: currentUser!);
         _debouncedNotify();
-
-        return true;
-      } else {
-        developer.log('Failed to refresh token: ${response.body}',
-            name: 'TokenRefresh');
-        // Clear the token if refresh fails
-        return false;
       }
-    } catch (e) {
-      developer.log('Error refreshing token: $e', name: 'TokenRefresh');
-      return false;
+      return true;
     }
+    return false;
   }
 
   // Verify token and refresh if needed
   Future<bool> verifyAndRefreshTokenIfNeeded() async {
-    if (token == null) {
-      return false;
-    }
-
-    try {
-      // Check if token is valid
-      final isValid = await validateToken();
-
-      // If not valid, try refreshing
-      if (!isValid) {
-        return await refreshToken();
-      }
-
-      return isValid;
-    } catch (e) {
-      developer.log('Error during token verification: $e',
-          name: 'TokenValidation');
-      return false;
-    }
+    final accessToken = await _tokenManager.getValidAccessToken();
+    return accessToken != null;
   }
 
   // Register a new user
@@ -474,6 +293,9 @@ class AccountProvider extends ChangeNotifier {
         // Handle JWT token response
         if (result['tokens'] != null) {
           final token = JwtToken.fromJson(result['tokens']);
+
+          // Set token in TokenManager
+          await _tokenManager.setToken(token);
 
           // Save token to SharedPreferences
           await SharedPrefs.saveJwtToken(token);
@@ -517,10 +339,16 @@ class AccountProvider extends ChangeNotifier {
     }
 
     try {
+      // Use TokenManager to get a valid access token
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
       final url = Uri.parse(ApiUrls.profileImage);
       final request = http.MultipartRequest('POST', url);
 
-      request.headers['Authorization'] = 'Bearer ${token!.accessToken}';
+      request.headers['Authorization'] = 'Bearer $accessToken';
 
       final multipartFile = http.MultipartFile.fromBytes(
         'profile_image',
@@ -537,7 +365,9 @@ class AccountProvider extends ChangeNotifier {
         await _fetchUserProfile();
         return true;
       } else if (response.statusCode == 401 || response.statusCode == 403) {
-        if (await refreshToken()) {
+        // Try getting a fresh token and retry
+        final newAccessToken = await _tokenManager.getValidAccessToken();
+        if (newAccessToken != null) {
           return await _uploadProfileImage(imageData);
         }
         return false;
@@ -556,14 +386,18 @@ class AccountProvider extends ChangeNotifier {
     }
 
     try {
-      await verifyAndRefreshTokenIfNeeded();
+      // Use TokenManager to get a valid access token
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
 
       final base64Image = base64Encode(imageData);
 
       final response = await http.post(
         Uri.parse(ApiUrls.updateProfile),
         headers: {
-          'Authorization': 'Bearer ${token!.accessToken}',
+          'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
@@ -587,21 +421,21 @@ class AccountProvider extends ChangeNotifier {
     if (token == null) return;
 
     try {
-      if (token!.isAccessTokenExpired) {
-        final refreshed = await refreshToken();
-        if (!refreshed) {
-          await logout();
-          return;
-        }
+      // Use TokenManager to get a valid access token (handles refresh automatically)
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        await logout();
+        return;
       }
 
-      final result = await _authService.getUserProfile(token!.accessToken);
+      final result = await _authService.getUserProfile(accessToken);
 
       if (result['success']) {
         _sessionManager.setUser(result['user'] as Account);
       } else if (result['token_expired'] == true) {
-        final refreshed = await refreshToken();
-        if (refreshed) {
+        // Try refreshing token and retry
+        final newAccessToken = await _tokenManager.getValidAccessToken();
+        if (newAccessToken != null) {
           await _fetchUserProfile();
         } else {
           await logout();
@@ -707,6 +541,9 @@ class AccountProvider extends ChangeNotifier {
         if (result['tokens'] != null) {
           final token = JwtToken.fromJson(result['tokens']);
 
+          // Set token in TokenManager
+          await _tokenManager.setToken(token);
+
           await SharedPrefs.saveJwtToken(token);
           await SharedPrefs.setRememberMe(true);
           await SharedPrefs.setLastActivity();
@@ -811,6 +648,9 @@ class AccountProvider extends ChangeNotifier {
       if (result['success']) {
         if (result['tokens'] != null) {
           final token = JwtToken.fromJson(result['tokens']);
+
+          // Set token in TokenManager
+          await _tokenManager.setToken(token);
 
           await SharedPrefs.saveJwtToken(token);
 

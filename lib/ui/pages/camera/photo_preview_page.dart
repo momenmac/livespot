@@ -6,7 +6,6 @@ import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 
 class PhotoPreviewPage extends StatefulWidget {
   final String imagePath;

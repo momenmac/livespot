@@ -77,7 +77,8 @@ class _HomeContentState extends State<HomeContent> {
     // Always update and call setState, even if the date is the same
     setState(() {
       _selectedDate = normalizedDate;
-      _isDateFilterActive = !DateUtils.isSameDay(normalizedDate, DateTime.now());
+      _isDateFilterActive =
+          !DateUtils.isSameDay(normalizedDate, DateTime.now());
     });
   }
 
@@ -87,8 +88,8 @@ class _HomeContentState extends State<HomeContent> {
     final today = DateTime(now.year, now.month, now.day);
     setState(() {
       _selectedDate = today;
-      // Keep date filter active but show it's for today
-      _isDateFilterActive = true;
+      // Set date filter to inactive when clearing
+      _isDateFilterActive = false;
     });
   }
 
@@ -172,7 +173,7 @@ class _HomeContentState extends State<HomeContent> {
               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: Divider(height: 1),
             ),
-          
+
             // Categories Section
             // Map Preview Section
             const MapPreviewSection(),

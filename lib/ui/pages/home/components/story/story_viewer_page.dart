@@ -207,7 +207,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             comments: 0, // No commentsCount in Post, fallback to 0
             isVerified: post.isVerifiedLocation,
             post: post,
-            distance: post.distance != null ? post.distance.toString() : null,
+            distance: post.distance?.toString(),
             authorName: post.authorName,
           ),
         ),
@@ -1385,7 +1385,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           match.group(1)! + match.group(2)!.replaceAll(RegExp(r'\/\/'), '/'),
     );
     // Debug log
-    debugPrint('[StoryViewer] Profile image URL: ' + finalUrl);
+    debugPrint('[StoryViewer] Profile image URL: $finalUrl');
     return finalUrl;
   }
 

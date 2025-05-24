@@ -4,46 +4,35 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/models/thread.dart';
-import 'package:flutter_application_2/services/api/account/account_provider.dart';
-import 'package:flutter_application_2/services/auth/auth_service.dart';
+import 'package:flutter_application_2/services/auth/token_manager.dart'; // Import TokenManager
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/constants/category_utils.dart'; // Added category utils import
 
 class PostsService {
   final String baseUrl;
-  final AuthService? authService;
-  final AccountProvider? accountProvider;
+  final TokenManager _tokenManager = TokenManager(); // Use TokenManager instead
 
   PostsService({
     String? baseUrl,
-    this.authService,
-    this.accountProvider,
-  })  : baseUrl = baseUrl ?? ApiUrls.baseUrl,
-        assert(authService != null || accountProvider != null,
-            'Either authService or accountProvider must be provided');
+  }) : baseUrl = baseUrl ?? ApiUrls.baseUrl;
 
-  // Get headers with auth token
+  // Get headers with auth token using TokenManager
   Future<Map<String, String>> _getHeaders() async {
-    String? token;
-
-    // Try to get token from AccountProvider first (preferred)
-    if (accountProvider != null && accountProvider!.token != null) {
-      token = accountProvider!.token!.accessToken;
-      debugPrint('Using token from AccountProvider');
-    }
-    // Fallback to AuthService if AccountProvider is not available or token is null
-    else if (authService != null) {
-      token = authService!.token;
-      debugPrint('Using token from AuthService');
-    }
+    // Use TokenManager to get a valid access token
+    final token = await _tokenManager.getValidAccessToken();
 
     final headers = {
       'Content-Type': 'application/json',
       'Authorization': token != null && token.isNotEmpty ? 'Bearer $token' : '',
     };
 
-    debugPrint(
-        'Authorization header: ${headers['Authorization']?.substring(0, 10)}...');
+    if (token != null) {
+      debugPrint('Using token from TokenManager');
+      debugPrint(
+          'Authorization header: ${headers['Authorization']?.substring(0, 10)}...');
+    } else {
+      debugPrint('No valid token available from TokenManager');
+    }
 
     return headers;
   }

@@ -247,11 +247,7 @@ Future<void> main() async {
           create: (_) => LocationService(),
         ),
         Provider<PostsService>(
-          create: (context) => PostsService(
-            authService: Provider.of<AuthService>(context, listen: false),
-            accountProvider:
-                Provider.of<AccountProvider>(context, listen: false),
-          ),
+          create: (context) => PostsService(),
         ),
         ChangeNotifierProvider<PostsProvider>(
           create: (context) => PostsProvider(
@@ -588,7 +584,7 @@ class _MyAppState extends State<MyApp> {
     final firebaseStatus = Provider.of<FirebaseStatusNotifier>(context);
 
     return SessionMonitor(
-      child: Consumer<ThemeProvider>( 
+      child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
             title: 'Optimized Flutter App',

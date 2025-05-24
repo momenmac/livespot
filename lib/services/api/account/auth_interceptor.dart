@@ -1,30 +1,29 @@
 import 'package:http/http.dart' as http;
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_2/services/auth/token_manager.dart';
 
-// An HTTP client that automatically adds authentication tokens to requests
+// An HTTP client that automatically adds authentication tokens to requests using TokenManager
 class AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
-  String? _cachedToken;
+  final TokenManager _tokenManager = TokenManager();
 
   AuthenticatedClient(this._inner);
 
   Future<String?> get _authToken async {
-    if (_cachedToken != null) return _cachedToken;
-
-    final prefs = await SharedPreferences.getInstance();
-    _cachedToken = prefs.getString('auth_token');
-    return _cachedToken;
+    // Use TokenManager to get a valid access token
+    return await _tokenManager.getValidAccessToken();
   }
 
-  // Clear cached token, used when logging out
+  // Clear cached token, used when logging out - delegate to TokenManager
   void clearToken() {
-    _cachedToken = null;
+    // TokenManager handles token clearing internally
+    _tokenManager.clearTokens();
   }
 
-  // Set token directly, used when logging in
+  // Set token directly, used when logging in - delegate to TokenManager
   void setToken(String token) {
-    _cachedToken = token;
+    // TokenManager handles token setting through its setToken method
+    // This method is kept for compatibility but tokens should be set through TokenManager directly
   }
 
   @override
@@ -32,7 +31,8 @@ class AuthenticatedClient extends http.BaseClient {
     final token = await _authToken;
 
     if (token != null) {
-      request.headers['Authorization'] = 'Token $token';
+      request.headers['Authorization'] =
+          'Bearer $token'; // Use Bearer instead of Token
     }
 
     request.headers['Content-Type'] = 'application/json';

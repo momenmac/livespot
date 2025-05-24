@@ -92,7 +92,8 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        posts = self.get_queryset().filter(author_id=user_id)
+        # Filter out anonymous posts for public viewing
+        posts = self.get_queryset().filter(author_id=user_id, is_anonymous=False)
         page = self.paginate_queryset(posts)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -109,7 +110,8 @@ class PostViewSet(viewsets.ModelViewSet):
         # Get list of users that the current user follows
         following_users = user.following.values_list('followee_id', flat=True)
         
-        posts = self.get_queryset().filter(author_id__in=following_users)
+        # Filter out anonymous posts
+        posts = self.get_queryset().filter(author_id__in=following_users, is_anonymous=False)
         page = self.paginate_queryset(posts)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -137,10 +139,11 @@ class PostViewSet(viewsets.ModelViewSet):
         # Longitude distance varies with latitude
         lng_range = radius / (111320.0 * abs(math.cos(math.radians(lat))))
         
-        # Filter posts within the bounding box
+        # Filter posts within the bounding box and exclude anonymous posts
         queryset = self.get_queryset().filter(
             location__latitude__range=(lat - lat_range, lat + lat_range),
-            location__longitude__range=(lng - lng_range, lng + lng_range)
+            location__longitude__range=(lng - lng_range, lng + lng_range),
+            is_anonymous=False
         )
         
         page = self.paginate_queryset(queryset)
@@ -163,7 +166,7 @@ class PostViewSet(viewsets.ModelViewSet):
             
         posts = Post.objects.annotate(
             search=SearchVector('title', 'content', 'tags')
-        ).filter(search=query)
+        ).filter(search=query, is_anonymous=False)  # Exclude anonymous posts from search
         
         page = self.paginate_queryset(posts)
         if page is not None:
@@ -265,7 +268,8 @@ class PostViewSet(viewsets.ModelViewSet):
             # Use a try-except block to handle the case where saved_posts might not exist yet
             try:
                 saved_post_ids = list(user_profile.saved_posts.values_list('id', flat=True))
-                posts = self.get_queryset().filter(id__in=saved_post_ids)
+                # Filter out anonymous posts from saved posts
+                posts = self.get_queryset().filter(id__in=saved_post_ids, is_anonymous=False)
                 
                 page = self.paginate_queryset(posts)
                 if page is not None:
@@ -290,13 +294,13 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # Get posts the user has upvoted
+        # Get posts the user has upvoted - exclude anonymous posts
         upvoted_post_ids = PostVote.objects.filter(
             user_id=user_id, 
             is_upvote=True
         ).values_list('post_id', flat=True)
         
-        posts = self.get_queryset().filter(id__in=upvoted_post_ids)
+        posts = self.get_queryset().filter(id__in=upvoted_post_ids, is_anonymous=False)
         
         page = self.paginate_queryset(posts)
         if page is not None:
@@ -345,9 +349,10 @@ class PostViewSet(viewsets.ModelViewSet):
             # Get the users they are following
             following_users = user_profile.following.values_list('user', flat=True)
             
-            # Get recent posts from those users (with media)
+            # Get recent posts from those users (with media) - exclude anonymous posts
             recent_posts = self.get_queryset().filter(
-                author_id__in=following_users
+                author_id__in=following_users,
+                is_anonymous=False
             ).filter(media_urls__isnull=False).exclude(media_urls=[])
             
             # Group posts by user

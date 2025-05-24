@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
-import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/ui/pages/camera/photo_preview_page.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:geolocator/geolocator.dart';

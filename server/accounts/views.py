@@ -860,11 +860,58 @@ class ValidateTokenView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
-        # If we get here, the token was valid (as permission_classes=[IsAuthenticated])
-        return Response({
-            'valid': True,
-            'user_id': request.user.id,
-        }, status=status.HTTP_200_OK)
+        try:
+            # If we get here, the token was valid (as permission_classes=[IsAuthenticated])
+            user = request.user
+            
+            # Get token from request header
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            if auth_header.startswith('Bearer '):
+                access_token = auth_header.split(' ')[1]
+                
+                # Decode token to get expiration info
+                from rest_framework_simplejwt.tokens import AccessToken
+                try:
+                    token = AccessToken(access_token)
+                    exp_timestamp = token.get('exp')
+                    
+                    # Calculate time until expiration
+                    exp_datetime = timezone.datetime.fromtimestamp(exp_timestamp, tz=timezone.timezone.utc)
+                    time_until_exp = exp_datetime - timezone.now()
+                    
+                    return Response({
+                        'valid': True,
+                        'user_id': user.id,
+                        'user_email': user.email,
+                        'expires_at': exp_datetime.isoformat(),
+                        'expires_in_seconds': int(time_until_exp.total_seconds()),
+                        'expires_in_minutes': int(time_until_exp.total_seconds() / 60),
+                        'needs_refresh_soon': time_until_exp.total_seconds() < 300,  # Less than 5 minutes
+                    }, status=status.HTTP_200_OK)
+                    
+                except Exception as token_error:
+                    logger.warning(f"Error decoding token: {token_error}")
+                    # Fallback to basic validation
+                    return Response({
+                        'valid': True,
+                        'user_id': user.id,
+                        'user_email': user.email,
+                        'token_decode_error': str(token_error)
+                    }, status=status.HTTP_200_OK)
+            
+            # Fallback if no token in header
+            return Response({
+                'valid': True,
+                'user_id': user.id,
+                'user_email': user.email,
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Token validation error: {e}")
+            return Response({
+                'valid': False,
+                'error': str(e)
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

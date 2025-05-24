@@ -18,8 +18,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/services/auth/token_manager.dart'; // Import TokenManager
 import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
@@ -42,6 +41,8 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   late final MapPageController _controller;
   final FocusNode _focusNode = FocusNode();
+  final TokenManager _tokenManager =
+      TokenManager(); // Add TokenManager instance
 
   // Add state variables for location data
   List<dynamic> _mapLocations = [];
@@ -142,14 +143,12 @@ class _MapPageState extends State<MapPage> {
       print('🔍 API URL with filters: $url');
       print('📋 Selected categories: $_selectedCategories');
 
-      // Make the HTTP request
-      final accountProvider =
-          Provider.of<AccountProvider>(context, listen: false);
+      // Make the HTTP request using TokenManager
+      final token = await _tokenManager.getValidAccessToken();
 
-      print('Using token from AccountProvider');
-      if (accountProvider.token != null) {
-        print(
-            'Authorization header: Bearer ${accountProvider.token!.accessToken.substring(0, 3)}...');
+      print('Using token from TokenManager');
+      if (token != null) {
+        print('Authorization header: Bearer ${token.substring(0, 3)}...');
       } else {
         print('No authentication token available');
       }
@@ -157,9 +156,7 @@ class _MapPageState extends State<MapPage> {
       // Debug headers before making request
       final headers = {
         'Content-Type': 'application/json',
-        'Authorization': accountProvider.token != null
-            ? 'Bearer ${accountProvider.token!.accessToken}'
-            : '',
+        'Authorization': token != null ? 'Bearer $token' : '',
       };
       print('🔒 Request headers: $headers');
 
