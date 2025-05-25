@@ -562,8 +562,19 @@ class _CustomCameraPageState extends State<CustomCameraPage>
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel',
-                    style: TextStyle(color: Colors.white70)),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),

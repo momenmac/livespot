@@ -396,7 +396,7 @@ class _CustomScaffoldState extends State<CustomScaffold> {
 }
 
 class AdminFloatingActionButton extends StatefulWidget {
-  const AdminFloatingActionButton({Key? key}) : super(key: key);
+  const AdminFloatingActionButton({super.key});
 
   @override
   State<AdminFloatingActionButton> createState() =>

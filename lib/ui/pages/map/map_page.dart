@@ -360,10 +360,38 @@ class _MapPageState extends State<MapPage> {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
 
-    // Get post details
+    // Get post details with proper encoding for Arabic text
     final category = post['category'] ?? 'general';
-    final title = post['title'] ?? '';
-    final content = post['content'] ?? post['description'] ?? '';
+
+    // Get title with proper UTF-8 encoding for Arabic text
+    String title = post['title'] ?? '';
+    // Try to ensure proper UTF-8 decoding for Arabic text
+    if (title.contains('Ù') || title.contains('Ø')) {
+      try {
+        // Convert to bytes and properly decode as UTF-8
+        List<int> bytes = title.codeUnits;
+        title = utf8.decode(bytes, allowMalformed: true);
+      } catch (e) {
+        debugPrint('Error decoding title: $e');
+      }
+    }
+    debugPrint('🔍 Map Popup Title: $title');
+    debugPrint('🔍 Map Popup Title bytes: ${title.codeUnits}');
+
+    // Get content with proper UTF-8 encoding for Arabic text
+    String content = post['content'] ?? post['description'] ?? '';
+    // Try to ensure proper UTF-8 decoding for Arabic text
+    if (content.contains('Ù') || content.contains('Ø')) {
+      try {
+        // Convert to bytes and properly decode as UTF-8
+        List<int> bytes = content.codeUnits;
+        content = utf8.decode(bytes, allowMalformed: true);
+      } catch (e) {
+        debugPrint('Error decoding content: $e');
+      }
+    }
+    debugPrint('🔍 Map Popup Content: $content');
+    debugPrint('🔍 Map Popup Content bytes: ${content.codeUnits}');
 
     // Extract media information with improved handling for different data structures
     String? thumbnailUrl;
@@ -712,6 +740,8 @@ class _MapPageState extends State<MapPage> {
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
+                                    textAlign: TextAlign
+                                        .right, // Help with RTL languages
                                   ),
                                 ],
                               ),
@@ -728,32 +758,46 @@ class _MapPageState extends State<MapPage> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Title with better typography
+                              // Title with better typography and proper RTL support
                               if (title.isNotEmpty)
-                                Text(
-                                  title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 20,
+                                Directionality(
+                                  textDirection: _isArabicText(title)
+                                      ? TextDirection.rtl
+                                      : TextDirection.ltr,
+                                  child: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 20,
+                                    ),
+                                    textAlign: TextAlign
+                                        .start, // Help with RTL languages
                                   ),
                                 ),
 
                               if (title.isNotEmpty && content.isNotEmpty)
                                 const SizedBox(height: 12),
 
-                              // Content text
+                              // Content text with proper RTL support for Arabic
                               if (content.isNotEmpty)
-                                Text(
-                                  content,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.color,
+                                Directionality(
+                                  textDirection: _isArabicText(content)
+                                      ? TextDirection.rtl
+                                      : TextDirection.ltr,
+                                  child: Text(
+                                    content,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color,
+                                    ),
+                                    textAlign: TextAlign
+                                        .start, // Help with RTL languages
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
 
                               const SizedBox(height: 16),
@@ -827,12 +871,38 @@ class _MapPageState extends State<MapPage> {
                                     print(
                                         'Is anonymous flag: ${post['is_anonymous']}');
 
-                                    // Extract post details for navigation
+                                    // Extract post details for navigation with proper encoding
                                     final title =
                                         post['title'] ?? 'Untitled Post';
                                     final description = post['content'] ??
                                         post['description'] ??
                                         '';
+
+                                    // Apply UTF-8 decoding to ensure proper handling of Arabic text
+                                    final String decodedTitle =
+                                        (title.contains('Ù') ||
+                                                title.contains('Ø'))
+                                            ? utf8.decode(title.codeUnits,
+                                                allowMalformed: true)
+                                            : title;
+
+                                    final String decodedDescription =
+                                        (description.contains('Ù') ||
+                                                description.contains('Ø'))
+                                            ? utf8.decode(description.codeUnits,
+                                                allowMalformed: true)
+                                            : description;
+
+                                    // Debug output to confirm proper encoding is preserved
+                                    debugPrint(
+                                        '📝 Navigation - Post Title: $decodedTitle');
+                                    debugPrint(
+                                        '📝 Navigation - Post Title bytes: ${decodedTitle.codeUnits}');
+                                    debugPrint(
+                                        '📝 Navigation - Post Description: $decodedDescription');
+                                    debugPrint(
+                                        '📝 Navigation - Post Description bytes: ${decodedDescription.codeUnits}');
+
                                     final imageUrl = thumbnailUrl ?? '';
                                     final location = post['location'] != null
                                         ? (post['location']['name'] ??
@@ -852,8 +922,8 @@ class _MapPageState extends State<MapPage> {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => PostDetailPage(
-                                          title: title,
-                                          description: description,
+                                          title: decodedTitle,
+                                          description: decodedDescription,
                                           imageUrl: imageUrl,
                                           location: location,
                                           time: time,
@@ -864,8 +934,8 @@ class _MapPageState extends State<MapPage> {
                                           // Create a Post object to ensure consistent marker styling
                                           post: Post(
                                             id: post['id'] ?? 0,
-                                            title: title,
-                                            content: description,
+                                            title: decodedTitle,
+                                            content: decodedDescription,
                                             category:
                                                 category, // Pass category for consistent marker styling
                                             imageUrl: imageUrl,
@@ -1004,6 +1074,14 @@ class _MapPageState extends State<MapPage> {
       isVerified: isVerified,
       profileImage: profileImage,
     );
+  }
+
+  // Helper method to check if text contains Arabic characters
+  bool _isArabicText(String text) {
+    // Regular expression to match Arabic Unicode character range
+    final arabicRegex = RegExp(
+        r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]');
+    return arabicRegex.hasMatch(text);
   }
 
   // Custom animated location button widget

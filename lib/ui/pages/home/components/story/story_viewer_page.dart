@@ -207,7 +207,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             comments: 0, // No commentsCount in Post, fallback to 0
             isVerified: post.isVerifiedLocation,
             post: post,
-            distance: post.distance?.toString(),
+            distance: post.distance.toString(),
             authorName: post.authorName,
           ),
         ),

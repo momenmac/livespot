@@ -23,7 +23,11 @@ class CameraPage extends StatelessWidget {
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: Text('Close Camera'),
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.red.shade700,
+              ),
+              child: const Text('Close Camera'),
             ),
           ],
         ),
