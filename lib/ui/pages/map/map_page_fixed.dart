@@ -41,7 +41,8 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   late final MapPageController _controller;
   final FocusNode _focusNode = FocusNode();
-  final TokenManager _tokenManager = TokenManager(); // Add TokenManager instance
+  final TokenManager _tokenManager =
+      TokenManager(); // Add TokenManager instance
 
   // Add state variables for location data
   List<dynamic> _mapLocations = [];
@@ -59,7 +60,7 @@ class _MapPageState extends State<MapPage> {
   List<dynamic>? _locationsCache;
   String? _lastCacheDateParam;
   List<String>? _lastCacheCategories;
-  
+
   // Debounce timer for location fetching
   Timer? _fetchDebounceTimer;
 
@@ -85,12 +86,12 @@ class _MapPageState extends State<MapPage> {
       _debouncedFetchLocations();
     });
   }
-  
+
   // Debounce method to prevent multiple rapid API calls
   void _debouncedFetchLocations() {
     // Cancel any previous timer
     _fetchDebounceTimer?.cancel();
-    
+
     // Start a new timer - wait 500ms before making API call
     _fetchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -111,11 +112,11 @@ class _MapPageState extends State<MapPage> {
   bool _areListsEqual(List<String>? list1, List<String>? list2) {
     if (list1 == null || list2 == null) return list1 == list2;
     if (list1.length != list2.length) return false;
-    
+
     // Sort copies of the lists for comparison
     final sorted1 = List<String>.from(list1)..sort();
     final sorted2 = List<String>.from(list2)..sort();
-    
+
     for (var i = 0; i < sorted1.length; i++) {
       if (sorted1[i] != sorted2[i]) return false;
     }
@@ -129,22 +130,22 @@ class _MapPageState extends State<MapPage> {
     // Format the date for the API request - only if it's different from today
     final today = DateTime.now();
     final selectedDate = _controller.selectedDate;
-    
-    final dateParam = selectedDate != null && 
-        (selectedDate.year != today.year || 
-         selectedDate.month != today.month || 
-         selectedDate.day != today.day)
+
+    final dateParam = selectedDate != null &&
+            (selectedDate.year != today.year ||
+                selectedDate.month != today.month ||
+                selectedDate.day != today.day)
         ? "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}"
         : null;
 
     // Print debug info about the current request
-    print('🔍 Fetch request - Date: $dateParam, Categories: $_selectedCategories');
-    
+    print(
+        '🔍 Fetch request - Date: $dateParam, Categories: $_selectedCategories');
+
     // Check if we can use the cache - with proper comparison of category lists
     if (_locationsCache != null &&
         _lastCacheDateParam == dateParam &&
         _areListsEqual(_lastCacheCategories, _selectedCategories)) {
-      
       print('✅ Using cache - Avoiding network request');
       setState(() {
         _mapLocations = _locationsCache!;
@@ -153,14 +154,15 @@ class _MapPageState extends State<MapPage> {
       });
       return;
     }
-    
+
     // Cache miss - debug info
     print('⚠️ Cache miss - Making network request');
     if (_lastCacheDateParam != dateParam) {
       print('  - Date changed: $_lastCacheDateParam → $dateParam');
     }
     if (!_areListsEqual(_lastCacheCategories, _selectedCategories)) {
-      print('  - Categories changed: $_lastCacheCategories → $_selectedCategories');
+      print(
+          '  - Categories changed: $_lastCacheCategories → $_selectedCategories');
     }
 
     setState(() {

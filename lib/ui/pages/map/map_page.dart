@@ -77,12 +77,13 @@ class _MapPageState extends State<MapPage> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _controller.initializeLocation();
-        
+
         // IMPORTANT: Set today's date as default and ensure it's used in queries
         final today = DateTime.now();
-        print('📅 Setting initial date filter to today: ${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}');
+        print(
+            '📅 Setting initial date filter to today: ${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}');
         _controller.selectedDate = today;
-        
+
         // Small delay to ensure controller is fully initialized
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) {
@@ -99,22 +100,22 @@ class _MapPageState extends State<MapPage> {
       _debouncedFetchLocations();
     });
   }
-  
+
   void _debouncedFetchLocations() {
     // Cancel any previous timer
     _fetchDebounceTimer?.cancel();
-    
+
     // Start a new timer
     _fetchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         _fetchMapLocations();
       }
     });
-    
+
     // Debug message to verify debounce is working
     print('🕒 Debounce timer started - delaying API request by 500ms');
   }
-  
+
   // Helper method to compare lists irrespective of order
   bool _areListsEqual(List<String>? list1, List<String>? list2) {
     // Handle null cases
@@ -125,30 +126,33 @@ class _MapPageState extends State<MapPage> {
       print('📊 One list is null, not equal');
       return false;
     }
-    
+
     // If both lists are empty, they're equal
     if (list1.isEmpty && list2.isEmpty) {
       return true;
     }
-    
+
     // Quick length check
     if (list1.length != list2.length) {
       print('📊 List length mismatch: ${list1.length} vs ${list2.length}');
       return false;
     }
-    
+
     // Sort copies of the lists for comparison (case insensitive)
-    final sorted1 = List<String>.from(list1)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final sorted2 = List<String>.from(list2)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    
+    final sorted1 = List<String>.from(list1)
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final sorted2 = List<String>.from(list2)
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     // Compare each element (case insensitive)
     for (int i = 0; i < sorted1.length; i++) {
       if (sorted1[i].toLowerCase() != sorted2[i].toLowerCase()) {
-        print('📊 List element mismatch at position $i: "${sorted1[i]}" vs "${sorted2[i]}"');
+        print(
+            '📊 List element mismatch at position $i: "${sorted1[i]}" vs "${sorted2[i]}"');
         return false;
       }
     }
-    
+
     // All elements match
     return true;
   }
@@ -166,10 +170,11 @@ class _MapPageState extends State<MapPage> {
     if (!mounted) return;
 
     final DateTime? selectedDate = _controller.selectedDate;
-    
+
     // Force setting today's date if no date is selected
     if (selectedDate == null) {
-      print('⚠️ No date selected - forcing today\'s date to ensure proper filtering');
+      print(
+          '⚠️ No date selected - forcing today\'s date to ensure proper filtering');
       _controller.selectedDate = DateTime.now();
       // Wait for the controller to update before proceeding
       await Future.delayed(const Duration(milliseconds: 50));
@@ -177,36 +182,37 @@ class _MapPageState extends State<MapPage> {
       if (mounted) _fetchMapLocations();
       return;
     }
-    
+
     // ALWAYS include the date parameter when selectedDate is available
     String? dateParam;
-    
+
     if (selectedDate != null) {
       // Format date as YYYY-MM-DD (always include date parameter regardless of whether it's today)
       dateParam = "${selectedDate.year}-"
-                "${selectedDate.month.toString().padLeft(2, '0')}-"
-                "${selectedDate.day.toString().padLeft(2, '0')}";
-      
+          "${selectedDate.month.toString().padLeft(2, '0')}-"
+          "${selectedDate.day.toString().padLeft(2, '0')}";
+
       print('📆 Using date parameter: $dateParam');
     } else {
-      print('⚠️ No date selected! This will fetch ALL posts without date filtering');
+      print(
+          '⚠️ No date selected! This will fetch ALL posts without date filtering');
     }
 
     // Convert selected categories to a sorted list for consistent comparison
     final sortedCategories = List<String>.from(_selectedCategories)..sort();
-    
+
     // Print debug info about the current request
     print('🔍 Fetch request - Date: $dateParam, Categories: $sortedCategories');
-    
+
     // Check if we can use the cache - with deep comparison of category lists
-    if (_locationsCache != null && 
+    if (_locationsCache != null &&
         _lastCacheDateParam == dateParam &&
         _areListsEqual(_lastCacheCategories, sortedCategories)) {
-      
       print('✅ Using cache - Avoiding network request');
       print('   Cache hits - Date: "$_lastCacheDateParam" = "$dateParam"');
-      print('   Cache hits - Categories: $_lastCacheCategories = $sortedCategories');
-      
+      print(
+          '   Cache hits - Categories: $_lastCacheCategories = $sortedCategories');
+
       setState(() {
         _mapLocations = _locationsCache!;
         _isLoadingLocations = false;
@@ -214,14 +220,15 @@ class _MapPageState extends State<MapPage> {
       });
       return;
     }
-    
+
     // Cache miss - debug info
     print('⚠️ Cache miss - Making network request');
     if (_lastCacheDateParam != dateParam) {
       print('  - Date changed: $_lastCacheDateParam → $dateParam');
     }
     if (!_areListsEqual(_lastCacheCategories, sortedCategories)) {
-      print('  - Categories changed: $_lastCacheCategories → $sortedCategories');
+      print(
+          '  - Categories changed: $_lastCacheCategories → $sortedCategories');
     }
 
     setState(() {
@@ -249,38 +256,42 @@ class _MapPageState extends State<MapPage> {
             .where((cat) => cat.isNotEmpty) // Filter out empty strings
             .map((cat) => cat.trim().toLowerCase()) // Normalize format
             .toList();
-            
+
         if (normalizedCategories.isNotEmpty) {
           // Based on the server logs, it appears the server is expecting a single category
           // Try the last selected category (most recent selection)
           final lastSelectedCategory = normalizedCategories.last;
           queryParams['category'] = lastSelectedCategory;
           print('📂 Adding category filter: category=$lastSelectedCategory');
-          
+
           // Also include all categories parameter (just in case server starts supporting it)
           if (normalizedCategories.length > 1) {
             final allCategories = normalizedCategories.join(',');
             queryParams['categories'] = allCategories;
-            print('📂 Adding all categories as backup: categories=$allCategories');
+            print(
+                '📂 Adding all categories as backup: categories=$allCategories');
           }
-          
+
           // Debug info to check what's being sent
-          print('📂 Category filter type: ${normalizedCategories.runtimeType}, values: $normalizedCategories');
-          print('📂 Using most recent category selection: $lastSelectedCategory');
+          print(
+              '📂 Category filter type: ${normalizedCategories.runtimeType}, values: $normalizedCategories');
+          print(
+              '📂 Using most recent category selection: $lastSelectedCategory');
         }
       }
 
       if (queryParams.isNotEmpty) {
         // Encode URI components properly to handle special characters
-        final encodedParams = queryParams.entries.map((e) => 
-          '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}'
-        ).join('&');
+        final encodedParams = queryParams.entries
+            .map((e) =>
+                '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+            .join('&');
         url += '?$encodedParams';
-        
+
         // Log the final encoded URL
         print('🌐 Encoded API URL: $url');
       }
-      
+
       // Extra clear logging to help debug API requests
       print('🌐 Final API request URL: $url');
       if (dateParam == null) {
@@ -397,8 +408,11 @@ class _MapPageState extends State<MapPage> {
           // Cache the results with deep copy to avoid reference issues
           _locationsCache = List<dynamic>.from(_mapLocations);
           _lastCacheDateParam = dateParam;
-          _lastCacheCategories = _selectedCategories.isEmpty ? [] : List<String>.from(_selectedCategories);
-          print('📦 Updated cache - Date: $dateParam, Categories: $_lastCacheCategories');
+          _lastCacheCategories = _selectedCategories.isEmpty
+              ? []
+              : List<String>.from(_selectedCategories);
+          print(
+              '📦 Updated cache - Date: $dateParam, Categories: $_lastCacheCategories');
         } else {
           print('⚠️ Non-paginated response detected');
           setState(() {
@@ -409,8 +423,11 @@ class _MapPageState extends State<MapPage> {
           // Cache the results with deep copy to avoid reference issues
           _locationsCache = List<dynamic>.from(_mapLocations);
           _lastCacheDateParam = dateParam;
-          _lastCacheCategories = _selectedCategories.isEmpty ? [] : List<String>.from(_selectedCategories);
-          print('📦 Updated cache (non-paginated) - Date: $dateParam, Categories: $_lastCacheCategories');
+          _lastCacheCategories = _selectedCategories.isEmpty
+              ? []
+              : List<String>.from(_selectedCategories);
+          print(
+              '📦 Updated cache (non-paginated) - Date: $dateParam, Categories: $_lastCacheCategories');
         }
 
         // Always call _addMarkersToMap after updating _mapLocations
@@ -457,7 +474,7 @@ class _MapPageState extends State<MapPage> {
   void _addMarkersToMap() {
     // Always clear existing markers first
     _mapMarkers.clear();
-    
+
     // Early return if no locations - this effectively removes all markers
     if (_mapLocations.isEmpty) {
       print('🗺️ No locations to show on map - all markers cleared');
@@ -466,7 +483,7 @@ class _MapPageState extends State<MapPage> {
     }
 
     print('🗺️ Adding ${_mapLocations.length} markers to map');
-    
+
     // Add new markers for each location
     for (final post in _mapLocations) {
       if (post['location'] != null) {
@@ -478,9 +495,9 @@ class _MapPageState extends State<MapPage> {
             final category = post['category'] ?? 'general';
 
             // Only add markers that match the selected category filter if any is selected
-            final shouldAddMarker = _selectedCategories.isEmpty || 
+            final shouldAddMarker = _selectedCategories.isEmpty ||
                 _selectedCategories.contains(category.toLowerCase());
-                
+
             if (shouldAddMarker) {
               // Add marker with just the icon (no text) - smaller size
               _mapMarkers.add(
@@ -1203,20 +1220,21 @@ class _MapPageState extends State<MapPage> {
     // Log before state change with more details
     print('🔖 Current categories before update: $_selectedCategories');
     print('🔖 New categories to set: $newCategories');
-    
+
     // Print each selected category for debugging
     for (int i = 0; i < selectedCategories.length; i++) {
-      print('🔖 Category ${i+1}: ${selectedCategories[i].name} (${selectedCategories[i].icon})');
+      print(
+          '🔖 Category ${i + 1}: ${selectedCategories[i].name} (${selectedCategories[i].icon})');
     }
 
     // Check if categories actually changed before updating state
     if (!_areListsEqual(_selectedCategories, newCategories)) {
       print('🔖 Categories have changed - updating state and triggering fetch');
-      
+
       // Clear the cache when categories change to force a new API request
       _locationsCache = null;
       _lastCacheCategories = null;
-      
+
       setState(() {
         // Direct replacement with the full list from MapCategories
         _selectedCategories = newCategories;
@@ -1270,82 +1288,82 @@ class _MapPageState extends State<MapPage> {
   // Custom animated location button widget
   Widget _buildCurrentLocationButton() {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [ThemeConstants.primaryColor, Colors.blue.shade600],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: ThemeConstants.primaryColor.withOpacity(0.5),
-            blurRadius: 10,
-            spreadRadius: 2,
-            offset: const Offset(0, 3),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [ThemeConstants.primaryColor, Colors.blue.shade600],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          splashColor: Colors.white.withOpacity(0.3),
-          highlightColor: Colors.white.withOpacity(0.1),
-          onTap: _controller.centerOnUserLocation,
-          child: Padding(
-            padding: const EdgeInsets.all(15),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Outer ring
-                Container(
-                  height: 30,
-                  width: 30,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 2,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: ThemeConstants.primaryColor.withOpacity(0.5),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            splashColor: Colors.white.withOpacity(0.3),
+            highlightColor: Colors.white.withOpacity(0.1),
+            onTap: _controller.centerOnUserLocation,
+            child: Padding(
+              padding: const EdgeInsets.all(15),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Outer ring
+                  Container(
+                    height: 30,
+                    width: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
                     ),
                   ),
-                ),
-                // Inner dot
-                Container(
-                  height: 8,
-                  width: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                  // Inner dot
+                  Container(
+                    height: 8,
+                    width: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                // Direction indicators
-                ...List.generate(
-                  4,
-                  (index) {
-                    final angle = index * (pi / 2);
-                    return Transform.translate(
-                      offset: Offset(
-                        sin(angle) * 16,
-                        -cos(angle) * 16,
-                      ),
-                      child: Container(
-                        height: 6,
-                        width: 6,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.8),
-                          shape: BoxShape.circle,
+                  // Direction indicators
+                  ...List.generate(
+                    4,
+                    (index) {
+                      final angle = index * (pi / 2);
+                      return Transform.translate(
+                        offset: Offset(
+                          sin(angle) * 16,
+                          -cos(angle) * 16,
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ],
+                        child: Container(
+                          height: 6,
+                          width: 6,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.8),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ));
+        ));
   }
 
   @override
