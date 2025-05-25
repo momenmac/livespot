@@ -15,6 +15,8 @@ import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_date_picker.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_categories.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/legend/map_legend.dart'; // Import the map legend widget
+import 'package:flutter_application_2/ui/widgets/animated_speech_bubble.dart'; // Import animated speech bubble widget
+import 'package:flutter_application_2/ui/pages/media/reels_page.dart'; // Import reels page
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
@@ -22,8 +24,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/services/auth/token_manager.dart'; // Import TokenManager
 import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
 import 'dart:math';
-import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
-import 'package:collection/collection.dart'; // Import for ListEquality
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;
@@ -48,7 +48,6 @@ class _MapPageState extends State<MapPage> {
   // Add state variables for location data
   List<dynamic> _mapLocations = [];
   bool _isLoadingLocations = false;
-  String? _selectedCategory;
   String? _error;
 
   // Add a list to store multiple selected categories
@@ -184,19 +183,15 @@ class _MapPageState extends State<MapPage> {
     }
 
     // ALWAYS include the date parameter when selectedDate is available
-    String? dateParam;
+    String dateParam;
 
-    if (selectedDate != null) {
-      // Format date as YYYY-MM-DD (always include date parameter regardless of whether it's today)
-      dateParam = "${selectedDate.year}-"
-          "${selectedDate.month.toString().padLeft(2, '0')}-"
-          "${selectedDate.day.toString().padLeft(2, '0')}";
+    // selectedDate is guaranteed to be non-null at this point due to the check above
+    // Format date as YYYY-MM-DD (always include date parameter regardless of whether it's today)
+    dateParam = "${selectedDate.year}-"
+        "${selectedDate.month.toString().padLeft(2, '0')}-"
+        "${selectedDate.day.toString().padLeft(2, '0')}";
 
-      print('📆 Using date parameter: $dateParam');
-    } else {
-      print(
-          '⚠️ No date selected! This will fetch ALL posts without date filtering');
-    }
+    print('📆 Using date parameter: $dateParam');
 
     // Convert selected categories to a sorted list for consistent comparison
     final sortedCategories = List<String>.from(_selectedCategories)..sort();
@@ -242,12 +237,8 @@ class _MapPageState extends State<MapPage> {
       final queryParams = <String, String>{};
 
       // ALWAYS add date parameter when available - this is essential for filtering
-      if (dateParam != null) {
-        queryParams['date'] = dateParam;
-        print('🗓️ Adding date filter to URL: date=$dateParam');
-      } else {
-        print('⚠️ Warning: No date parameter available for filtering!');
-      }
+      queryParams['date'] = dateParam;
+      print('🗓️ Adding date filter to URL: date=$dateParam');
 
       // Send all selected categories as a single comma-separated value
       if (_selectedCategories.isNotEmpty) {
@@ -506,7 +497,7 @@ class _MapPageState extends State<MapPage> {
                   width: 38, // Reduced from 42 to 38
                   point: LatLng(latitude, longitude),
                   child: GestureDetector(
-                    onTap: () => _showMarkerPopover(
+                    onTap: () => _showSpeechBubblePopover(
                         context, post, LatLng(latitude, longitude)),
                     child: _buildMarkerIcon(category),
                   ),
@@ -534,12 +525,8 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  // Show popover with post details when marker is tapped
-  void _showMarkerPopover(BuildContext context, dynamic post, LatLng position) {
-    // Calculate position in screen coordinates
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-
+  // Show speech bubble popover with post details when marker is tapped
+  void _showSpeechBubblePopover(BuildContext context, dynamic post, LatLng position) {
     // Get post details with proper encoding for Arabic text
     final category = post['category'] ?? 'general';
 
@@ -555,8 +542,6 @@ class _MapPageState extends State<MapPage> {
         debugPrint('Error decoding title: $e');
       }
     }
-    debugPrint('🔍 Map Popup Title: $title');
-    debugPrint('🔍 Map Popup Title bytes: ${title.codeUnits}');
 
     // Get content with proper UTF-8 encoding for Arabic text
     String content = post['content'] ?? post['description'] ?? '';
@@ -570,99 +555,88 @@ class _MapPageState extends State<MapPage> {
         debugPrint('Error decoding content: $e');
       }
     }
-    debugPrint('🔍 Map Popup Content: $content');
-    debugPrint('🔍 Map Popup Content bytes: ${content.codeUnits}');
 
     // Extract media information with improved handling for different data structures
     String? thumbnailUrl;
+    List<String> mediaUrls = [];
 
-    if (post.containsKey('media_urls') &&
-        post['media_urls'] is List &&
-        (post['media_urls'] as List).isNotEmpty) {
+    // Extract all media URLs from the post
+    if (post.containsKey('media_urls') && post['media_urls'] is List && (post['media_urls'] as List).isNotEmpty) {
       // Handle direct media_urls array
-      thumbnailUrl = post['media_urls'][0];
-    } else if (post.containsKey('media') &&
-        post['media'] is List &&
-        (post['media'] as List).isNotEmpty) {
+      mediaUrls = List<String>.from(post['media_urls']);
+      thumbnailUrl = mediaUrls[0];
+    } else if (post.containsKey('media') && post['media'] is List && (post['media'] as List).isNotEmpty) {
       var mediaList = post['media'];
 
-      // Debug info
-      print('Media list for post ${post['id']}: $mediaList');
-
-      // Check if the media item has a 'url' directly
-      if (mediaList[0] is Map && mediaList[0].containsKey('url')) {
-        thumbnailUrl = mediaList[0]['url'];
-        print('Found media URL in url field: $thumbnailUrl');
-      }
-      // Or if it's just a string URL directly in the array
-      else if (mediaList[0] is String) {
-        thumbnailUrl = mediaList[0];
-        print('Found direct string media URL: $thumbnailUrl');
-      }
-      // If it has a different key for the URL
-      else if (mediaList[0] is Map) {
-        final mediaItem = mediaList[0];
-        print('Media item is a map: $mediaItem');
-
-        // Try common keys for image URLs
-        for (final key in [
-          'image_url',
-          'url',
-          'path',
-          'src',
-          'uri',
-          'thumb',
-          'thumbnail'
-        ]) {
-          if (mediaItem.containsKey(key)) {
-            thumbnailUrl = mediaItem[key];
-            print('Found media URL in $key field: $thumbnailUrl');
-            break;
+      // Collect all media URLs from the list
+      for (var item in mediaList) {
+        String? url;
+        
+        // If item is a direct string URL
+        if (item is String) {
+          url = item;
+        } 
+        // If item is a map with URL in a field
+        else if (item is Map) {
+          // Try common keys for image URLs
+          for (final key in ['image_url', 'url', 'path', 'src', 'uri', 'thumb', 'thumbnail']) {
+            if (item.containsKey(key)) {
+              url = item[key];
+              break;
+            }
           }
         }
+        
+        // Add valid URL to our list
+        if (url != null && url.isNotEmpty) {
+          // Make relative URLs absolute
+          if (url.startsWith('/')) {
+            url = '${ApiUrls.baseUrl}$url';
+          }
+          mediaUrls.add(url);
+        }
       }
-    } else if (post.containsKey('mediaUrls') &&
-        post['mediaUrls'] is List &&
-        (post['mediaUrls'] as List).isNotEmpty) {
+      
+      // Use the first media URL as thumbnail
+      if (mediaUrls.isNotEmpty) {
+        thumbnailUrl = mediaUrls[0];
+      }
+    } else if (post.containsKey('mediaUrls') && post['mediaUrls'] is List && (post['mediaUrls'] as List).isNotEmpty) {
       // Handle direct mediaUrls array with camelCase
-      thumbnailUrl = post['mediaUrls'][0];
-      print('Found media URL in mediaUrls array: $thumbnailUrl');
+      mediaUrls = List<String>.from(post['mediaUrls']);
+      thumbnailUrl = mediaUrls[0];
     } else if (post.containsKey('image_url')) {
       // Handle direct image_url field
       thumbnailUrl = post['image_url'];
-      print('Found direct image_url field: $thumbnailUrl');
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+        mediaUrls = [thumbnailUrl];
+      }
     } else if (post.containsKey('imageUrl')) {
       // Handle direct imageUrl field with camelCase
       thumbnailUrl = post['imageUrl'];
-      print('Found direct imageUrl field: $thumbnailUrl');
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+        mediaUrls = [thumbnailUrl];
+      }
     }
 
     // Check if thumbnailUrl is a relative URL and make it absolute if needed
     if (thumbnailUrl != null && thumbnailUrl.startsWith('/')) {
       thumbnailUrl = '${ApiUrls.baseUrl}$thumbnailUrl';
-      print('Converted to absolute URL: $thumbnailUrl');
     }
-
-    // If still no thumbnail but we have a category, we'll show a fallback icon
 
     // Fix for honesty rate - handle different possible structures and formats
     double honesty = 0.0;
     if (post.containsKey('honesty_rate')) {
-      // Try to convert to double safely
       try {
-        if (post['honesty_rate'] is int) {
+        if (post['honesty_rate'] is num) {
           honesty = post['honesty_rate'].toDouble();
-        } else if (post['honesty_rate'] is double) {
-          honesty = post['honesty_rate'];
         } else if (post['honesty_rate'] is String) {
           honesty = double.tryParse(post['honesty_rate']) ?? 0.0;
         }
       } catch (e) {
         honesty = 0.0;
       }
-    }
-    // Try alternative key names
-    else if (post.containsKey('honesty_score')) {
+    } else if (post.containsKey('honesty_score')) {
       try {
         if (post['honesty_score'] is num) {
           honesty = post['honesty_score'].toDouble();
@@ -684,51 +658,59 @@ class _MapPageState extends State<MapPage> {
       }
     }
 
-    final DateTime? postDate =
-        post['created_at'] != null ? DateTime.parse(post['created_at']) : null;
+    final DateTime? postDate = post['created_at'] != null ? DateTime.parse(post['created_at']) : null;
     final String formattedDate = postDate != null
         ? "${postDate.day}/${postDate.month}/${postDate.year} at ${postDate.hour}:${postDate.minute.toString().padLeft(2, '0')}"
         : "Unknown date";
 
-    // Determine honesty rating color
-    Color getHonestyColor(double score) {
-      if (score >= 80) return ThemeConstants.green;
-      if (score >= 60) return ThemeConstants.orange;
-      return ThemeConstants.red;
-    }
+    // Create a Post object for the ReelsPage navigation
+    final postObj = Post(
+      id: post['id'] ?? 0,
+      title: title,
+      content: content,
+      category: category,
+      imageUrl: thumbnailUrl ?? '',
+      createdAt: postDate ?? DateTime.now(),
+      honestyScore: honesty.toInt(),
+      upvotes: post['upvotes'] ?? 0,
+      downvotes: post['downvotes'] ?? 0,
+      userVote: 0,
+      mediaUrls: mediaUrls,
+      latitude: post['location']['latitude']?.toDouble() ?? 0.0,
+      longitude: post['location']['longitude']?.toDouble() ?? 0.0,
+      location: _createPostLocation(
+        post['location'] != null ? (post['location']['name'] ?? 'Unknown location') : 'Unknown location',
+        post['location']['latitude']?.toDouble(),
+        post['location']['longitude']?.toDouble(),
+      ),
+      author: _createPostAuthor(
+        post['author']?['id'] ?? 0,
+        post['is_anonymous'] == true
+            ? 'Anonymous'
+            : (post['author']?['display_name'] ?? post['author']?['username'] ?? 'Anonymous'),
+        post['is_verified'] ?? false,
+        profileImage: post['is_anonymous'] == true ? null : post['author']?['profile_picture'],
+      ),
+      status: post['status'] ?? 'published',
+      isVerifiedLocation: post['is_verified_location'] ?? true,
+      takenWithinApp: post['taken_within_app'] ?? true,
+      isAnonymous: post['is_anonymous'] ?? false,
+      tags: [],
+    );
 
-    final honestyColor = getHonestyColor(honesty);
-
+    // Calculate position for the bubble
+    // We need to convert the map coordinates to screen coordinates
+    final screenPoint = _controller.mapController.camera.latLngToScreenPoint(position);
+    
     // Show overlay
     OverlayState? overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry; // Using late to defer initialization
-
-    // Create a transparent overlay to catch taps outside the popup
-    // This will be used to dismiss the popup when clicking elsewhere
-    final GlobalKey popupKey = GlobalKey();
+    late OverlayEntry overlayEntry;
 
     void removeOverlay() {
       overlayEntry.remove();
     }
 
-    // This handler will dismiss the popup when tapping outside
-    void handleTapOutside(TapDownDetails details) {
-      final RenderBox? popupBox =
-          popupKey.currentContext?.findRenderObject() as RenderBox?;
-      if (popupBox == null) return;
-
-      final Offset popupPosition = popupBox.localToGlobal(Offset.zero);
-      final Size popupSize = popupBox.size;
-
-      // Check if the tap is outside the popup bounds
-      if (details.globalPosition.dx < popupPosition.dx ||
-          details.globalPosition.dx > popupPosition.dx + popupSize.width ||
-          details.globalPosition.dy < popupPosition.dy ||
-          details.globalPosition.dy > popupPosition.dy + popupSize.height) {
-        removeOverlay();
-      }
-    }
-
+    // Create the overlay entry with the speech bubble
     overlayEntry = OverlayEntry(
       builder: (context) => Stack(
         children: [
@@ -736,466 +718,362 @@ class _MapPageState extends State<MapPage> {
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTapDown: handleTapOutside,
+              onTap: removeOverlay,
               child: Container(color: Colors.transparent),
             ),
           ),
 
-          // The actual popup content
+          // Position the speech bubble above the marker with dynamic sizing and adaptive positioning
           Positioned(
-            top: size.height * 0.15,
-            left: size.width * 0.1,
-            child: Material(
-              color: Colors.transparent,
+            left: max(10, min(MediaQuery.of(context).size.width - 310, screenPoint.x - 150)), // Keep bubble on screen
+            // Adjust vertical position - if near top of screen, put bubble below marker instead
+            top: screenPoint.y < MediaQuery.of(context).size.height * 0.3
+                ? screenPoint.y + 40 // Place below the marker if close to top
+                : max(MediaQuery.of(context).padding.top + 10, screenPoint.y - 210), // Otherwise above
+            child: AnimatedSpeechBubble(
+              bubbleColor: Theme.of(context).cardColor,
+              cornerRadius: 20.0,
+              arrowWidth: 22.0,
+              arrowHeight: 12.0,
+              elevation: 6.0,
+              shadowColor: Colors.black26,
+              animationDuration: const Duration(milliseconds: 300),
+              // Set arrow direction based on bubble position
+              arrowAlignment: screenPoint.y < MediaQuery.of(context).size.height * 0.3
+                  ? Alignment.topCenter // Arrow points up if bubble is below marker
+                  : Alignment.bottomCenter, // Arrow points down if bubble is above marker
               child: Container(
-                key: popupKey,
-                width: size.width * 0.8,
-                constraints: BoxConstraints(maxHeight: size.height * 0.7),
+                width: 320,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 15,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(20.0),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    width: 1,
+                  ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Thumbnail as the main focus with improved UI
-                      Stack(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Enhanced title with better typography
+                    Container(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Directionality(
+                        textDirection: _isArabicText(title) ? TextDirection.rtl : TextDirection.ltr,
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Theme.of(context).textTheme.titleLarge?.color,
+                            letterSpacing: 0.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: _isArabicText(title) ? TextAlign.right : TextAlign.left,
+                        ),
+                      ),
+                    ),
+                    
+                    // Subtle divider
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Theme.of(context).primaryColor.withOpacity(0.3),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Enhanced content preview
+                    if (content.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Directionality(
+                          textDirection: _isArabicText(content) ? TextDirection.rtl : TextDirection.ltr,
+                          child: Text(
+                            content,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.8),
+                              height: 1.4,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: _isArabicText(content) ? TextAlign.right : TextAlign.left,
+                          ),
+                        ),
+                      ),
+                      
+                    // Date and location info
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
                         children: [
-                          // Post thumbnail with fallback image
-                          AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: thumbnailUrl != null
-                                ? CachedNetworkImage(
-                                    imageUrl: thumbnailUrl,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                      color: Theme.of(context).hoverColor,
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
+                          Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            formattedDate,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).primaryColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (post['location'] != null && post['location']['name'] != null)
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  post['location']['name'],
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).primaryColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Enhanced button section with better styling
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        children: [
+                          // Action buttons row with improved design
+                          Row(
+                            children: [
+                              // View details button with gradient
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Theme.of(context).primaryColor,
+                                        Theme.of(context).primaryColor.withOpacity(0.8),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () {
+                                        removeOverlay();
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => PostDetailPage(
+                                              title: title,
+                                              description: content,
+                                              imageUrl: thumbnailUrl ?? '',
+                                              location: post['location'] != null
+                                                  ? (post['location']['name'] ?? 'Unknown location')
+                                                  : 'Unknown location',
+                                              time: formattedDate,
+                                              honesty: honesty.toInt(),
+                                              upvotes: post['upvotes'] ?? 0,
+                                              comments: post['comments_count'] ?? post['threads_count'] ?? 0,
+                                              isVerified: post['is_verified'] ?? false,
+                                              post: postObj,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              CategoryUtils.getCategoryIcon(
-                                                  category),
-                                              color: CategoryUtils
-                                                  .getCategoryColor(category),
-                                              size: 40,
+                                              Icons.article_outlined,
+                                              size: 20,
+                                              color: Colors.white,
                                             ),
-                                            const SizedBox(height: 12),
+                                            const SizedBox(width: 8),
                                             Text(
-                                              category.toUpperCase(),
+                                              'Details',
                                               style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: CategoryUtils
-                                                    .getCategoryColor(category),
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
                                               ),
-                                            )
+                                            ),
                                           ],
                                         ),
                                       ),
                                     ),
-                                    placeholder: (context, url) => Container(
-                                      color: Theme.of(context)
-                                          .scaffoldBackgroundColor,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                : Container(
-                                    color: Theme.of(context).hoverColor,
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            CategoryUtils.getCategoryIcon(
-                                                category),
-                                            color:
-                                                CategoryUtils.getCategoryColor(
-                                                    category),
-                                            size: 40,
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            category.toUpperCase(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: CategoryUtils
-                                                  .getCategoryColor(category),
-                                            ),
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(width: 12),
+                              
+                              // View media button with enhanced styling
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: mediaUrls.isEmpty 
+                                        ? LinearGradient(
+                                            colors: [Colors.grey.shade300, Colors.grey.shade400],
                                           )
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                          ),
-
-                          // Semi-transparent gradient overlay at top for controls
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: 60,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withOpacity(0.7),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Close button with improved visibility
-                          Positioned(
-                            top: 12,
-                            right: 12,
-                            child: GestureDetector(
-                              onTap: removeOverlay,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Category badge with more prominence
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: CategoryUtils.getCategoryColor(category),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CategoryUtils.getCategoryIcon(category),
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    category.toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign
-                                        .right, // Help with RTL languages
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Content section with improved spacing and typography
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Title with better typography and proper RTL support
-                              if (title.isNotEmpty)
-                                Directionality(
-                                  textDirection: _isArabicText(title)
-                                      ? TextDirection.rtl
-                                      : TextDirection.ltr,
-                                  child: Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 20,
-                                    ),
-                                    textAlign: TextAlign
-                                        .start, // Help with RTL languages
-                                  ),
-                                ),
-
-                              if (title.isNotEmpty && content.isNotEmpty)
-                                const SizedBox(height: 12),
-
-                              // Content text with proper RTL support for Arabic
-                              if (content.isNotEmpty)
-                                Directionality(
-                                  textDirection: _isArabicText(content)
-                                      ? TextDirection.rtl
-                                      : TextDirection.ltr,
-                                  child: Text(
-                                    content,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color,
-                                    ),
-                                    textAlign: TextAlign
-                                        .start, // Help with RTL languages
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-
-                              const SizedBox(height: 16),
-
-                              // Date and time with icon
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.access_time,
-                                    size: 16,
-                                    color: Theme.of(context).hintColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      formattedDate,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Theme.of(context).hintColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Honesty rating as a pill instead of a bar (more modern)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: honestyColor.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color: honestyColor.withOpacity(0.3)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.verified_user,
-                                      size: 18,
-                                      color: honestyColor,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${honesty.toStringAsFixed(0)}% Honesty Rating',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: honestyColor,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 20),
-
-                              // View full post button with better styling
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    removeOverlay();
-
-                                    // Debug output to understand the author data structure
-                                    print(
-                                        'Author data from API: ${post['author']}');
-                                    print(
-                                        'Is anonymous flag: ${post['is_anonymous']}');
-
-                                    // Extract post details for navigation with proper encoding
-                                    final title =
-                                        post['title'] ?? 'Untitled Post';
-                                    final description = post['content'] ??
-                                        post['description'] ??
-                                        '';
-
-                                    // Apply UTF-8 decoding to ensure proper handling of Arabic text
-                                    final String decodedTitle =
-                                        (title.contains('Ù') ||
-                                                title.contains('Ø'))
-                                            ? utf8.decode(title.codeUnits,
-                                                allowMalformed: true)
-                                            : title;
-
-                                    final String decodedDescription =
-                                        (description.contains('Ù') ||
-                                                description.contains('Ø'))
-                                            ? utf8.decode(description.codeUnits,
-                                                allowMalformed: true)
-                                            : description;
-
-                                    // Debug output to confirm proper encoding is preserved
-                                    debugPrint(
-                                        '📝 Navigation - Post Title: $decodedTitle');
-                                    debugPrint(
-                                        '📝 Navigation - Post Title bytes: ${decodedTitle.codeUnits}');
-                                    debugPrint(
-                                        '📝 Navigation - Post Description: $decodedDescription');
-                                    debugPrint(
-                                        '📝 Navigation - Post Description bytes: ${decodedDescription.codeUnits}');
-
-                                    final imageUrl = thumbnailUrl ?? '';
-                                    final location = post['location'] != null
-                                        ? (post['location']['name'] ??
-                                            'Unknown location')
-                                        : 'Unknown location';
-                                    final time = formattedDate;
-                                    final honestyInt = honesty.toInt();
-                                    final upvotes = post['upvotes'] ?? 0;
-                                    final comments = post['comments_count'] ??
-                                        post['threads_count'] ??
-                                        0;
-                                    final isVerified =
-                                        post['is_verified'] ?? false;
-
-                                    // Navigate with all required parameters
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => PostDetailPage(
-                                          title: decodedTitle,
-                                          description: decodedDescription,
-                                          imageUrl: imageUrl,
-                                          location: location,
-                                          time: time,
-                                          honesty: honestyInt,
-                                          upvotes: upvotes,
-                                          comments: comments,
-                                          isVerified: isVerified,
-                                          // Create a Post object to ensure consistent marker styling
-                                          post: Post(
-                                            id: post['id'] ?? 0,
-                                            title: decodedTitle,
-                                            content: decodedDescription,
-                                            category:
-                                                category, // Pass category for consistent marker styling
-                                            imageUrl: imageUrl,
-                                            createdAt:
-                                                postDate ?? DateTime.now(),
-                                            honestyScore: honestyInt,
-                                            upvotes: upvotes,
-                                            downvotes: post['downvotes'] ?? 0,
-                                            userVote: 0,
-                                            mediaUrls: imageUrl.isNotEmpty
-                                                ? [imageUrl]
-                                                : [],
-                                            latitude: post['location']
-                                                        ['latitude']
-                                                    ?.toDouble() ??
-                                                0.0,
-                                            longitude: post['location']
-                                                        ['longitude']
-                                                    ?.toDouble() ??
-                                                0.0,
-                                            location: _createPostLocation(
-                                              location,
-                                              post['location']['latitude']
-                                                  ?.toDouble(),
-                                              post['location']['longitude']
-                                                  ?.toDouble(),
-                                            ),
-                                            author: _createPostAuthor(
-                                              post['author']?['id'] ?? 0,
-                                              post['is_anonymous'] == true
-                                                  ? 'Anonymous'
-                                                  : (post['author']
-                                                          ?['display_name'] ??
-                                                      post['author']
-                                                          ?['username'] ??
-                                                      'Anonymous'),
-                                              isVerified,
-                                              profileImage:
-                                                  post['is_anonymous'] == true
-                                                      ? null
-                                                      : post['author']
-                                                          ?['profile_picture'],
-                                            ),
-                                            status:
-                                                post['status'] ?? 'published',
-                                            isVerifiedLocation:
-                                                post['is_verified_location'] ??
-                                                    true,
-                                            takenWithinApp:
-                                                post['taken_within_app'] ??
-                                                    true,
-                                            isAnonymous:
-                                                post['is_anonymous'] ?? false,
-                                            tags: [],
+                                        : LinearGradient(
+                                            colors: [
+                                              ThemeConstants.green,
+                                              ThemeConstants.green.withOpacity(0.8),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
                                           ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: mediaUrls.isEmpty ? [] : [
+                                      BoxShadow(
+                                        color: ThemeConstants.green.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: mediaUrls.isEmpty 
+                                          ? null
+                                          : () {
+                                              removeOverlay();
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => ReelsPage(
+                                                    post: postObj,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              _hasVideoContent(mediaUrls) 
+                                                  ? Icons.play_circle_outline
+                                                  : Icons.photo_library_outlined,
+                                              size: 20,
+                                              color: mediaUrls.isEmpty ? Colors.grey.shade600 : Colors.white,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              mediaUrls.isEmpty 
+                                                  ? 'No Media'
+                                                  : (_hasVideoContent(mediaUrls) ? 'Videos' : 'Photos'),
+                                              style: TextStyle(
+                                                color: mediaUrls.isEmpty ? Colors.grey.shade600 : Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.article_outlined),
-                                  label: const Text('View Details'),
-                                  style: ElevatedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    backgroundColor:
-                                        Theme.of(context).primaryColor,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    elevation: 2,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
+                          
+                          // Additional info row with stats
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              // Upvotes
+                              _buildStatItem(
+                                icon: Icons.thumb_up_outlined,
+                                count: post['upvotes'] ?? 0,
+                                label: 'Upvotes',
+                                color: Colors.blue,
+                              ),
+                              // Comments
+                              _buildStatItem(
+                                icon: Icons.comment_outlined,
+                                count: post['comments_count'] ?? post['threads_count'] ?? 0,
+                                label: 'Comments',
+                                color: Colors.orange,
+                              ),
+                              // Verification status
+                              if (post['is_verified'] == true)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified, size: 14, color: Colors.green),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Verified',
+                                        style: TextStyle(
+                                          color: Colors.green,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1238,10 +1116,6 @@ class _MapPageState extends State<MapPage> {
       setState(() {
         // Direct replacement with the full list from MapCategories
         _selectedCategories = newCategories;
-
-        // Keep backward compatibility with _selectedCategory
-        _selectedCategory =
-            _selectedCategories.isNotEmpty ? _selectedCategories.first : null;
       });
 
       // Debug log after state change
@@ -1625,6 +1499,63 @@ class _MapPageState extends State<MapPage> {
           },
         ),
       ),
+    );
+  }
+
+  // Helper method to check if any of the media URLs points to a video
+  bool _hasVideoContent(List<String> urls) {
+    for (final url in urls) {
+      final lowerUrl = url.toLowerCase();
+      if (lowerUrl.endsWith('.mp4') || 
+          lowerUrl.endsWith('.mov') || 
+          lowerUrl.endsWith('.avi') || 
+          lowerUrl.endsWith('.webm') || 
+          lowerUrl.contains('video')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Helper method to build stat items for the speech bubble
+  Widget _buildStatItem({
+    required IconData icon,
+    required int count,
+    required String label,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          count.toString(),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+        ),
+      ],
     );
   }
 }
