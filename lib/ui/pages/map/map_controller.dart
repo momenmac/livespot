@@ -489,8 +489,12 @@ class MapPageController extends ChangeNotifier {
   void handleCategorySelected(List<CategoryItem> selectedCategories) {
     if (_isDisposed) return; // Safety check
 
-    // TODO: Filter map markers based on selected categories
-    // This would update the map based on category selection
+    // Extract category names from the selected category items
+    final categoryNames = selectedCategories.map((item) => item.name.toLowerCase()).toList();
+    
+    print('🔖 Controller received ${selectedCategories.length} categories: $categoryNames');
+    
+    // Notify listeners to update the UI and trigger API request with the new filters
     _safeNotifyListeners();
   }
 
@@ -501,11 +505,21 @@ class MapPageController extends ChangeNotifier {
   void handleDateChanged(DateTime newDate) {
     if (_isDisposed) return; // Safety check
 
+    // Format for logs to make debugging easier
+    final formattedDate = "${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}";
+    
+    print('📆 Date filter changed to: $formattedDate');
     selectedDate = newDate;
-    // TODO: Update map data based on the selected date
+    
+    // Update filter message for UI
     showInfoMessage(
         TextStrings.showingDataForDate.replaceFirst('%s', formatDate(newDate)));
+    
+    // Ensure this change is immediately reflected in the UI
     _safeNotifyListeners();
+    
+    // Log to make debugging easier
+    print('📣 Date change notification sent to listeners - API request will follow');
   }
 
   // Method to set a custom event marker on the map

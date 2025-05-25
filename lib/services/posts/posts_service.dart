@@ -205,13 +205,21 @@ class PostsService {
   Future<Map<String, dynamic>> voteOnPost({
     required int postId,
     required bool isUpvote,
+    int?
+        originalPostId, // Add parameter to track original post ID for related posts
   }) async {
     try {
-      final url = Uri.parse('$baseUrl/api/posts/$postId/vote/');
+      // Use the original post ID for the API call if provided (for related posts)
+      final effectivePostId = originalPostId ?? postId;
+      final url = Uri.parse('$baseUrl/api/posts/$effectivePostId/vote/');
       final headers = await _getHeaders();
 
       // Debug the request being sent
       debugPrint('Voting on post with URL: $url and isUpvote=$isUpvote');
+      if (originalPostId != null) {
+        debugPrint(
+            'Using original post ID $originalPostId for related post $postId');
+      }
 
       // Make sure to format the payload exactly as the server expects it
       final response = await http.post(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart'; // Import SchedulerBinding
-import 'dart:async'; // Import for Timer class
+import 'dart:async'; // For Timer
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/constants/category_utils.dart'; // Import for category styling
@@ -23,7 +23,6 @@ import 'package:flutter_application_2/services/auth/token_manager.dart'; // Impo
 import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
-import 'package:collection/collection.dart'; // Import for ListEquality
 
 class MapPage extends StatefulWidget {
   final VoidCallback? onBackPress;
@@ -42,8 +41,7 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   late final MapPageController _controller;
   final FocusNode _focusNode = FocusNode();
-  final TokenManager _tokenManager =
-      TokenManager(); // Add TokenManager instance
+  final TokenManager _tokenManager = TokenManager(); // Add TokenManager instance
 
   // Add state variables for location data
   List<dynamic> _mapLocations = [];
@@ -61,7 +59,7 @@ class _MapPageState extends State<MapPage> {
   List<dynamic>? _locationsCache;
   String? _lastCacheDateParam;
   List<String>? _lastCacheCategories;
-
+  
   // Debounce timer for location fetching
   Timer? _fetchDebounceTimer;
 
@@ -77,80 +75,28 @@ class _MapPageState extends State<MapPage> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _controller.initializeLocation();
-        
-        // IMPORTANT: Set today's date as default and ensure it's used in queries
-        final today = DateTime.now();
-        print('📅 Setting initial date filter to today: ${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}');
-        _controller.selectedDate = today;
-        
-        // Small delay to ensure controller is fully initialized
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) {
-            _debouncedFetchLocations();
-          }
-        });
+        // Fetch locations after initializing
+        _fetchMapLocations();
       }
     });
 
-    // Listen for controller changes and debounce to avoid multiple API calls
+    // Listen for controller changes - use debounce to avoid multiple API calls
     _controller.addListener(() {
-      print('🔄 Controller notified changes - Triggering debounced fetch');
-      // Debounce to prevent multiple rapid API calls
       _debouncedFetchLocations();
     });
   }
   
+  // Debounce method to prevent multiple rapid API calls
   void _debouncedFetchLocations() {
     // Cancel any previous timer
     _fetchDebounceTimer?.cancel();
     
-    // Start a new timer
+    // Start a new timer - wait 500ms before making API call
     _fetchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         _fetchMapLocations();
       }
     });
-    
-    // Debug message to verify debounce is working
-    print('🕒 Debounce timer started - delaying API request by 500ms');
-  }
-  
-  // Helper method to compare lists irrespective of order
-  bool _areListsEqual(List<String>? list1, List<String>? list2) {
-    // Handle null cases
-    if (list1 == null && list2 == null) {
-      return true;
-    }
-    if (list1 == null || list2 == null) {
-      print('📊 One list is null, not equal');
-      return false;
-    }
-    
-    // If both lists are empty, they're equal
-    if (list1.isEmpty && list2.isEmpty) {
-      return true;
-    }
-    
-    // Quick length check
-    if (list1.length != list2.length) {
-      print('📊 List length mismatch: ${list1.length} vs ${list2.length}');
-      return false;
-    }
-    
-    // Sort copies of the lists for comparison (case insensitive)
-    final sorted1 = List<String>.from(list1)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final sorted2 = List<String>.from(list2)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    
-    // Compare each element (case insensitive)
-    for (int i = 0; i < sorted1.length; i++) {
-      if (sorted1[i].toLowerCase() != sorted2[i].toLowerCase()) {
-        print('📊 List element mismatch at position $i: "${sorted1[i]}" vs "${sorted2[i]}"');
-        return false;
-      }
-    }
-    
-    // All elements match
-    return true;
   }
 
   @override
@@ -161,52 +107,45 @@ class _MapPageState extends State<MapPage> {
     super.dispose();
   }
 
+  // Helper method to compare lists irrespective of order
+  bool _areListsEqual(List<String>? list1, List<String>? list2) {
+    if (list1 == null || list2 == null) return list1 == list2;
+    if (list1.length != list2.length) return false;
+    
+    // Sort copies of the lists for comparison
+    final sorted1 = List<String>.from(list1)..sort();
+    final sorted2 = List<String>.from(list2)..sort();
+    
+    for (var i = 0; i < sorted1.length; i++) {
+      if (sorted1[i] != sorted2[i]) return false;
+    }
+    return true;
+  }
+
   // Method to fetch location data from the API
   Future<void> _fetchMapLocations() async {
     if (!mounted) return;
 
-    final DateTime? selectedDate = _controller.selectedDate;
+    // Format the date for the API request - only if it's different from today
+    final today = DateTime.now();
+    final selectedDate = _controller.selectedDate;
     
-    // Force setting today's date if no date is selected
-    if (selectedDate == null) {
-      print('⚠️ No date selected - forcing today\'s date to ensure proper filtering');
-      _controller.selectedDate = DateTime.now();
-      // Wait for the controller to update before proceeding
-      await Future.delayed(const Duration(milliseconds: 50));
-      // Try again with the date set
-      if (mounted) _fetchMapLocations();
-      return;
-    }
-    
-    // ALWAYS include the date parameter when selectedDate is available
-    String? dateParam;
-    
-    if (selectedDate != null) {
-      // Format date as YYYY-MM-DD (always include date parameter regardless of whether it's today)
-      dateParam = "${selectedDate.year}-"
-                "${selectedDate.month.toString().padLeft(2, '0')}-"
-                "${selectedDate.day.toString().padLeft(2, '0')}";
-      
-      print('📆 Using date parameter: $dateParam');
-    } else {
-      print('⚠️ No date selected! This will fetch ALL posts without date filtering');
-    }
+    final dateParam = selectedDate != null && 
+        (selectedDate.year != today.year || 
+         selectedDate.month != today.month || 
+         selectedDate.day != today.day)
+        ? "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}"
+        : null;
 
-    // Convert selected categories to a sorted list for consistent comparison
-    final sortedCategories = List<String>.from(_selectedCategories)..sort();
-    
     // Print debug info about the current request
-    print('🔍 Fetch request - Date: $dateParam, Categories: $sortedCategories');
+    print('🔍 Fetch request - Date: $dateParam, Categories: $_selectedCategories');
     
-    // Check if we can use the cache - with deep comparison of category lists
-    if (_locationsCache != null && 
+    // Check if we can use the cache - with proper comparison of category lists
+    if (_locationsCache != null &&
         _lastCacheDateParam == dateParam &&
-        _areListsEqual(_lastCacheCategories, sortedCategories)) {
+        _areListsEqual(_lastCacheCategories, _selectedCategories)) {
       
       print('✅ Using cache - Avoiding network request');
-      print('   Cache hits - Date: "$_lastCacheDateParam" = "$dateParam"');
-      print('   Cache hits - Categories: $_lastCacheCategories = $sortedCategories');
-      
       setState(() {
         _mapLocations = _locationsCache!;
         _isLoadingLocations = false;
@@ -220,8 +159,8 @@ class _MapPageState extends State<MapPage> {
     if (_lastCacheDateParam != dateParam) {
       print('  - Date changed: $_lastCacheDateParam → $dateParam');
     }
-    if (!_areListsEqual(_lastCacheCategories, sortedCategories)) {
-      print('  - Categories changed: $_lastCacheCategories → $sortedCategories');
+    if (!_areListsEqual(_lastCacheCategories, _selectedCategories)) {
+      print('  - Categories changed: $_lastCacheCategories → $_selectedCategories');
     }
 
     setState(() {
@@ -234,57 +173,18 @@ class _MapPageState extends State<MapPage> {
       String url = ApiUrls.posts;
       final queryParams = <String, String>{};
 
-      // ALWAYS add date parameter when available - this is essential for filtering
       if (dateParam != null) {
         queryParams['date'] = dateParam;
-        print('🗓️ Adding date filter to URL: date=$dateParam');
-      } else {
-        print('⚠️ Warning: No date parameter available for filtering!');
       }
 
       // Send all selected categories as a single comma-separated value
       if (_selectedCategories.isNotEmpty) {
-        // Clean up and normalize category values
-        final normalizedCategories = _selectedCategories
-            .where((cat) => cat.isNotEmpty) // Filter out empty strings
-            .map((cat) => cat.trim().toLowerCase()) // Normalize format
-            .toList();
-            
-        if (normalizedCategories.isNotEmpty) {
-          // Based on the server logs, it appears the server is expecting a single category
-          // Try the last selected category (most recent selection)
-          final lastSelectedCategory = normalizedCategories.last;
-          queryParams['category'] = lastSelectedCategory;
-          print('📂 Adding category filter: category=$lastSelectedCategory');
-          
-          // Also include all categories parameter (just in case server starts supporting it)
-          if (normalizedCategories.length > 1) {
-            final allCategories = normalizedCategories.join(',');
-            queryParams['categories'] = allCategories;
-            print('📂 Adding all categories as backup: categories=$allCategories');
-          }
-          
-          // Debug info to check what's being sent
-          print('📂 Category filter type: ${normalizedCategories.runtimeType}, values: $normalizedCategories');
-          print('📂 Using most recent category selection: $lastSelectedCategory');
-        }
+        queryParams['category'] = _selectedCategories.join(',');
       }
 
       if (queryParams.isNotEmpty) {
-        // Encode URI components properly to handle special characters
-        final encodedParams = queryParams.entries.map((e) => 
-          '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}'
-        ).join('&');
-        url += '?$encodedParams';
-        
-        // Log the final encoded URL
-        print('🌐 Encoded API URL: $url');
-      }
-      
-      // Extra clear logging to help debug API requests
-      print('🌐 Final API request URL: $url');
-      if (dateParam == null) {
-        print('⚠️ WARNING: Making request WITHOUT date parameter!');
+        url +=
+            '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
       }
 
       // Debug the actual URL being sent
@@ -320,10 +220,6 @@ class _MapPageState extends State<MapPage> {
         print('❌ Error response body: ${response.body}');
       }
 
-      print(
-          'Fetching posts with URL: $url and headers: ${response.request?.headers}');
-      print('Posts API response status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print('✅ Successful response data: $data');
@@ -338,14 +234,6 @@ class _MapPageState extends State<MapPage> {
           // Get the current page results
           final List<dynamic> currentResults = data['results'];
           final String? nextPageUrl = data['next'];
-
-          // Add current results to our locations
-          List<dynamic> allLocations = List.from(_mapLocations)
-            ..addAll(currentResults);
-
-          setState(() {
-            _mapLocations = allLocations;
-          });
 
           // Display first page results immediately
           setState(() {
@@ -394,11 +282,10 @@ class _MapPageState extends State<MapPage> {
           });
           print(
               '✅ All pages fetched. Total locations: ${_mapLocations.length}');
-          // Cache the results with deep copy to avoid reference issues
-          _locationsCache = List<dynamic>.from(_mapLocations);
+          // Cache the results
+          _locationsCache = _mapLocations;
           _lastCacheDateParam = dateParam;
-          _lastCacheCategories = _selectedCategories.isEmpty ? [] : List<String>.from(_selectedCategories);
-          print('📦 Updated cache - Date: $dateParam, Categories: $_lastCacheCategories');
+          _lastCacheCategories = List.from(_selectedCategories);
         } else {
           print('⚠️ Non-paginated response detected');
           setState(() {
@@ -406,19 +293,18 @@ class _MapPageState extends State<MapPage> {
             _isLoadingLocations = false;
             _addMarkersToMap();
           });
-          // Cache the results with deep copy to avoid reference issues
-          _locationsCache = List<dynamic>.from(_mapLocations);
+          // Cache the results
+          _locationsCache = _mapLocations;
           _lastCacheDateParam = dateParam;
-          _lastCacheCategories = _selectedCategories.isEmpty ? [] : List<String>.from(_selectedCategories);
-          print('📦 Updated cache (non-paginated) - Date: $dateParam, Categories: $_lastCacheCategories');
+          _lastCacheCategories = List.from(_selectedCategories);
         }
 
-        // Always call _addMarkersToMap after updating _mapLocations
-        // This ensures the map is updated whether or not we have locations
-        setState(() {
-          // This will clear markers if _mapLocations is empty
-          _addMarkersToMap();
-        });
+        if (_mapLocations.isEmpty) {
+          print(
+              'No locations found for the selected filters - markers cleared');
+          _mapMarkers.clear();
+          setState(() {}); // Trigger a rebuild to show the empty map
+        }
       } else {
         print('❌ Error status code: ${response.statusCode}');
         final errorMessage =
@@ -455,18 +341,11 @@ class _MapPageState extends State<MapPage> {
 
   // Add post markers to the map
   void _addMarkersToMap() {
-    // Always clear existing markers first
-    _mapMarkers.clear();
-    
-    // Early return if no locations - this effectively removes all markers
-    if (_mapLocations.isEmpty) {
-      print('🗺️ No locations to show on map - all markers cleared');
-      setState(() {}); // Ensure UI updates with empty map
-      return;
-    }
+    if (_mapLocations.isEmpty) return;
 
-    print('🗺️ Adding ${_mapLocations.length} markers to map');
-    
+    // Clear existing markers
+    _mapMarkers.clear();
+
     // Add new markers for each location
     for (final post in _mapLocations) {
       if (post['location'] != null) {
@@ -477,25 +356,19 @@ class _MapPageState extends State<MapPage> {
           if (latitude != null && longitude != null) {
             final category = post['category'] ?? 'general';
 
-            // Only add markers that match the selected category filter if any is selected
-            final shouldAddMarker = _selectedCategories.isEmpty || 
-                _selectedCategories.contains(category.toLowerCase());
-                
-            if (shouldAddMarker) {
-              // Add marker with just the icon (no text) - smaller size
-              _mapMarkers.add(
-                Marker(
-                  height: 38, // Reduced from 42 to 38
-                  width: 38, // Reduced from 42 to 38
-                  point: LatLng(latitude, longitude),
-                  child: GestureDetector(
-                    onTap: () => _showMarkerPopover(
-                        context, post, LatLng(latitude, longitude)),
-                    child: _buildMarkerIcon(category),
-                  ),
+            // Add marker with just the icon (no text) - smaller size
+            _mapMarkers.add(
+              Marker(
+                height: 38, // Reduced from 42 to 38
+                width: 38, // Reduced from 42 to 38
+                point: LatLng(latitude, longitude),
+                child: GestureDetector(
+                  onTap: () => _showMarkerPopover(
+                      context, post, LatLng(latitude, longitude)),
+                  child: _buildMarkerIcon(category),
                 ),
-              );
-            }
+              ),
+            );
           }
         } catch (e) {
           debugPrint("Error adding marker for post ID ${post['id']}: $e");
@@ -625,8 +498,6 @@ class _MapPageState extends State<MapPage> {
       thumbnailUrl = '${ApiUrls.baseUrl}$thumbnailUrl';
       print('Converted to absolute URL: $thumbnailUrl');
     }
-
-    // If still no thumbnail but we have a category, we'll show a fallback icon
 
     // Fix for honesty rate - handle different possible structures and formats
     double honesty = 0.0;
@@ -1193,49 +1064,29 @@ class _MapPageState extends State<MapPage> {
   // Method to handle category selection - updated for multiple categories
   void _handleCategorySelected(List<CategoryItem> selectedCategories) {
     print(
-        '🔖 Received ${selectedCategories.length} categories from MapCategories widget');
+        'DEBUG: Received ${selectedCategories.length} categories from MapCategories widget');
 
-    // Convert category items to lowercase strings and normalize
-    final newCategories = selectedCategories
-        .map((item) => item.name.trim().toLowerCase())
-        .toList();
+    final newCategories =
+        selectedCategories.map((item) => item.name.toLowerCase()).toList();
 
-    // Log before state change with more details
-    print('🔖 Current categories before update: $_selectedCategories');
-    print('🔖 New categories to set: $newCategories');
-    
-    // Print each selected category for debugging
-    for (int i = 0; i < selectedCategories.length; i++) {
-      print('🔖 Category ${i+1}: ${selectedCategories[i].name} (${selectedCategories[i].icon})');
-    }
+    // Log before state change
+    print('DEBUG: Current categories before update: $_selectedCategories');
+    print('DEBUG: New categories to set: $newCategories');
 
-    // Check if categories actually changed before updating state
-    if (!_areListsEqual(_selectedCategories, newCategories)) {
-      print('🔖 Categories have changed - updating state and triggering fetch');
-      
-      // Clear the cache when categories change to force a new API request
-      _locationsCache = null;
-      _lastCacheCategories = null;
-      
-      setState(() {
-        // Direct replacement with the full list from MapCategories
-        _selectedCategories = newCategories;
+    setState(() {
+      // Direct replacement with the full list from MapCategories
+      _selectedCategories = newCategories;
 
-        // Keep backward compatibility with _selectedCategory
-        _selectedCategory =
-            _selectedCategories.isNotEmpty ? _selectedCategories.first : null;
-      });
+      // Keep backward compatibility with _selectedCategory
+      _selectedCategory =
+          _selectedCategories.isNotEmpty ? _selectedCategories.first : null;
+    });
 
-      // Debug log after state change
-      print('🔖 Categories changed - State updated');
-      print('🔖 Selected categories after update: $_selectedCategories');
+    // Debug log after state change
+    print('DEBUG: Selected categories after update: $_selectedCategories');
 
-      // Use debounced fetch instead of direct fetch to avoid rapid API calls
-      print('🔖 Triggering debounced location fetch with new categories');
-      _debouncedFetchLocations();
-    } else {
-      print('🔖 Categories unchanged - No fetch needed');
-    }
+    // Refresh locations with the new filter - will be debounced now
+    _debouncedFetchLocations();
   }
 
   // Helper method to create PostCoordinates instance
@@ -1345,7 +1196,8 @@ class _MapPageState extends State<MapPage> {
             ),
           ),
         ),
-      ));
+      ),
+    );
   }
 
   @override
@@ -1570,8 +1422,7 @@ class _MapPageState extends State<MapPage> {
               padding: EdgeInsets.only(
                   bottom: MediaQuery.of(context).padding.bottom + 10),
               child: Column(
-                mainAxisSize: MainAxisSize
-                    .min, // Use min size to avoid taking too much space
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   FloatingActionButton(

@@ -31,6 +31,9 @@ class PostDetailPage extends StatefulWidget {
   final Post? post; // Add post parameter
   final String? distance; // Add optional distance parameter
   final String? authorName; // Add optional author name parameter
+  final int? downvotes; // Add optional downvotes parameter
+  final int?
+      originalPostId; // Add originalPostId for tracking parent post ID for related posts
 
   const PostDetailPage({
     super.key,
@@ -46,6 +49,8 @@ class PostDetailPage extends StatefulWidget {
     this.post, // Make it optional for backward compatibility
     this.distance,
     this.authorName,
+    this.downvotes, // Optional downvotes parameter
+    this.originalPostId, // Optional original post ID for related posts
   });
 
   @override
@@ -76,6 +81,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
     super.initState();
     // Initialize with values from widget
     _upvotes = widget.upvotes;
+    // Initialize downvotes from widget if available
+    _downvotes = widget.downvotes ?? 0;
 
     // Debug prints for Arabic text
     developer.log('🔍 Initializing Post Detail Page with:',
@@ -250,7 +257,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
 
     try {
-      // Call the API with the correct parameters
+      // Check if this is a related post and log the attempt
+      if (widget.post!.relatedPostId != null) {
+        debugPrint(
+            'Upvoting related post ${widget.post!.id} with original post ID ${widget.post!.relatedPostId}');
+      } else {
+        debugPrint('Upvoting main post ${widget.post!.id}');
+      }
+
+      // Call the API with the correct parameters - the provider will handle the related post case
       final result = await postsProvider.voteOnPost(widget.post!, isUpvote);
 
       if (!mounted) return; // Add check before using context
@@ -363,9 +378,16 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
 
     try {
+      // Check if this is a related post and log the attempt
+      if (widget.post!.relatedPostId != null) {
+        debugPrint(
+            'Downvoting related post ${widget.post!.id} with original post ID ${widget.post!.relatedPostId}');
+      } else {
+        debugPrint('Downvoting main post ${widget.post!.id}');
+      }
+
       // Call the API with the correct parameters
-      // For removing a downvote, we'd need a separate call to reset to neutral
-      // which would be similar to the upvote flow but with isUpvote=null
+      // The provider will handle using the original post ID if this is a related post
       final result = await postsProvider.voteOnPost(widget.post!, isUpvote);
 
       if (result.isNotEmpty) {
@@ -542,11 +564,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
   // Helper method to check if media is a video
   bool _isVideoFile(String url) {
     final String lowerUrl = url.toLowerCase();
-    return lowerUrl.contains('.mp4') || 
-           lowerUrl.contains('.mov') || 
-           lowerUrl.contains('.avi') || 
-           lowerUrl.contains('.mkv') ||
-           lowerUrl.contains('.webm');
+    return lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm');
   }
 
   // Helper method to check if a string is a file path or URL
@@ -566,7 +588,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         } else {
           _videoController = VideoPlayerController.network(mediaUrl);
         }
-        
+
         await _videoController!.initialize();
         setState(() {
           _isVideoInitialized = true;
@@ -578,11 +600,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   // Widget to display either network image, file image, or video
-  Widget _buildMediaWidget(String mediaUrl, {BoxFit fit = BoxFit.cover, bool isClickable = true}) {
+  Widget _buildMediaWidget(String mediaUrl,
+      {BoxFit fit = BoxFit.cover, bool isClickable = true}) {
     final String fixedMediaUrl = _getFixedImageUrl(mediaUrl);
-    
+
     Widget mediaWidget;
-    
+
     if (_isVideoFile(fixedMediaUrl)) {
       // Video widget
       mediaWidget = _buildVideoThumbnail(fixedMediaUrl, fit);
@@ -615,7 +638,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         child: mediaWidget,
       );
     }
-    
+
     return mediaWidget;
   }
 
@@ -1351,227 +1374,231 @@ class _PostDetailPageState extends State<PostDetailPage> {
   // Updated method to build a thread post item with video support
   Widget _buildRelatedPostItem(Post post) {
     final bool isMainPost = post.relatedPostId == null;
+
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PostDetailPage(
-              title: post.title,
-              description: post.content,
-              imageUrl: post.imageUrl,
-              location: post.location.address ?? "Unknown location",
-              time: TimeFormatter.getFormattedTime(post.createdAt),
-              honesty: post.honestyScore,
-              upvotes: post.upvotes,
-              comments: 0,
-              isVerified: post.isVerifiedLocation,
-              post: post,
-              authorName: post.getDisplayName(),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailPage(
+                title: post.title,
+                description: post.content,
+                imageUrl: post.imageUrl,
+                location: post.location.address ?? "Unknown location",
+                time: TimeFormatter.getFormattedTime(post.createdAt),
+                honesty: post.honestyScore,
+                upvotes: post.upvotes,
+                downvotes: post.downvotes,
+                comments: 0,
+                isVerified: post.isVerifiedLocation,
+                post: post,
+                authorName: post.getDisplayName(),
+                distance: _formatDistance(post.distance * 1000),
+              ),
+            ),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isMainPost
+                ? (Theme.of(context).brightness == Brightness.dark
+                    ? ThemeConstants.primaryColor.withAlpha(26)
+                    : ThemeConstants.primaryColor.withAlpha(13))
+                : (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[800]
+                    : Colors.grey[50]),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isMainPost
+                  ? ThemeConstants.primaryColor.withAlpha(77)
+                  : (Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[700]!
+                      : Colors.grey[300]!),
+              width: isMainPost ? 2 : 1,
             ),
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isMainPost
-              ? (Theme.of(context).brightness == Brightness.dark
-                  ? ThemeConstants.primaryColor.withAlpha(26)
-                  : ThemeConstants.primaryColor.withAlpha(13))
-              : (Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[800]
-                  : Colors.grey[50]),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isMainPost
-                ? ThemeConstants.primaryColor.withAlpha(77)
-                : (Theme.of(context).brightness == Brightness.dark
-                    ? Colors.grey[700]!
-                    : Colors.grey[300]!),
-            width: isMainPost ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Author and time row
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundImage: post.authorProfilePic != null &&
-                          post.authorProfilePic!.isNotEmpty
-                      ? NetworkImage(_getFixedImageUrl(post.authorProfilePic!))
-                      : null,
-                  radius: 12,
-                  child: (post.authorProfilePic == null ||
-                          post.authorProfilePic!.isEmpty)
-                      ? const Icon(Icons.person, size: 16)
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            post.getDisplayName(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          if (post.isAuthorVerified)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.verified,
-                                size: 12,
-                                color: ThemeConstants.primaryColor,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Author and time row
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundImage: post.authorProfilePic != null &&
+                            post.authorProfilePic!.isNotEmpty
+                        ? NetworkImage(
+                            _getFixedImageUrl(post.authorProfilePic!))
+                        : null,
+                    radius: 12,
+                    child: (post.authorProfilePic == null ||
+                            post.authorProfilePic!.isEmpty)
+                        ? const Icon(Icons.person, size: 16)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              post.getDisplayName(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
                               ),
                             ),
-                          if (isMainPost)
-                            Container(
-                              margin: const EdgeInsets.only(left: 6),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: ThemeConstants.primaryColor,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                'MAIN',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
+                            if (post.isAuthorVerified)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 12,
+                                  color: ThemeConstants.primaryColor,
                                 ),
                               ),
-                            ),
-                        ],
+                            if (isMainPost)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: ThemeConstants.primaryColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'MAIN',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        Text(
+                          TimeFormatter.getFormattedTime(post.createdAt),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ThemeConstants.primaryColor.withAlpha(26),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _formatDistance(post.distance * 1000),
+                      style: TextStyle(
+                        color: ThemeConstants.primaryColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Post title
+              Text(
+                post.title,
+                style: TextStyle(
+                  fontWeight: isMainPost ? FontWeight.bold : FontWeight.w600,
+                  fontSize: isMainPost ? 15 : 14,
+                  color: isMainPost ? ThemeConstants.primaryColor : null,
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Post content (truncated)
+              Text(
+                post.content,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+              // Show media if available
+              if (post.hasMedia) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    height: 120,
+                    width: double.infinity,
+                    child: _buildMediaWidget(post.imageUrl, fit: BoxFit.cover),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              // Post stats row
+              Row(
+                children: [
+                  // Upvotes
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.arrow_upward_outlined,
+                        color: Colors.grey[600],
+                        size: 16,
+                      ),
+                      const SizedBox(width: 2),
                       Text(
-                        TimeFormatter.getFormattedTime(post.createdAt),
+                        '${post.upvotes}',
                         style: TextStyle(
                           color: Colors.grey[600],
-                          fontSize: 11,
+                          fontSize: 12,
                         ),
                       ),
                     ],
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: ThemeConstants.primaryColor.withAlpha(26),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _formatDistance(post.distance * 1000),
-                    style: TextStyle(
-                      color: ThemeConstants.primaryColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  // Honesty score
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getHonestyScoreColor(post.honestyScore)
+                          .withAlpha(26),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Post title
-            Text(
-              post.title,
-              style: TextStyle(
-                fontWeight: isMainPost ? FontWeight.bold : FontWeight.w600,
-                fontSize: isMainPost ? 15 : 14,
-                color: isMainPost ? ThemeConstants.primaryColor : null,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Post content (truncated)
-            Text(
-              post.content,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13),
-            ),
-            // Show media if available
-            if (post.hasMedia) ...[
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: SizedBox(
-                  height: 120,
-                  width: double.infinity,
-                  child: _buildMediaWidget(post.imageUrl, fit: BoxFit.cover),
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            // Post stats row
-            Row(
-              children: [
-                // Upvotes
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.arrow_upward_outlined,
-                      color: Colors.grey[600],
-                      size: 16,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      '${post.upvotes}',
+                    child: Text(
+                      '${post.honestyScore}%',
                       style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
+                        color: _getHonestyScoreColor(post.honestyScore),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                // Honesty score
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color:
-                        _getHonestyScoreColor(post.honestyScore).withAlpha(26),
-                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(
-                    '${post.honestyScore}%',
+                  const Spacer(),
+                  // Tap to view full post
+                  Text(
+                    'Tap to view full post',
                     style: TextStyle(
-                      color: _getHonestyScoreColor(post.honestyScore),
+                      color: ThemeConstants.primaryColor,
                       fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                ),
-                const Spacer(),
-                // Tap to view full post
-                Text(
-                  'Tap to view full post',
-                  style: TextStyle(
-                    color: ThemeConstants.primaryColor,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ));
+                ],
+              ),
+            ],
+          ),
+        ));
   }
 
   // Modify _buildAdditionalActionButtons to send correct related post ID

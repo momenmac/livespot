@@ -239,9 +239,19 @@ class PostsProvider with ChangeNotifier {
   // Vote on a post
   Future<Map<String, dynamic>> voteOnPost(Post post, bool isUpvote) async {
     try {
+      // Check if this is a related post, and if so, use the original post ID
+      int? originalPostId;
+      if (post.relatedPostId != null) {
+        // If this post is a related post, use its relatedPostId for the API call
+        originalPostId = post.relatedPostId;
+        debugPrint(
+            'Using original post ID ${post.relatedPostId} for related post ${post.id}');
+      }
+
       final result = await _postsService.voteOnPost(
         postId: post.id,
         isUpvote: isUpvote,
+        originalPostId: originalPostId,
       );
 
       // Update post with new vote counts
