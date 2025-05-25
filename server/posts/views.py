@@ -7,13 +7,10 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
 import math  # Adding missing math import
-from .models import Post, Thread, PostVote, PostThread
+from .models import Post, PostVote
 from .serializers import (
     PostSerializer, 
-    ThreadSerializer, 
-    ThreadDetailSerializer,
-    PostVoteSerializer,
-    PostThreadSerializer
+    PostVoteSerializer
 )
 
 class IsAuthorOrReadOnly(permissions.BasePermission):
@@ -39,7 +36,7 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.save()
     
     def get_queryset(self):
-        queryset = Post.objects.select_related('author', 'location', 'thread')
+        queryset = Post.objects.select_related('author', 'location')
         
         # Filter by category if provided
         category = self.request.query_params.get('category')
@@ -375,7 +372,7 @@ class PostViewSet(viewsets.ModelViewSet):
                     'imageUrl': post.media_urls[0] if post.media_urls else '',
                     'upvotes': post.upvotes,
                     'honesty_score': post.honesty_score,
-                    'comments': post.thread.posts.count() if post.thread else 0,
+                    'comments': 0,  # Thread functionality removed
                     'isVerified': post.is_verified_location,
                     'is_admin': post.author.is_admin,
                     'location': {
@@ -395,152 +392,3 @@ class PostViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to retrieve stories: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-class ThreadViewSet(viewsets.ModelViewSet):
-    queryset = Thread.objects.all()
-    serializer_class = ThreadSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return ThreadDetailSerializer
-        return ThreadSerializer
-    
-    def get_queryset(self):
-        queryset = Thread.objects.all()
-        
-        # Filter by category if provided
-        category = self.request.query_params.get('category')
-        if category:
-            queryset = queryset.filter(category=category)
-        
-        # Filter by date if provided
-        date = self.request.query_params.get('date')
-        if date:
-            queryset = queryset.filter(created_at__date=date)
-        
-        # Filter by tag if provided
-        tag = self.request.query_params.get('tag')
-        if tag:
-            queryset = queryset.filter(tags__contains=[tag])
-            
-        return queryset
-    
-    @action(detail=False, methods=['get'])
-    def nearby(self, request):
-        """Get threads near a specific location"""
-        import math
-        
-        try:
-            lat = float(request.query_params.get('lat', 0))
-            lng = float(request.query_params.get('lng', 0))
-            radius = int(request.query_params.get('radius', 1000))  # meters
-        except (ValueError, TypeError):
-            return Response(
-                {"error": "Invalid parameters. lat, lng must be floats, radius must be integer"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Approximate 1 degree of lat/lng in meters
-        # Rough conversion that works for small distances
-        lat_range = radius / 111320.0  # 1 degree of latitude is approximately 111,320 meters
-        # Longitude distance varies with latitude
-        lng_range = radius / (111320.0 * abs(math.cos(math.radians(lat))))
-        
-        # Filter threads within the bounding box
-        queryset = self.get_queryset().filter(
-            location__latitude__range=(lat - lat_range, lat + lat_range),
-            location__longitude__range=(lng - lng_range, lng + lng_range)
-        ).prefetch_related('posts')
-        
-        # Apply category filter if provided
-        category = request.query_params.get('category')
-        if category:
-            queryset = queryset.filter(category=category)
-            
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = ThreadDetailSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-            
-        serializer = ThreadDetailSerializer(queryset, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def add_post(self, request, pk=None):
-        """Add a post to a thread"""
-        thread = self.get_object()
-        post_data = request.data.copy()
-        post_data['thread'] = thread.id
-        
-        serializer = PostSerializer(data=post_data, context={'request': request})
-        if serializer.is_valid():
-            post = serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class PostThreadViewSet(viewsets.ModelViewSet):
-    serializer_class = PostThreadSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAuthorOrReadOnly]
-    
-    def get_queryset(self):
-        # Get threads for a specific post if post_id is provided
-        post_id = self.request.query_params.get('post_id')
-        if post_id:
-            return PostThread.objects.filter(post_id=post_id).select_related('author', 'post')
-        return PostThread.objects.all().select_related('author', 'post')
-    
-    def perform_create(self, serializer):
-        """Create a new thread with location verification"""
-        post_id = serializer.validated_data.get('post').id
-        try:
-            post = Post.objects.get(id=post_id)
-            
-            # Verify the user's location is close to the post's location
-            user_lat = self.request.data.get('user_latitude')
-            user_lng = self.request.data.get('user_longitude')
-            
-            if user_lat and user_lng:
-                # Convert to float
-                user_lat = float(user_lat)
-                user_lng = float(user_lng)
-                
-                # Calculate the distance between user and post location
-                import math
-                
-                # Earth's radius in meters
-                R = 6371000  
-                
-                # Convert latitude and longitude from degrees to radians
-                lat1_rad = math.radians(user_lat)
-                lng1_rad = math.radians(user_lng)
-                lat2_rad = math.radians(post.location.latitude)
-                lng2_rad = math.radians(post.location.longitude)
-                
-                # Haversine formula to calculate distance
-                dlat = lat2_rad - lat1_rad
-                dlng = lng2_rad - lng1_rad
-                a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlng/2) * math.sin(dlng/2)
-                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-                distance = R * c  # Distance in meters
-                
-                # Set the is_verified_location flag if user is within 1000 meters
-                is_verified = distance <= 1000  # Within 1km
-                serializer.save(is_verified_location=is_verified)
-            else:
-                # If user location not provided, set as not verified
-                serializer.save(is_verified_location=False)
-        except Post.DoesNotExist:
-            # If post doesn't exist, still create the thread but mark as not verified
-            serializer.save(is_verified_location=False)
-    
-    def create(self, request, *args, **kwargs):
-        """Override create to enforce image requirement"""
-        # Check if media URL is provided
-        if not request.data.get('media_url'):
-            return Response(
-                {"error": "An image is required to create a thread"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        return super().create(request, *args, **kwargs)

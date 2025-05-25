@@ -62,6 +62,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _mapInitialized = false; // Remove 'late' as it's initialized here
   bool _isLoadingVote = false; // Add loading state for vote operations
   bool _isLoading = false; // Add loading state for save operations
+  bool _isCalculatingDistance =
+      false; // Add loading state for distance calculation
 
   // Real threads data, initialized empty
   List<Map<String, dynamic>> _threads = [];
@@ -109,6 +111,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       debugPrint('   - ID: ${widget.post!.id}');
       debugPrint('   - Title: ${widget.post!.title}');
       debugPrint('   - Content: ${widget.post!.content}');
+      debugPrint('   - Initial distance: ${widget.post!.distance}');
 
       setState(() {
         // Initialize vote counts from the actual post data
@@ -128,24 +131,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       });
 
-      // Always recalculate distance from user's current location if not set or zero
-      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN)) {
-        final locationService = LocationService();
-        try {
-          final userPosition = await locationService.getCurrentPosition();
-          final double calculatedDistance = locationService.calculateDistance(
-            userPosition.latitude,
-            userPosition.longitude,
-            widget.post!.latitude,
-            widget.post!.longitude,
-          );
-          setState(() {
-            widget.post!.distance = calculatedDistance; // Store in meters
-          });
-        } catch (e) {
-          // Could not get user location, leave distance as 0
-        }
-      }
+      // Always try to calculate distance, with proper error handling
+      _calculateDistanceWithErrorHandling();
 
       // Log initialization for debugging
       developer.log(
@@ -679,6 +666,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Helper method to format distance properly in km or m
   String _formatDistance(double? distanceInMeters) {
+    // If we're currently calculating distance, show loading state
+    if (_isCalculatingDistance) {
+      return 'Calculating...';
+    }
+
     // Always use post.distance in meters if available
     if (widget.post?.distance != null && widget.post!.distance > 0) {
       double meters = widget.post!.distance;
@@ -713,8 +705,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       }
     }
-    // Default: show 300m instead of "Nearby"
-    return '300 m';
+    // Default: show "Nearby" instead of hardcoded distance
+    return 'Nearby';
   }
 
   // Navigate to the user's profile
@@ -774,6 +766,150 @@ class _PostDetailPageState extends State<PostDetailPage> {
           duration: Duration(seconds: 2),
         ),
       );
+    }
+  }
+
+  // Wrapper method to safely calculate distance with proper error handling
+  void _calculateDistanceWithErrorHandling() {
+    // Set loading state
+    setState(() {
+      _isCalculatingDistance = true;
+    });
+
+    // Use a post-frame callback to avoid issues during widget initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || widget.post == null) {
+        if (mounted) {
+          setState(() {
+            _isCalculatingDistance = false;
+          });
+        }
+        return;
+      }
+
+      try {
+        developer.log(
+          'Starting distance calculation for post ${widget.post!.id}...',
+          name: 'PostDetailPage',
+        );
+
+        // Always try to calculate distance, regardless of current value
+        await _calculateDistance();
+      } catch (e) {
+        developer.log(
+          'Error in distance calculation wrapper: $e',
+          name: 'PostDetailPage',
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isCalculatingDistance = false;
+          });
+        }
+      }
+    });
+  }
+
+  // Improved distance calculation with retry logic and better error handling
+  Future<void> _calculateDistance(
+      {int retryCount = 0, int maxRetries = 3}) async {
+    if (widget.post == null) return;
+
+    final locationService = LocationService();
+
+    try {
+      developer.log(
+        'Attempting distance calculation (attempt ${retryCount + 1}/$maxRetries)',
+        name: 'PostDetailPage',
+      );
+
+      // Get user position with timeout
+      final userPosition = await locationService
+          .getCurrentPosition()
+          .timeout(const Duration(seconds: 10));
+
+      // Validate post coordinates
+      if (widget.post!.latitude == 0.0 && widget.post!.longitude == 0.0) {
+        developer.log(
+          'Post has invalid coordinates (0,0), skipping distance calculation',
+          name: 'PostDetailPage',
+        );
+        return;
+      }
+
+      // Calculate distance
+      final double calculatedDistance = locationService.calculateDistance(
+        userPosition.latitude,
+        userPosition.longitude,
+        widget.post!.latitude,
+        widget.post!.longitude,
+      );
+
+      // Validate calculated distance
+      if (calculatedDistance.isNaN ||
+          calculatedDistance.isInfinite ||
+          calculatedDistance < 0) {
+        throw Exception(
+            'Invalid distance calculation result: $calculatedDistance');
+      }
+
+      if (mounted) {
+        setState(() {
+          widget.post!.distance = calculatedDistance; // Store in meters
+        });
+
+        developer.log(
+          'Successfully calculated distance: ${calculatedDistance.toStringAsFixed(2)} meters',
+          name: 'PostDetailPage',
+        );
+      }
+    } catch (e) {
+      developer.log(
+        'Distance calculation failed (attempt ${retryCount + 1}): $e',
+        name: 'PostDetailPage',
+      );
+
+      // Retry logic
+      if (retryCount < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        await Future.delayed(Duration(seconds: (retryCount + 1) * 2));
+        if (mounted) {
+          await _calculateDistance(
+              retryCount: retryCount + 1, maxRetries: maxRetries);
+        }
+      } else {
+        // After all retries failed, try to get last known position as fallback
+        try {
+          final lastKnownPosition =
+              await locationService.getLastKnownPosition();
+          if (lastKnownPosition != null && mounted) {
+            final fallbackDistance = locationService.calculateDistance(
+              lastKnownPosition.latitude,
+              lastKnownPosition.longitude,
+              widget.post!.latitude,
+              widget.post!.longitude,
+            );
+
+            if (!fallbackDistance.isNaN &&
+                !fallbackDistance.isInfinite &&
+                fallbackDistance >= 0) {
+              setState(() {
+                widget.post!.distance = fallbackDistance;
+              });
+
+              developer.log(
+                'Used last known position for distance: ${fallbackDistance.toStringAsFixed(2)} meters',
+                name: 'PostDetailPage',
+              );
+            }
+          }
+        } catch (fallbackError) {
+          developer.log(
+            'Fallback distance calculation also failed: $fallbackError',
+            name: 'PostDetailPage',
+          );
+        }
+      }
     }
   }
 

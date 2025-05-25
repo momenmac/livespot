@@ -1,23 +1,10 @@
 from django.contrib import admin
-from .models import Post, Thread, PostCoordinates, PostVote
+from .models import Post, PostCoordinates, PostVote
 
 @admin.register(PostCoordinates)
 class PostCoordinatesAdmin(admin.ModelAdmin):
     list_display = ('id', 'latitude', 'longitude', 'address')
     search_fields = ('address',)
-
-class PostInline(admin.TabularInline):
-    model = Post
-    extra = 0
-    fields = ('title', 'author', 'category', 'status', 'created_at')
-    readonly_fields = ('created_at',)
-
-@admin.register(Thread)
-class ThreadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'category', 'created_at', 'updated_at', 'honesty_score')
-    list_filter = ('category', 'created_at')
-    search_fields = ('title', 'tags')
-    inlines = [PostInline]
 
 class PostVoteInline(admin.TabularInline):
     model = PostVote

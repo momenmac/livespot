@@ -38,26 +38,6 @@ class PostCoordinates(models.Model):
     def __str__(self):
         return f"{self.latitude}, {self.longitude}"
 
-class Thread(models.Model):
-    title = models.CharField(max_length=100)
-    category = models.CharField(
-        max_length=20,
-        choices=PostCategory.choices,
-        default=PostCategory.NEWS
-    )
-    location = models.ForeignKey(
-        PostCoordinates, 
-        on_delete=models.CASCADE,
-        related_name='threads'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    tags = models.JSONField(default=list)
-    honesty_score = models.IntegerField(default=100)
-
-    def __str__(self):
-        return self.title
-
 class Post(models.Model):
     title = models.CharField(max_length=100)
     content = models.TextField()
@@ -88,13 +68,6 @@ class Post(models.Model):
         choices=PostStatus.choices,
         default=PostStatus.PUBLISHED
     )
-    thread = models.ForeignKey(
-        Thread, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='posts'
-    )
     is_verified_location = models.BooleanField(default=True)
     taken_within_app = models.BooleanField(default=True)
     tags = models.JSONField(default=list)
@@ -112,10 +85,6 @@ class Post(models.Model):
     @property
     def has_media(self):
         return len(self.media_urls) > 0
-    
-    @property
-    def is_in_thread(self):
-        return self.thread is not None
         
     @property
     def user_vote(self):
@@ -139,19 +108,4 @@ class PostVote(models.Model):
         vote_type = "Upvote" if self.is_upvote else "Downvote"
         return f"{vote_type} by {self.user.username} on {self.post.title}"
 
-class PostThread(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='threads')
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='thread_posts')
-    content = models.TextField()
-    media_url = models.CharField(max_length=255, null=False, blank=False)  # Media is required
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    likes = models.IntegerField(default=0)
-    replies = models.IntegerField(default=0)
-    is_verified_location = models.BooleanField(default=False)  # Must be verified
 
-    class Meta:
-        ordering = ['-created_at']
-        
-    def __str__(self):
-        return f"Thread by {self.author.username} on post {self.post.title}"

@@ -1,28 +1,11 @@
 from rest_framework import serializers
 from accounts.serializers import AccountAuthorSerializer
-from .models import PostCoordinates, Post, Thread, PostVote, PostThread
+from .models import PostCoordinates, Post, PostVote
 
 class PostCoordinatesSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostCoordinates
         fields = ['id', 'latitude', 'longitude', 'address']
-
-class ThreadSerializer(serializers.ModelSerializer):
-    location = PostCoordinatesSerializer()
-    
-    class Meta:
-        model = Thread
-        fields = [
-            'id', 'title', 'category', 'location', 'created_at', 
-            'updated_at', 'tags', 'honesty_score'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-        
-    def create(self, validated_data):
-        location_data = validated_data.pop('location')
-        location = PostCoordinates.objects.create(**location_data)
-        thread = Thread.objects.create(location=location, **validated_data)
-        return thread
 
 class PostSerializer(serializers.ModelSerializer):
     location = PostCoordinatesSerializer()
@@ -36,7 +19,7 @@ class PostSerializer(serializers.ModelSerializer):
             'id', 'title', 'content', 'media_urls', 'category',
             'location', 'author', 'created_at', 'updated_at',
             'upvotes', 'downvotes', 'honesty_score', 'status',
-            'thread', 'is_verified_location', 'taken_within_app',
+            'is_verified_location', 'taken_within_app',
             'tags', 'user_vote', 'is_anonymous', 'is_saved'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 'downvotes', 'honesty_score', 'user_vote', 'is_saved']
@@ -46,22 +29,11 @@ class PostSerializer(serializers.ModelSerializer):
         location_data = validated_data.pop('location')
         location = PostCoordinates.objects.create(**location_data)
         
-        # Get the thread ID if provided
-        thread_id = validated_data.pop('thread', None)
-        thread = None
-        
-        if thread_id:
-            try:
-                thread = Thread.objects.get(id=thread_id)
-            except Thread.DoesNotExist:
-                pass
-        
         # Create the post with the author from the request context
         author = self.context['request'].user
         post = Post.objects.create(
             author=author,
             location=location,
-            thread=thread,
             **validated_data
         )
         return post
@@ -101,12 +73,6 @@ class PostSerializer(serializers.ModelSerializer):
             except UserProfile.DoesNotExist:
                 pass
         return False
-
-class ThreadDetailSerializer(ThreadSerializer):
-    posts = PostSerializer(many=True, read_only=True)
-    
-    class Meta(ThreadSerializer.Meta):
-        fields = ThreadSerializer.Meta.fields + ['posts']
 
 class PostVoteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -176,59 +142,3 @@ class PostVoteSerializer(serializers.ModelSerializer):
                 
             post.save()
             return vote
-
-class PostThreadSerializer(serializers.ModelSerializer):
-    author_name = serializers.SerializerMethodField()
-    author_profile_pic = serializers.SerializerMethodField()
-    time_ago = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = PostThread
-        fields = [
-            'id', 'post', 'author', 'author_name', 'author_profile_pic',
-            'content', 'media_url', 'created_at', 'updated_at', 
-            'likes', 'replies', 'is_verified_location', 'time_ago'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'likes', 'replies']
-    
-    def get_author_name(self, obj):
-        return f"{obj.author.first_name} {obj.author.last_name}".strip() or obj.author.username
-    
-    def get_author_profile_pic(self, obj):
-        # Get author profile picture if available
-        if hasattr(obj.author, 'profile') and obj.author.profile.profile_picture:
-            return obj.author.profile.profile_picture.url
-        return ""
-    
-    def get_time_ago(self, obj):
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        now = timezone.now()
-        diff = now - obj.created_at
-        
-        if diff < timedelta(minutes=1):
-            return "Just now"
-        elif diff < timedelta(hours=1):
-            minutes = int(diff.total_seconds() / 60)
-            return f"{minutes}m ago"
-        elif diff < timedelta(days=1):
-            hours = int(diff.total_seconds() / 3600)
-            return f"{hours}h ago"
-        elif diff < timedelta(days=7):
-            days = diff.days
-            return f"{days}d ago"
-        else:
-            return obj.created_at.strftime("%b %d, %Y")
-    
-    def create(self, validated_data):
-        # Get the user from the request context
-        user = self.context['request'].user
-        
-        # Create the thread with the current user as author
-        thread = PostThread.objects.create(
-            author=user,
-            **validated_data
-        )
-        
-        return thread
