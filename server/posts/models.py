@@ -71,13 +71,24 @@ class Post(models.Model):
     is_verified_location = models.BooleanField(default=True)
     taken_within_app = models.BooleanField(default=True)
     tags = models.JSONField(default=list)
+    related_post = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='related_posts'
+    )
 
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
-        return self.title
-    
+        # Ensure proper Unicode handling for Arabic text
+        try:
+            return self.title
+        except UnicodeEncodeError:
+            return self.title.encode('utf-8', errors='ignore').decode('utf-8')
+
     @property
     def vote_score(self):
         return self.upvotes - self.downvotes
@@ -94,6 +105,29 @@ class Post(models.Model):
         """
         # This will be set dynamically by the serializer
         return getattr(self, '_user_vote', 0)
+    
+    @property
+    def is_main_post(self):
+        """Return True if this post is a main post (not related to any other post)"""
+        return self.related_post is None
+    
+    @property
+    def related_posts_count(self):
+        """Return the number of posts related to this one"""
+        if hasattr(self, '_related_posts_count'):
+            return self._related_posts_count
+        
+        # If this is a main post, count posts that reference it
+        if self.related_post is None:
+            return Post.objects.filter(related_post=self).count()
+        else:
+            # If this is a related post, count all posts related to the same main post
+            return Post.objects.filter(related_post=self.related_post).count()
+    
+    @property
+    def has_related_posts(self):
+        """Return True if this post has related posts"""
+        return self.related_posts_count > 0
 
 class PostVote(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

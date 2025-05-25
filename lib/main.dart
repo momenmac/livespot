@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_application_2/services/auth/auth_service.dart';
 import 'package:flutter_application_2/services/auth/session_monitor.dart';
 import 'package:flutter_application_2/routes/route_guard.dart';
+import 'package:flutter_application_2/services/location/location_cache_service.dart';
 import 'package:flutter_application_2/ui/theme/theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_application_2/services/config/firebase_options.dart';
@@ -232,6 +233,10 @@ Future<void> main() async {
 
   final accountProvider = AccountProvider()..initialize();
 
+  // Initialize location cache service
+  final locationCacheService = LocationCacheService();
+  await locationCacheService.initialize();
+
   runApp(
     MultiProvider(
       providers: [
@@ -246,6 +251,8 @@ Future<void> main() async {
         Provider<LocationService>(
           create: (_) => LocationService(),
         ),
+        // Add location cache service
+        Provider<LocationCacheService>.value(value: locationCacheService),
         Provider<PostsService>(
           create: (context) => PostsService(),
         ),

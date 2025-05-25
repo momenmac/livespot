@@ -1,6 +1,10 @@
 from rest_framework import serializers
 from accounts.serializers import AccountAuthorSerializer
 from .models import PostCoordinates, Post, PostVote
+from django.db.models import Q, Count
+from django.utils import timezone
+from datetime import timedelta
+from math import radians, cos, sin, asin, sqrt
 
 class PostCoordinatesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,6 +16,7 @@ class PostSerializer(serializers.ModelSerializer):
     author = AccountAuthorSerializer(read_only=True)
     user_vote = serializers.IntegerField(read_only=True)
     is_saved = serializers.SerializerMethodField(read_only=True)
+    related_posts_count = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Post
@@ -20,9 +25,12 @@ class PostSerializer(serializers.ModelSerializer):
             'location', 'author', 'created_at', 'updated_at',
             'upvotes', 'downvotes', 'honesty_score', 'status',
             'is_verified_location', 'taken_within_app',
-            'tags', 'user_vote', 'is_anonymous', 'is_saved'
+            'tags', 'user_vote', 'is_anonymous', 'is_saved',
+            'related_post', 'related_posts_count'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 'downvotes', 'honesty_score', 'user_vote', 'is_saved']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 
+                           'downvotes', 'honesty_score', 'user_vote', 
+                           'is_saved', 'related_posts_count']
         
     def create(self, validated_data):
         # Extract location data and create PostCoordinates object
@@ -36,7 +44,75 @@ class PostSerializer(serializers.ModelSerializer):
             location=location,
             **validated_data
         )
+        
+        # Check for similar posts and link if needed
+        similar_post = self.find_similar_post(post)
+        if similar_post:
+            post.related_post = similar_post
+            post.save()
+            
         return post
+    
+    def get_related_posts_count(self, obj):
+        """Get the count of posts related to this post"""
+        if obj.related_post is None:  # This is a main post
+            return Post.objects.filter(related_post=obj).count()
+        return 0
+    
+    def find_similar_post(self, post):
+        """Find posts with similar content and nearby location"""
+        # Define what "nearby" means in kilometers (100 meters)
+        MAX_DISTANCE_KM = 0.1  # 100 meters
+        
+        # Get posts within the last 24 hours
+        recent_time = timezone.now() - timedelta(hours=24)
+        
+        # Simple content similarity check - match on some keywords
+        important_words = [word for word in post.title.lower().split() if len(word) > 4]
+        important_words += [word for word in post.content.lower().split() if len(word) > 4]
+        
+        # If no substantial words found, use any words
+        if not important_words and post.title:
+            important_words = [word for word in post.title.lower().split()]
+        
+        content_filters = Q()
+        for word in important_words:
+            content_filters |= Q(title__icontains=word) | Q(content__icontains=word)
+        
+        # Find posts with similar content - ensure date filtering works
+        similar_posts = Post.objects.filter(
+            related_post__isnull=True,  # Only consider main posts
+        ).exclude(id=post.id)
+        
+        # Apply content filter only if we have words to match
+        if important_words:
+            similar_posts = similar_posts.filter(content_filters)
+        
+        # Apply date filter separately to ensure it works
+        similar_posts = similar_posts.filter(created_at__gte=recent_time)
+        
+        # Filter for nearby posts using Haversine formula
+        for similar_post in similar_posts:
+            if self.calculate_distance(
+                post.location.latitude, post.location.longitude,
+                similar_post.location.latitude, similar_post.location.longitude
+            ) <= MAX_DISTANCE_KM:
+                return similar_post
+                
+        return None
+    
+    def calculate_distance(self, lat1, lon1, lat2, lon2):
+        """Calculate distance between two points in kilometers using Haversine formula"""
+        # Convert decimal degrees to radians
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        
+        # Haversine formula
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        r = 6371  # Radius of earth in kilometers
+        return c * r
     
     def to_representation(self, instance):
         # Call the parent class's to_representation to get the default representation

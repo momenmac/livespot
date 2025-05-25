@@ -34,6 +34,10 @@ class Post {
   String description = '';
   bool? isSaved; // Added isSaved field to track if post is saved by user
 
+  // New fields for related posts
+  final int? relatedPostId; // ID of related post if this is a child post
+  final int relatedPostsCount; // Count of posts related to this one
+
   Post({
     required this.id,
     required this.title,
@@ -64,6 +68,8 @@ class Post {
     double? distance,
     String? description,
     this.isSaved, // Add isSaved parameter
+    this.relatedPostId, // New field
+    this.relatedPostsCount = 0, // New field with default
   })  : latitude = latitude ?? location.latitude,
         longitude = longitude ?? location.longitude,
         imageUrl = imageUrl ?? (mediaUrls.isNotEmpty ? mediaUrls[0] : ''),
@@ -108,6 +114,9 @@ class Post {
       // If post is anonymous, use 'Anonymous' as author name
       authorName: isAnonymous ? 'Anonymous' : null,
       isSaved: json['is_saved'], // Map isSaved from API response
+      relatedPostId: json['related_post'], // Map related post ID
+      relatedPostsCount:
+          json['related_posts_count'] ?? 0, // Map related posts count
     );
 
     return post;
@@ -137,7 +146,9 @@ class Post {
       'distance': distance,
       'latitude': latitude,
       'longitude': longitude,
-      'is_saved': isSaved, // Include isSaved in JSON
+      'is_saved': isSaved,
+      'related_post': relatedPostId, // Include related post ID
+      'related_posts_count': relatedPostsCount, // Include related posts count
     };
   }
 
@@ -155,4 +166,10 @@ class Post {
   bool get hasMedia => mediaUrls.isNotEmpty;
 
   bool get isInThread => threadId != null;
+
+  // Helper to check if this is a main post (not related to another post)
+  bool get isMainPost => relatedPostId == null;
+
+  // Helper to check if this post has related posts
+  bool get hasRelatedPosts => relatedPostsCount > 0;
 }

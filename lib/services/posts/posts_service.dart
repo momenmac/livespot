@@ -282,7 +282,7 @@ class PostsService {
             'Failed to load nearby threads: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Error getting nearby threads: $e');
+      debugPrint('Error getting thread details: $e');
       throw Exception('Network error: $e');
     }
   }
@@ -877,6 +877,106 @@ class PostsService {
     } catch (e) {
       debugPrint('Error getting post details: $e');
       throw Exception('Network error: $e');
+    }
+  }
+
+  // Fetch related posts for a specific post
+  Future<List<Post>> getRelatedPosts(int postId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/posts/$postId/related/'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        throw Exception(
+            'Failed to fetch related posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching related posts: $e');
+      throw Exception('Failed to fetch related posts: $e');
+    }
+  }
+
+  // Create a post that is related to an existing post
+  Future<Post> createRelatedPost({
+    required int relatedToPostId,
+    required String title,
+    required String content,
+    required double latitude,
+    required double longitude,
+    String? address,
+    required String category,
+    required List<String> mediaUrls,
+    List<String> tags = const [],
+    bool isAnonymous = false,
+  }) async {
+    try {
+      // Create location data
+      final locationData = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'address': address,
+      };
+
+      // Create post data
+      final postData = {
+        'title': title,
+        'content': content,
+        'category': category,
+        'location': locationData,
+        'media_urls': mediaUrls,
+        'tags': tags,
+        'is_anonymous': isAnonymous,
+        'related_post':
+            relatedToPostId, // This is the key field linking to the original post
+      };
+
+      // Get headers with content type
+      final headers = await _getHeaders();
+      // Add content type manually if needed
+      headers['Content-Type'] = 'application/json';
+
+      // Send the post request
+      final response = await http.post(
+        Uri.parse('$baseUrl/posts/'),
+        headers: headers,
+        body: json.encode(postData),
+      );
+
+      if (response.statusCode == 201) {
+        return Post.fromJson(json.decode(response.body));
+      } else {
+        throw Exception(
+            'Failed to create related post: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('Error creating related post: $e');
+      throw Exception('Failed to create related post: $e');
+    }
+  }
+
+  // Get a group of posts related to each other (main post and its related posts)
+  Future<List<Post>> getPostGroup(int postId) async {
+    try {
+      // Use the query parameter to fetch all posts related to this one
+      final response = await http.get(
+        Uri.parse('$baseUrl/posts/?related_to=$postId'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to fetch post group: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching post group: $e');
+      throw Exception('Failed to fetch post group: $e');
     }
   }
 }

@@ -1,11 +1,11 @@
 from django.shortcuts import render
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.contrib.postgres.search import SearchVector
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
 import math  # Adding missing math import
 from .models import Post, PostVote
 from .serializers import (
@@ -36,47 +36,72 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.save()
     
     def get_queryset(self):
-        queryset = Post.objects.select_related('author', 'location')
+        """
+        Get the list of posts based on various filter criteria.
+        By default, return only main posts (where related_post is null).
+        """
+        queryset = Post.objects.all().order_by('-created_at')
         
-        # Filter by category if provided
-        category = self.request.query_params.get('category')
-        if category:
-            # Check if this is a comma-separated list of categories
-            if ',' in category:
-                categories = [cat.strip() for cat in category.split(',')]
-                queryset = queryset.filter(category__in=categories)
-            else:
-                queryset = queryset.filter(category=category)
+        # Annotate with related posts count (sons count for fathers)
+        from django.db.models import Case, When, IntegerField
+        queryset = queryset.annotate(
+            _related_posts_count=Case(
+                When(related_post__isnull=True, then=Count('related_posts')),
+                default=0,
+                output_field=IntegerField()
+            )
+        )
         
-        # Filter by date if provided
-        date = self.request.query_params.get('date')
-        if date:
+        # Date filtering - proper implementation
+        date_str = self.request.query_params.get('date')
+        if date_str:
             try:
-                # Filter by date but order by most recent first
-                queryset = queryset.filter(created_at__date=date).order_by('-created_at')
+                # Parse the date string
+                filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 
-                # Get page size from request or use default
-                page_size = int(self.request.query_params.get('page_size', '10'))
+                # Create datetime objects for the start and end of the day
+                start_datetime = datetime.combine(filter_date, datetime.min.time())
+                end_datetime = datetime.combine(filter_date, datetime.max.time())
                 
-                # Log query info for debugging
-                print(f"Date filter query: date={date}, page_size={page_size}")
-                print(f"Total posts for date: {queryset.count()}")
-            except Exception as e:
-                print(f"Date filtering error: {e}")
-                # Instead of failing, provide a graceful fallback by getting recent posts
-                thirty_days_ago = timezone.now() - timedelta(days=30)
-                queryset = queryset.filter(created_at__gte=thirty_days_ago).order_by('-created_at')
+                # Apply timezone awareness if using timezone-aware datetimes in Django
+                if timezone.is_aware(queryset.first().created_at if queryset.exists() else timezone.now()):
+                    start_datetime = timezone.make_aware(start_datetime)
+                    end_datetime = timezone.make_aware(end_datetime)
+                
+                # Filter queryset by date range
+                queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+                
+                # Debug output to help diagnose issues
+                print(f"Date filtering: {date_str} -> {start_datetime} to {end_datetime}")
+                print(f"Found {queryset.count()} posts for this date")
+            except ValueError:
+                print(f"Invalid date format: {date_str}")
         
-        # Filter by tag if provided
-        tag = self.request.query_params.get('tag')
-        if tag:
-            queryset = queryset.filter(tags__contains=[tag])
-        
-        # Default to published posts only
-        status_param = self.request.query_params.get('status', 'published')
-        if status_param != 'all':
-            queryset = queryset.filter(status=status_param)
+        # By default, only show main posts (fathers)
+        show_related = self.request.query_params.get('show_related', 'false').lower() == 'true'
+        if not show_related:
+            queryset = queryset.filter(related_post__isnull=True)
             
+        # Add filtering by related_post_id to get all posts related to a specific post
+        related_to = self.request.query_params.get('related_to')
+        if related_to:
+            try:
+                related_to_id = int(related_to)
+                # Get the main post and all its related posts
+                main_post = Post.objects.get(id=related_to_id)
+                if main_post.related_post is None:
+                    # This is a main post, get it and all its related posts
+                    queryset = Post.objects.filter(
+                        Q(id=related_to_id) | Q(related_post_id=related_to_id)
+                    )
+                else:
+                    # This is a related post, get the main post and all related posts
+                    queryset = Post.objects.filter(
+                        Q(id=main_post.related_post.id) | Q(related_post_id=main_post.related_post.id)
+                    )
+            except (ValueError, Post.DoesNotExist):
+                pass
+                
         return queryset
     
     @action(detail=False, methods=['get'])
@@ -390,5 +415,64 @@ class PostViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response(
                 {"error": f"Failed to retrieve stories: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def related(self, request, pk=None):
+        """Get all posts related to this post"""
+        try:
+            print(f"DEBUG: Related endpoint called with pk={pk}")
+            print(f"DEBUG: Full URL path: {request.path}")
+            
+            # Use base queryset to avoid filtering issues
+            post = Post.objects.get(pk=pk)
+            print(f"DEBUG: Getting related posts for post {pk}")
+            print(f"DEBUG: Post {pk} related_post field: {post.related_post}")
+            print(f"DEBUG: Post {pk} is_main_post: {post.is_main_post}")
+            
+            # If this is a main post (father), get all its related posts (sons)
+            if post.related_post is None:
+                related_posts = Post.objects.filter(related_post=post)
+                print(f"DEBUG: This is a main post, found {related_posts.count()} related posts")
+            else:
+                # This is a related post (son), get all other posts related to the same main post
+                main_post = post.related_post
+                related_posts = Post.objects.filter(
+                    Q(related_post=main_post) | Q(id=main_post.id)
+                ).exclude(id=post.id)
+                print(f"DEBUG: This is a related post, found {related_posts.count()} related posts")
+            
+            # Ensure proper UTF-8 encoding for Arabic content
+            serializer = self.get_serializer(related_posts, many=True)
+            response_data = serializer.data
+            
+            # Debug Arabic content
+            for item in response_data:
+                if item.get('title'):
+                    print(f"DEBUG: Title: {item['title']} (type: {type(item['title'])})")
+                if item.get('content'):
+                    print(f"DEBUG: Content: {item['content']} (type: {type(item['content'])})")
+            
+            print(f"DEBUG: Serialized {len(response_data)} posts for response")
+            
+            # Ensure the response is properly encoded for Arabic
+            from django.http import JsonResponse
+            import json
+            
+            # Return JsonResponse with ensure_ascii=False to properly handle Arabic
+            return JsonResponse(
+                response_data, 
+                safe=False, 
+                json_dumps_params={'ensure_ascii': False}
+            )
+            
+        except Post.DoesNotExist:
+            print(f"DEBUG: Post {pk} does not exist")
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"DEBUG: Exception in related endpoint: {e}")
+            return Response(
+                {"error": str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

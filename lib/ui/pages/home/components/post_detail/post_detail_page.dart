@@ -5,17 +5,18 @@ import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_application_2/ui/pages/map/widgets/map_view.dart';
+import 'package:flutter_application_2/ui/pages/posts/create_post_page.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/utils/time_formatter.dart';
-import 'package:flutter_application_2/ui/widgets/thread_item.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'dart:io';
 import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:flutter_application_2/ui/pages/media/media_preview_page.dart';
+import 'package:video_player/video_player.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String title;
@@ -57,19 +58,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
   int _downvotes = 0;
   bool _hasUpvoted = false;
   bool _hasDownvoted = false;
-  final TextEditingController _threadController = TextEditingController();
   late MapPageController _mapController;
   bool _mapInitialized = false; // Remove 'late' as it's initialized here
   bool _isLoadingVote = false; // Add loading state for vote operations
   bool _isLoading = false; // Add loading state for save operations
-  bool _isCalculatingDistance =
-      false; // Add loading state for distance calculation
 
-  // Real threads data, initialized empty
-  List<Map<String, dynamic>> _threads = [];
+  // Add state for related posts
+  List<Post> _relatedPosts = [];
+  bool _isLoadingRelatedPosts = false;
 
-  // Variables to track media attachment for thread
-  String? _threadImageUrl;
+  // Video player controller
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
 
   @override
   void initState() {
@@ -92,7 +92,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
     _initializePostData();
     _initializeMap();
-    _fetchThreads();
+    // Add related posts loading
+    _loadRelatedPosts();
+    _initializeVideoPlayer();
   }
 
   void _initializePostData() async {
@@ -111,7 +113,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
       debugPrint('   - ID: ${widget.post!.id}');
       debugPrint('   - Title: ${widget.post!.title}');
       debugPrint('   - Content: ${widget.post!.content}');
-      debugPrint('   - Initial distance: ${widget.post!.distance}');
 
       setState(() {
         // Initialize vote counts from the actual post data
@@ -131,8 +132,24 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       });
 
-      // Always try to calculate distance, with proper error handling
-      _calculateDistanceWithErrorHandling();
+      // Always recalculate distance from user's current location if not set or zero
+      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN)) {
+        final locationService = LocationService();
+        try {
+          final userPosition = await locationService.getCurrentPosition();
+          final double calculatedDistance = locationService.calculateDistance(
+            userPosition.latitude,
+            userPosition.longitude,
+            widget.post!.latitude,
+            widget.post!.longitude,
+          );
+          setState(() {
+            widget.post!.distance = calculatedDistance; // Store in meters
+          });
+        } catch (e) {
+          // Could not get user location, leave distance as 0
+        }
+      }
 
       // Log initialization for debugging
       developer.log(
@@ -144,7 +161,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   void _initializeMap() {
-    // Initialize map controller
+    // Initialize map controller without automatic location initialization
     _mapController = MapPageController();
 
     // Delay initialization to ensure context is available
@@ -153,92 +170,49 @@ class _PostDetailPageState extends State<PostDetailPage> {
     });
   }
 
-  void _fetchThreads() {
-    // Load threads for this post if available
-    _loadThreads();
-  }
-
-  // Load threads for this post
-  Future<void> _loadThreads() async {
-    // Defer execution until after the build is complete to avoid setState during build
-    if (!mounted) return;
-
-    // Use a post-frame callback to avoid setState during build
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (widget.post != null) {
-        try {
-          final postsProvider =
-              Provider.of<PostsProvider>(context, listen: false);
-          final threads =
-              await postsProvider.getThreadsForPost(widget.post!.id);
-
-          if (mounted) {
-            setState(() {
-              _threads = threads;
-            });
-          }
-        } catch (e) {
-          debugPrint('Error loading threads: $e');
-          // Show error to user
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to load comments: ${e.toString()}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } else {
-        // No mock data - just show empty threads list
-        if (mounted) {
-          setState(() {
-            _threads = [];
-          });
-        }
-      }
-    });
-  }
-
   // Helper method to set map center to post location
   void _setCenterToPostLocation() {
     try {
       _mapController.setContext(context);
-      _mapController.initializeLocation();
 
-      // If we have post coordinates, use them
+      // If we have post coordinates, use them directly without calling initializeLocation
       if (widget.post?.latitude != null && widget.post?.longitude != null) {
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          _mapController.centerOnLocation(
-              widget.post!.latitude, widget.post!.longitude);
-
-          // Get the category from the post, or use a default
-          String category = widget.post?.category.toLowerCase() ?? 'news';
-
-          // Set a custom marker with appropriate styling based on the category
-          _mapController.setCustomMarker(
-            latitude: widget.post!.latitude,
-            longitude: widget.post!.longitude,
-            eventType: category, // This will determine the styling
-            description: widget.post?.title ?? widget.title,
-          );
-
-          setState(() {
-            _mapInitialized = true;
-          });
+        // Set initialized to true immediately to prevent any automatic centering
+        setState(() {
+          _mapInitialized = true;
         });
+
+        // Set the location and marker immediately without delay
+        _mapController.centerOnLocation(
+            widget.post!.latitude, widget.post!.longitude);
+
+        // Get the category from the post, or use a default
+        String category = widget.post?.category.toLowerCase() ?? 'news';
+
+        // Set a custom marker with appropriate styling based on the category
+        _mapController.setCustomMarker(
+          latitude: widget.post!.latitude,
+          longitude: widget.post!.longitude,
+          eventType: category,
+          description: widget.post?.title ?? widget.title,
+        );
       } else {
-        // Use a longer delay to ensure map is fully initialized before moving
+        // Only for fallback when no post coordinates are available
+        _mapController.initializeLocation();
         Future.delayed(const Duration(milliseconds: 1000), () {
-          // Use the available method to center on user location as fallback
-          _mapController.centerOnUserLocation();
-          setState(() {
-            _mapInitialized = true;
-          });
+          if (mounted) {
+            _mapController.centerOnUserLocation();
+            setState(() {
+              _mapInitialized = true;
+            });
+          }
         });
       }
     } catch (e) {
       debugPrint('Error setting map location: $e');
+      setState(() {
+        _mapInitialized = true; // Set to true even on error to show the map
+      });
     }
   }
 
@@ -278,6 +252,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
     try {
       // Call the API with the correct parameters
       final result = await postsProvider.voteOnPost(widget.post!, isUpvote);
+
+      if (!mounted) return; // Add check before using context
 
       if (result.isNotEmpty) {
         // Log success for debugging
@@ -322,10 +298,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         });
 
         // Show error message
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: postsProvider.errorMessage ?? 'Failed to update vote',
-        );
+        if (mounted) {
+          // Add check before using context
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: postsProvider.errorMessage ?? 'Failed to update vote',
+          );
+        }
       }
     } catch (e) {
       // Revert UI on exception and show error
@@ -337,10 +316,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         _downvotes = widget.post!.downvotes;
       });
 
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: 'Error: ${e.toString()}',
-      );
+      if (mounted) {
+        // Add check before using context
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: 'Error: ${e.toString()}',
+        );
+      }
     } finally {
       setState(() => _isLoadingVote = false);
     }
@@ -429,10 +411,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         });
 
         // Show error message
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: postsProvider.errorMessage ?? 'Failed to update vote',
-        );
+        if (mounted) {
+          // Add check before using context
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: postsProvider.errorMessage ?? 'Failed to update vote',
+          );
+        }
       }
     } catch (e) {
       // Revert UI on exception and show error
@@ -444,10 +429,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         _downvotes = widget.post!.downvotes;
       });
 
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: 'Error: ${e.toString()}',
-      );
+      if (mounted) {
+        // Add check before using context
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: 'Error: ${e.toString()}',
+        );
+      }
     } finally {
       setState(() => _isLoadingVote = false);
     }
@@ -474,22 +462,22 @@ class _PostDetailPageState extends State<PostDetailPage> {
       // Call API through provider
       final success = await postsProvider.toggleSavePost(widget.post!.id);
 
+      if (!mounted) return; // Add check before using context
+
       if (!success) {
         // Revert on API failure
         setState(() {
           widget.post!.isSaved = previousSavedState;
         });
 
-        if (mounted) {
-          // Show error message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  postsProvider.errorMessage ?? 'Failed to update save status'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                postsProvider.errorMessage ?? 'Failed to update save status'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       // Handle exceptions
@@ -498,6 +486,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       });
 
       if (mounted) {
+        // Add check before using context
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
@@ -512,59 +501,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
         });
       }
     }
-  }
-
-  // Function to handle image selection
-  Future<void> _selectThreadImage() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-
-      if (image != null) {
-        setState(() {
-          _threadImageUrl = image.path;
-        });
-        ResponsiveSnackBar.showSuccess(
-          context: context,
-          message: "Image attached successfully",
-        );
-      }
-    } catch (e) {
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Error attaching image: $e",
-      );
-    }
-  }
-
-  // Function to handle video selection
-  Future<void> _selectThreadVideo() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
-
-      if (video != null) {
-        setState(() {
-          _threadImageUrl = video.path; // Using same variable for simplicity
-        });
-        ResponsiveSnackBar.showSuccess(
-          context: context,
-          message: "Video attached successfully",
-        );
-      }
-    } catch (e) {
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Error attaching video: $e",
-      );
-    }
-  }
-
-  // Function to clear selected media
-  void _clearSelectedMedia() {
-    setState(() {
-      _threadImageUrl = null;
-    });
   }
 
   // Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
@@ -582,7 +518,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return url;
   }
 
-  // Enhanced method to get appropriate image URL or path with better fallback handling
+  // Enhanced method to get appropriate media URL
   String _getImageUrl() {
     // First try: Check if we have a valid post object with an imageUrl
     if (widget.post?.imageUrl != null && widget.post!.imageUrl.isNotEmpty) {
@@ -603,36 +539,132 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return 'https://via.placeholder.com/400x200?text=No+Image';
   }
 
-  // Helper method to determine if a string is a file path or URL
+  // Helper method to check if media is a video
+  bool _isVideoFile(String url) {
+    final String lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('.mp4') || 
+           lowerUrl.contains('.mov') || 
+           lowerUrl.contains('.avi') || 
+           lowerUrl.contains('.mkv') ||
+           lowerUrl.contains('.webm');
+  }
+
+  // Helper method to check if a string is a file path or URL
   bool _isFilePath(String path) {
-    // This is a simple heuristic that can be enhanced based on your needs
     return path.startsWith('/') ||
         path.startsWith('file:/') ||
         !path.contains('://');
   }
 
-  // Widget to display either network image or file image based on the path
-  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover}) {
-    final String fixedImageUrl = _getFixedImageUrl(imageUrl);
-    if (_isFilePath(fixedImageUrl)) {
-      return Image.file(
-        File(fixedImageUrl),
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('Error loading file image: $error');
-          return _buildImageErrorPlaceholder();
-        },
-      );
+  // Initialize video player for the main media
+  void _initializeVideoPlayer() async {
+    final String mediaUrl = _getImageUrl();
+    if (_isVideoFile(mediaUrl)) {
+      try {
+        if (_isFilePath(mediaUrl)) {
+          _videoController = VideoPlayerController.file(File(mediaUrl));
+        } else {
+          _videoController = VideoPlayerController.network(mediaUrl);
+        }
+        
+        await _videoController!.initialize();
+        setState(() {
+          _isVideoInitialized = true;
+        });
+      } catch (e) {
+        debugPrint('Error initializing video: $e');
+      }
+    }
+  }
+
+  // Widget to display either network image, file image, or video
+  Widget _buildMediaWidget(String mediaUrl, {BoxFit fit = BoxFit.cover, bool isClickable = true}) {
+    final String fixedMediaUrl = _getFixedImageUrl(mediaUrl);
+    
+    Widget mediaWidget;
+    
+    if (_isVideoFile(fixedMediaUrl)) {
+      // Video widget
+      mediaWidget = _buildVideoThumbnail(fixedMediaUrl, fit);
     } else {
-      return Image.network(
-        fixedImageUrl,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('Error loading network image: $error');
-          return _buildImageErrorPlaceholder();
-        },
+      // Image widget
+      if (_isFilePath(fixedMediaUrl)) {
+        mediaWidget = Image.file(
+          File(fixedMediaUrl),
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('Error loading file image: $error');
+            return _buildImageErrorPlaceholder();
+          },
+        );
+      } else {
+        mediaWidget = Image.network(
+          fixedMediaUrl,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('Error loading network image: $error');
+            return _buildImageErrorPlaceholder();
+          },
+        );
+      }
+    }
+
+    if (isClickable) {
+      return GestureDetector(
+        onTap: () => _openMediaPreview(fixedMediaUrl),
+        child: mediaWidget,
       );
     }
+    
+    return mediaWidget;
+  }
+
+  // Build video thumbnail with play button overlay
+  Widget _buildVideoThumbnail(String videoUrl, BoxFit fit) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Video thumbnail or placeholder
+        _videoController != null && _isVideoInitialized
+            ? VideoPlayer(_videoController!)
+            : Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(
+                    Icons.video_file,
+                    size: 48,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+        // Play button overlay
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.play_arrow,
+            color: Colors.white,
+            size: 48,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Open media preview page
+  void _openMediaPreview(String mediaUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MediaPreviewPage(
+          mediaUrl: mediaUrl,
+          title: widget.title,
+          isVideo: _isVideoFile(mediaUrl),
+        ),
+      ),
+    );
   }
 
   // Widget for showing a placeholder when image loading fails
@@ -666,11 +698,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Helper method to format distance properly in km or m
   String _formatDistance(double? distanceInMeters) {
-    // If we're currently calculating distance, show loading state
-    if (_isCalculatingDistance) {
-      return 'Calculating...';
-    }
-
     // Always use post.distance in meters if available
     if (widget.post?.distance != null && widget.post!.distance > 0) {
       double meters = widget.post!.distance;
@@ -705,8 +732,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       }
     }
-    // Default: show "Nearby" instead of hardcoded distance
-    return 'Nearby';
+    // Default: show 300m instead of "Nearby"
+    return '300 m';
   }
 
   // Navigate to the user's profile
@@ -769,148 +796,45 @@ class _PostDetailPageState extends State<PostDetailPage> {
     }
   }
 
-  // Wrapper method to safely calculate distance with proper error handling
-  void _calculateDistanceWithErrorHandling() {
-    // Set loading state
+  // Update method to load related posts using the server's endpoint
+  Future<void> _loadRelatedPosts() async {
+    if (!mounted || widget.post == null) return;
+
     setState(() {
-      _isCalculatingDistance = true;
+      _isLoadingRelatedPosts = true;
     });
-
-    // Use a post-frame callback to avoid issues during widget initialization
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || widget.post == null) {
-        if (mounted) {
-          setState(() {
-            _isCalculatingDistance = false;
-          });
-        }
-        return;
-      }
-
-      try {
-        developer.log(
-          'Starting distance calculation for post ${widget.post!.id}...',
-          name: 'PostDetailPage',
-        );
-
-        // Always try to calculate distance, regardless of current value
-        await _calculateDistance();
-      } catch (e) {
-        developer.log(
-          'Error in distance calculation wrapper: $e',
-          name: 'PostDetailPage',
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isCalculatingDistance = false;
-          });
-        }
-      }
-    });
-  }
-
-  // Improved distance calculation with retry logic and better error handling
-  Future<void> _calculateDistance(
-      {int retryCount = 0, int maxRetries = 3}) async {
-    if (widget.post == null) return;
-
-    final locationService = LocationService();
 
     try {
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
+      // Use the dedicated API endpoint for related posts
+      // This works for both main posts and related posts
+      _relatedPosts = await postsProvider.getRelatedPosts(widget.post!.id);
+
+      // Filter out the current post from the results
+      _relatedPosts =
+          _relatedPosts.where((p) => p.id != widget.post!.id).toList();
+
       developer.log(
-        'Attempting distance calculation (attempt ${retryCount + 1}/$maxRetries)',
-        name: 'PostDetailPage',
-      );
-
-      // Get user position with timeout
-      final userPosition = await locationService
-          .getCurrentPosition()
-          .timeout(const Duration(seconds: 10));
-
-      // Validate post coordinates
-      if (widget.post!.latitude == 0.0 && widget.post!.longitude == 0.0) {
-        developer.log(
-          'Post has invalid coordinates (0,0), skipping distance calculation',
-          name: 'PostDetailPage',
-        );
-        return;
-      }
-
-      // Calculate distance
-      final double calculatedDistance = locationService.calculateDistance(
-        userPosition.latitude,
-        userPosition.longitude,
-        widget.post!.latitude,
-        widget.post!.longitude,
-      );
-
-      // Validate calculated distance
-      if (calculatedDistance.isNaN ||
-          calculatedDistance.isInfinite ||
-          calculatedDistance < 0) {
-        throw Exception(
-            'Invalid distance calculation result: $calculatedDistance');
-      }
-
+          'Loaded ${_relatedPosts.length} related posts for post ${widget.post!.id}',
+          name: 'PostDetailPage');
+    } catch (e) {
+      debugPrint('Error loading related posts: $e');
+    } finally {
       if (mounted) {
         setState(() {
-          widget.post!.distance = calculatedDistance; // Store in meters
+          _isLoadingRelatedPosts = false;
         });
-
-        developer.log(
-          'Successfully calculated distance: ${calculatedDistance.toStringAsFixed(2)} meters',
-          name: 'PostDetailPage',
-        );
-      }
-    } catch (e) {
-      developer.log(
-        'Distance calculation failed (attempt ${retryCount + 1}): $e',
-        name: 'PostDetailPage',
-      );
-
-      // Retry logic
-      if (retryCount < maxRetries) {
-        // Wait before retrying (exponential backoff)
-        await Future.delayed(Duration(seconds: (retryCount + 1) * 2));
-        if (mounted) {
-          await _calculateDistance(
-              retryCount: retryCount + 1, maxRetries: maxRetries);
-        }
-      } else {
-        // After all retries failed, try to get last known position as fallback
-        try {
-          final lastKnownPosition =
-              await locationService.getLastKnownPosition();
-          if (lastKnownPosition != null && mounted) {
-            final fallbackDistance = locationService.calculateDistance(
-              lastKnownPosition.latitude,
-              lastKnownPosition.longitude,
-              widget.post!.latitude,
-              widget.post!.longitude,
-            );
-
-            if (!fallbackDistance.isNaN &&
-                !fallbackDistance.isInfinite &&
-                fallbackDistance >= 0) {
-              setState(() {
-                widget.post!.distance = fallbackDistance;
-              });
-
-              developer.log(
-                'Used last known position for distance: ${fallbackDistance.toStringAsFixed(2)} meters',
-                name: 'PostDetailPage',
-              );
-            }
-          }
-        } catch (fallbackError) {
-          developer.log(
-            'Fallback distance calculation also failed: $fallbackError',
-            name: 'PostDetailPage',
-          );
-        }
       }
     }
+  }
+
+  // Add method to check if user is within 100m of the post
+  bool _isWithinRange() {
+    if (widget.post?.distance == null) return false;
+    // Convert distance to meters if needed and check if within 100m
+    double distanceInMeters = widget.post!.distance;
+    return distanceInMeters <= 100.0;
   }
 
   @override
@@ -926,7 +850,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
           child: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withAlpha(77), // Replaced withOpacity
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.arrow_back, color: Colors.white),
@@ -936,7 +860,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
           Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withAlpha(77), // Replaced withOpacity
               shape: BoxShape.circle,
             ),
             child: IconButton(
@@ -956,18 +880,48 @@ class _PostDetailPageState extends State<PostDetailPage> {
         ],
       ),
       extendBodyBehindAppBar: true,
+      // Add floating action button
+      floatingActionButton: widget.post != null
+          ? FloatingActionButton(
+              onPressed: _isWithinRange()
+                  ? () {
+                      // Navigate to create post screen with thread info
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CreatePostPage(
+                            // If this is a main post, use its ID
+                            // If this is already a related post, use its main post's ID
+                            relatedToPostId:
+                                widget.post!.relatedPostId ?? widget.post!.id,
+                          ),
+                        ),
+                      );
+                    }
+                  : null, // Disable button if not within range
+              backgroundColor:
+                  _isWithinRange() ? ThemeConstants.primaryColor : Colors.grey,
+              tooltip: _isWithinRange()
+                  ? 'Add to Thread'
+                  : 'You must be within 100m to add to this thread',
+              child: Icon(
+                Icons.add,
+                color: Colors.white,
+              ),
+            )
+          : null,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Main post image
+            // Main post image/video - now clickable
             Stack(
               children: [
-                // Image with shimmer loading placeholder
+                // Media with shimmer loading placeholder
                 SizedBox(
                   height: 250,
                   width: double.infinity,
-                  child: _buildImageWidget(
+                  child: _buildMediaWidget(
                     _getImageUrl(),
                     fit: BoxFit.cover,
                   ),
@@ -985,7 +939,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withOpacity(0.7),
+                          Colors.black.withAlpha(
+                              178), // Replaced withOpacity (0.7 * 255 = 178.5)
                         ],
                       ),
                     ),
@@ -1119,8 +1074,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color:
-                          _getHonestyScoreColor(honestyScore).withOpacity(0.1),
+                      color: _getHonestyScoreColor(honestyScore).withAlpha(
+                          26), // Replaced withOpacity (0.1 * 255 = 25.5)
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _getHonestyScoreColor(honestyScore),
@@ -1226,7 +1181,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         ),
                       ),
 
-                      // Comments count
+                      // Comments count - now shows thread count
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1237,7 +1192,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${_threads.length}',
+                            '${_relatedPosts.length}', // Show thread count instead of comments
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ],
@@ -1259,98 +1214,367 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey[300]!),
               ),
-              child: ClipRRectMapContainer(
-                child: !_mapInitialized
-                    ? const Center(child: CircularProgressIndicator())
-                    : MapWidget(mapController: _mapController),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: IgnorePointer(
+                  ignoring: false, // Allow user interaction with map
+                  child: !_mapInitialized
+                      ? const Center(child: CircularProgressIndicator())
+                      : MapWidget(mapController: _mapController),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            // Thread (comments) section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Threads (${_threads.length})',
+            // Related posts section
+            if (widget.post != null &&
+                (widget.post!.hasRelatedPosts || _relatedPosts.isNotEmpty))
+              _buildRelatedPostsSection(),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Updated method to build thread section - more like comments
+  Widget _buildRelatedPostsSection() {
+    // Check if current post is a related post (has a parent)
+    final bool isChildPost = widget.post?.relatedPostId != null;
+    final String sectionTitle =
+        isChildPost ? 'Thread' : 'Thread (${_relatedPosts.length})';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                sectionTitle,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            // List of threads (removed the thread input text field)
-            ..._threads.map(
-              (thread) => ThreadItem(
-                authorName:
-                    thread['author_name'] ?? thread['author'] ?? 'Anonymous',
-                text: thread['content'] ?? thread['text'] ?? '',
-                time: thread['time_ago'] ?? thread['time'] ?? 'Unknown time',
-                likes: thread['likes'] ?? 0,
-                replies: thread['replies'] ?? 0,
-                isVerified:
-                    thread['is_verified'] ?? thread['isVerified'] ?? false,
-                distance: thread['distance'] ?? '0.0 mi away',
-                profilePic: _getFixedImageUrl(thread['author_profile_pic']),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              // Add "View Main Post" button if this is a related post
+              if (isChildPost)
+                TextButton.icon(
+                  onPressed: _navigateToMainPost,
+                  icon: Icon(
+                    Icons.keyboard_arrow_up,
+                    color: ThemeConstants.primaryColor,
+                    size: 18,
+                  ),
+                  label: Text(
+                    'Main Post',
+                    style: TextStyle(
+                      color: ThemeConstants.primaryColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (context) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.image),
-                  title: const Text('Attach Image'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectThreadImage();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.videocam),
-                  title: const Text('Attach Video'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectThreadVideo();
-                  },
-                ),
-                if (_threadImageUrl != null)
-                  ListTile(
-                    leading: const Icon(Icons.clear),
-                    title: const Text('Clear Attachment'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _clearSelectedMedia();
+        _isLoadingRelatedPosts
+            ? const Center(child: CircularProgressIndicator())
+            : _relatedPosts.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: Text(
+                      isChildPost
+                          ? 'No other posts in this thread'
+                          : 'No thread posts found',
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _relatedPosts.length,
+                    itemBuilder: (context, index) {
+                      final relatedPost = _relatedPosts[index];
+                      return _buildRelatedPostItem(relatedPost);
                     },
                   ),
-              ],
-            ),
-          );
-        },
-        child: const Icon(Icons.add),
-      ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
-  // Helper method to get color based on honesty score
-  Color _getHonestyScoreColor(int score) {
-    if (score >= 80) {
-      return Colors.green;
-    } else if (score >= 60) {
-      return Colors.amber;
-    } else if (score >= 40) {
-      return Colors.orange;
-    } else {
-      return Colors.red;
+  // Add method to navigate to main post
+  void _navigateToMainPost() async {
+    if (widget.post?.relatedPostId == null) return;
+
+    try {
+      // Fetch the main post details
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      final mainPost =
+          await postsProvider.fetchPostDetails(widget.post!.relatedPostId!);
+
+      if (mainPost != null && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostDetailPage(
+              title: mainPost.title,
+              description: mainPost.content,
+              imageUrl: mainPost.imageUrl,
+              location: mainPost.location.address ?? "Unknown location",
+              time: TimeFormatter.getFormattedTime(mainPost.createdAt),
+              honesty: mainPost.honestyScore,
+              upvotes: mainPost.upvotes,
+              comments: 0,
+              isVerified: mainPost.isVerifiedLocation,
+              post: mainPost,
+              authorName: mainPost.getDisplayName(),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load main post: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
+  // Updated method to build a thread post item with video support
+  Widget _buildRelatedPostItem(Post post) {
+    final bool isMainPost = post.relatedPostId == null;
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostDetailPage(
+              title: post.title,
+              description: post.content,
+              imageUrl: post.imageUrl,
+              location: post.location.address ?? "Unknown location",
+              time: TimeFormatter.getFormattedTime(post.createdAt),
+              honesty: post.honestyScore,
+              upvotes: post.upvotes,
+              comments: 0,
+              isVerified: post.isVerifiedLocation,
+              post: post,
+              authorName: post.getDisplayName(),
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isMainPost
+              ? (Theme.of(context).brightness == Brightness.dark
+                  ? ThemeConstants.primaryColor.withAlpha(26)
+                  : ThemeConstants.primaryColor.withAlpha(13))
+              : (Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[800]
+                  : Colors.grey[50]),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isMainPost
+                ? ThemeConstants.primaryColor.withAlpha(77)
+                : (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[700]!
+                    : Colors.grey[300]!),
+            width: isMainPost ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Author and time row
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundImage: post.authorProfilePic != null &&
+                          post.authorProfilePic!.isNotEmpty
+                      ? NetworkImage(_getFixedImageUrl(post.authorProfilePic!))
+                      : null,
+                  radius: 12,
+                  child: (post.authorProfilePic == null ||
+                          post.authorProfilePic!.isEmpty)
+                      ? const Icon(Icons.person, size: 16)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            post.getDisplayName(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (post.isAuthorVerified)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                Icons.verified,
+                                size: 12,
+                                color: ThemeConstants.primaryColor,
+                              ),
+                            ),
+                          if (isMainPost)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ThemeConstants.primaryColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'MAIN',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      Text(
+                        TimeFormatter.getFormattedTime(post.createdAt),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ThemeConstants.primaryColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _formatDistance(post.distance * 1000),
+                    style: TextStyle(
+                      color: ThemeConstants.primaryColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Post title
+            Text(
+              post.title,
+              style: TextStyle(
+                fontWeight: isMainPost ? FontWeight.bold : FontWeight.w600,
+                fontSize: isMainPost ? 15 : 14,
+                color: isMainPost ? ThemeConstants.primaryColor : null,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Post content (truncated)
+            Text(
+              post.content,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+            // Show media if available
+            if (post.hasMedia) ...[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: _buildMediaWidget(post.imageUrl, fit: BoxFit.cover),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            // Post stats row
+            Row(
+              children: [
+                // Upvotes
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_upward_outlined,
+                      color: Colors.grey[600],
+                      size: 16,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${post.upvotes}',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                // Honesty score
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color:
+                        _getHonestyScoreColor(post.honestyScore).withAlpha(26),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${post.honestyScore}%',
+                    style: TextStyle(
+                      color: _getHonestyScoreColor(post.honestyScore),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // Tap to view full post
+                Text(
+                  'Tap to view full post',
+                  style: TextStyle(
+                    color: ThemeConstants.primaryColor,
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ));
+  }
+
+  // Modify _buildAdditionalActionButtons to send correct related post ID
   Widget _buildAdditionalActionButtons() {
     return Container(
       constraints: const BoxConstraints(maxWidth: 200),
@@ -1424,10 +1648,23 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
   }
 
+  // Helper method to get color based on honesty score
+  Color _getHonestyScoreColor(int score) {
+    if (score >= 80) {
+      return Colors.green;
+    } else if (score >= 60) {
+      return Colors.amber;
+    } else if (score >= 40) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
+  }
+
   @override
   void dispose() {
-    _threadController.dispose();
     _mapController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 }

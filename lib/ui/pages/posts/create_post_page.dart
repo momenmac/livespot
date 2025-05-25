@@ -9,7 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
 
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({super.key});
+  final int? relatedToPostId; // Add this parameter for related posts
+
+  const CreatePostPage({super.key, this.relatedToPostId});
 
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
@@ -27,6 +29,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final ImagePicker _imagePicker = ImagePicker();
   String? _currentAddress;
   Position? _currentPosition;
+  bool _isAnonymous = false; // Add this field to track anonymous posts
 
   final List<Map<String, dynamic>> _categories = [
     {'value': 'general', 'label': 'General', 'icon': Icons.article},
@@ -99,6 +102,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     try {
       final List<XFile> images = await _imagePicker.pickMultiImage();
 
+      if (!mounted) return; // Add mounted check
+
       if (images.isNotEmpty) {
         setState(() {
           _pickedImages.addAll(images);
@@ -106,6 +111,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
     } catch (e) {
       debugPrint('Error picking images: $e');
+      if (!mounted) return; // Add mounted check
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error picking images: $e'),
@@ -121,6 +128,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
         source: ImageSource.camera,
       );
 
+      if (!mounted) return; // Add mounted check
+
       if (image != null) {
         setState(() {
           _pickedImages.add(image);
@@ -128,6 +137,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
     } catch (e) {
       debugPrint('Error taking photo: $e');
+      if (!mounted) return; // Add mounted check
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error taking photo: $e'),
@@ -166,11 +177,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
         // First, we would upload the images to a server or cloud storage
         // and then get the URLs to store in the post
-        // For now, we'll mock this process
         List<String> mediaUrls = [];
         for (var image in _pickedImages) {
           // In a real app, you'd upload the image and get a URL
-          // Here we just use the path as a placeholder
           mediaUrls.add(image.path);
         }
 
@@ -178,37 +187,78 @@ class _CreatePostPageState extends State<CreatePostPage> {
           throw Exception('Location is required to create a post');
         }
 
-        // Create the post
-        final post =
-            await Provider.of<PostsProvider>(context, listen: false).createPost(
-          title: _titleController.text,
-          content: _contentController.text,
-          latitude: _currentPosition!.latitude,
-          longitude: _currentPosition!.longitude,
-          address: _currentAddress,
-          category: _selectedCategory,
-          mediaUrls: mediaUrls,
-          tags: _selectedTags,
-        );
+        final postsProvider =
+            Provider.of<PostsProvider>(context, listen: false);
 
-        if (!mounted) return;
-
-        if (post != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Post created successfully!'),
-              backgroundColor: ThemeConstants.green,
-            ),
+        // Check if we're creating a related post
+        if (widget.relatedToPostId != null) {
+          // Create a related post
+          final post = await postsProvider.createRelatedPost(
+            relatedToPostId: widget.relatedToPostId!,
+            title: _titleController.text,
+            content: _contentController.text,
+            latitude: _currentPosition!.latitude,
+            longitude: _currentPosition!.longitude,
+            address: _currentAddress ??
+                "Unknown location", // Provide default if null
+            category: _selectedCategory,
+            isAnonymous: _isAnonymous, // Add the missing required parameter
+            mediaUrls: mediaUrls,
+            // Remove tags parameter as it's not needed
           );
 
-          Navigator.pop(context);
+          if (!mounted) return;
+
+          if (post != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Related post created successfully!'),
+                backgroundColor: ThemeConstants.green,
+              ),
+            );
+            Navigator.pop(context);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content:
+                    Text('Failed to create related post. Please try again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create post. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
+          // Create a regular post
+          final post = await postsProvider.createPost(
+            title: _titleController.text,
+            content: _contentController.text,
+            latitude: _currentPosition!.latitude,
+            longitude: _currentPosition!.longitude,
+            address: _currentAddress ??
+                "Unknown location", // Provide default if null
+            category: _selectedCategory,
+            isAnonymous: _isAnonymous, // Add isAnonymous parameter
+            mediaUrls: mediaUrls,
+            // Remove tags parameter as it's not needed
           );
+
+          if (!mounted) return;
+
+          if (post != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Post created successfully!'),
+                backgroundColor: ThemeConstants.green,
+              ),
+            );
+            Navigator.pop(context);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to create post. Please try again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } catch (e) {
         debugPrint('Error creating post: $e');
@@ -300,8 +350,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
                     const SizedBox(height: 16),
 
-                    // Tags input
-                    _buildTagsInput(),
+                    // Anonymous post toggle
+                    SwitchListTile(
+                      title: const Text(
+                        'Post Anonymously',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Your username will not be shown with this post',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: _isAnonymous,
+                      activeColor: ThemeConstants.primaryColor,
+                      onChanged: (value) {
+                        setState(() {
+                          _isAnonymous = value;
+                        });
+                      },
+                    ),
 
                     const SizedBox(height: 16),
 

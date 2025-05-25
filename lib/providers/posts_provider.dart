@@ -1,22 +1,23 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/models/post.dart';
-import 'package:flutter_application_2/models/thread.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
-import 'package:flutter_application_2/constants/category_utils.dart'; // Added import
+import 'package:flutter_application_2/constants/category_utils.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:flutter_application_2/services/auth/token_manager.dart';
 
 class PostsProvider with ChangeNotifier {
   final PostsService _postsService;
   final LocationService _locationService;
 
   List<Post> _posts = [];
-  List<Thread> _threads = [];
   bool _isLoading = false;
   String? _errorMessage;
   bool _hasMore = true;
   int _currentPage = 1;
-  static const int _pageSize =
-      20; // Load 20 posts at a time for better experience
+  static const int _pageSize = 20;
   bool _isFetchingMore = false;
 
   // Map of usernames to their stories
@@ -25,7 +26,6 @@ class PostsProvider with ChangeNotifier {
 
   // Getters
   List<Post> get posts => _posts;
-  List<Thread> get threads => _threads;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get hasMore => _hasMore;
@@ -174,30 +174,6 @@ class PostsProvider with ChangeNotifier {
     }
   }
 
-  // Load threads near user's location
-  Future<void> fetchNearbyThreads({
-    int radius = 1000,
-    String? category,
-  }) async {
-    _setLoading(true);
-    try {
-      final position = await _locationService.getCurrentPosition();
-
-      _threads = await _postsService.getNearbyThreads(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        radius: radius,
-        category: category,
-      );
-      _errorMessage = null;
-    } catch (e) {
-      _errorMessage = 'Failed to fetch nearby threads: $e';
-      debugPrint(_errorMessage);
-    } finally {
-      _setLoading(false);
-    }
-  }
-
   // Create a new post
   Future<Post?> createPost({
     required String title,
@@ -295,22 +271,6 @@ class PostsProvider with ChangeNotifier {
       return results;
     } catch (e) {
       _errorMessage = 'Failed to search posts: $e';
-      debugPrint(_errorMessage);
-      return [];
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // Get threads for a specific post
-  Future<List<Map<String, dynamic>>> getThreadsForPost(int postId) async {
-    _setLoading(true);
-    try {
-      final threads = await _postsService.getThreadsForPost(postId);
-      _errorMessage = null;
-      return threads;
-    } catch (e) {
-      _errorMessage = 'Failed to fetch threads for post: $e';
       debugPrint(_errorMessage);
       return [];
     } finally {
@@ -667,9 +627,155 @@ class PostsProvider with ChangeNotifier {
   // Helper method to update loading state
   void _setLoading(bool loading) {
     _isLoading = loading;
-    // Use addPostFrameCallback to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
+  }
+
+  /// Get related posts for a specific post ID
+  /// Works for both main posts and related posts using the server's dedicated endpoint
+  Future<List<Post>> getRelatedPosts(int postId) async {
+    try {
+      final url = '${ApiUrls.baseUrl}/api/posts/$postId/related/';
+      print('DEBUG: Requesting related posts from: $url');
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _getAuthHeaders(),
+      );
+
+      print('DEBUG: Related posts response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        // Properly decode UTF-8 response for Arabic content
+        final responseBody = utf8.decode(response.bodyBytes);
+        print('DEBUG: Related posts response body (UTF-8): $responseBody');
+
+        final List<dynamic> data = json.decode(responseBody);
+
+        // Debug Arabic content handling
+        for (var item in data) {
+          if (item['title'] != null) {
+            print('DEBUG: Post title: ${item['title']}');
+            print('DEBUG: Title bytes: ${item['title'].runes.toList()}');
+          }
+          if (item['content'] != null) {
+            print('DEBUG: Post content: ${item['content']}');
+            print('DEBUG: Content bytes: ${item['content'].runes.toList()}');
+          }
+        }
+
+        final posts = data.map((json) => Post.fromJson(json)).toList();
+        print(
+            'DEBUG: Parsed ${posts.length} related posts with proper UTF-8 encoding');
+        return posts;
+      } else {
+        print(
+            'Error loading related posts: ${response.statusCode} - ${response.body}');
+        return [];
+      }
+    } catch (e) {
+      print('Exception loading related posts: $e');
+      return [];
+    }
+  }
+
+  /// Create a post that is related to another post
+  Future<Post?> createRelatedPost({
+    required String title,
+    required String content,
+    required double latitude,
+    required double longitude,
+    required String address,
+    required String category,
+    required bool isAnonymous,
+    required List<String> mediaUrls,
+    required int relatedToPostId,
+  }) async {
+    try {
+      final Map<String, dynamic> postData = {
+        'title': title,
+        'content': content,
+        'category': category,
+        'is_anonymous': isAnonymous,
+        'location': {
+          'latitude': latitude,
+          'longitude': longitude,
+          'address': address,
+        },
+        'media_urls': mediaUrls,
+        'related_post': relatedToPostId,
+      };
+
+      final url = Uri.parse(ApiUrls.posts);
+      final response = await http.post(
+        url,
+        headers: await getAuthHeaders(isMultipart: false),
+        body: json.encode(postData),
+      );
+
+      if (response.statusCode == 201) {
+        final responseData = json.decode(response.body);
+        return Post.fromJson(responseData);
+      } else {
+        final responseData = json.decode(response.body);
+        _errorMessage =
+            responseData['detail'] ?? 'Failed to create related post';
+        return null;
+      }
+    } catch (e) {
+      _errorMessage = 'Error creating related post: ${e.toString()}';
+      return null;
+    }
+  }
+
+  // Helper method to get authentication headers (private version)
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final Map<String, String> headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    final String? token = await getAuthToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    return headers;
+  }
+
+  // Make sure this method exists for authentication headers
+  Future<Map<String, String>> getAuthHeaders({bool isMultipart = false}) async {
+    final Map<String, String> headers = {
+      'Content-Type': isMultipart ? 'multipart/form-data' : 'application/json',
+      'Accept': 'application/json',
+    };
+
+    final String? token = await getAuthToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    return headers;
+  }
+
+  // Helper method to get the authentication token using TokenManager
+  Future<String?> getAuthToken() async {
+    try {
+      final tokenManager = TokenManager();
+      final accessToken = await tokenManager.getValidAccessToken();
+
+      if (accessToken != null && accessToken.isNotEmpty) {
+        print(
+            'DEBUG: Found JWT access token: ${accessToken.substring(0, 20)}...');
+        return accessToken;
+      } else {
+        print('DEBUG: No valid JWT access token found');
+        return null;
+      }
+    } catch (e) {
+      print('Error getting JWT access token: $e');
+      return null;
+    }
   }
 }
