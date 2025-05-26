@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 import math  # Adding missing math import
-from .models import Post, PostVote
+from .models import Post, PostVote, EventStatusVote
 from .serializers import (
     PostSerializer, 
     PostVoteSerializer
@@ -50,6 +50,9 @@ class PostViewSet(viewsets.ModelViewSet):
         By default, return only main posts (where related_post is null).
         """
         queryset = Post.objects.all().order_by('-created_at')
+        
+        # Check and update event status for time-based auto-ending
+        self._check_and_update_event_status(queryset)
         
         # Annotate with related posts count (sons count for fathers)
         from django.db.models import Case, When, IntegerField
@@ -508,3 +511,85 @@ class PostViewSet(viewsets.ModelViewSet):
                 {"error": str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=True, methods=['post'])
+    def vote_status(self, request, pk=None):
+        """Vote on whether an event has ended or is still happening"""
+        self.permission_classes = [permissions.IsAuthenticated]
+        self.check_permissions(request)
+        
+        post = self.get_object()
+        
+        # Check if event_ended is provided
+        event_ended = request.data.get('event_ended')
+        if event_ended is None:
+            return Response(
+                {"error": "event_ended parameter is required (true/false)"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Import the EventStatusVote model
+        from .models import EventStatusVote, PostStatus
+        
+        print(f"🎯 STATUS VOTE DEBUG - User {request.user.id} voting on post {post.id}, event_ended: {event_ended}")
+        
+        # Get or create the vote
+        vote, created = EventStatusVote.objects.get_or_create(
+            post=post,
+            user=request.user,
+            defaults={'voted_ended': event_ended}
+        )
+        
+        if not created:
+            # Update existing vote
+            vote.voted_ended = event_ended
+            vote.save()
+            print(f"📋 STATUS VOTE DEBUG - Updated existing vote")
+        else:
+            print(f"📋 STATUS VOTE DEBUG - Created new vote")
+        
+        # Check if event should be marked as ended based on votes
+        if post.should_mark_as_ended() and post.status == PostStatus.HAPPENING:
+            post.status = PostStatus.ENDED
+            post.save(update_fields=['status'])
+            print(f"🎯 STATUS VOTE DEBUG - Event marked as ended due to votes")
+        
+        # Get current vote counts
+        ended_votes = post.get_ended_votes_count()
+        happening_votes = post.get_happening_votes_count()
+        
+        response_data = {
+            'status': post.status,
+            'ended_votes': ended_votes,
+            'happening_votes': happening_votes,
+            'user_voted_ended': event_ended
+        }
+        
+        print(f"📤 STATUS VOTE DEBUG - Returning response: {response_data}")
+        return Response(response_data)
+    
+    def _check_and_update_event_status(self, queryset):
+        """
+        Helper method to check and update event status for posts that should be auto-ended
+        based on time (24+ hours old)
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+        from .models import PostStatus
+        
+        # Get posts that are still marked as happening but are older than 24 hours
+        time_threshold = timezone.now() - timedelta(hours=24)
+        old_happening_posts = queryset.filter(
+            status=PostStatus.HAPPENING,
+            created_at__lt=time_threshold
+        )
+        
+        # Batch update all old posts to ended status
+        updated_count = old_happening_posts.update(
+            status=PostStatus.ENDED
+        )
+        
+        if updated_count > 0:
+            print(f"🕐 AUTO-END DEBUG - Automatically marked {updated_count} events as ended (24+ hours old)")
+        
+        return updated_count

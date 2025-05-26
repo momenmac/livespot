@@ -38,6 +38,13 @@ class Post {
   final int? relatedPostId; // ID of related post if this is a child post
   final int relatedPostsCount; // Count of posts related to this one
 
+  // Event status tracking fields
+  bool? isHappening; // Whether the event is currently happening
+  bool? isEnded; // Whether the event has ended
+  int? endedVotesCount; // Number of votes that event has ended
+  int? happeningVotesCount; // Number of votes that event is still happening
+  String? userStatusVote; // User's vote on event status (ended/happening/null)
+
   Post({
     required this.id,
     required this.title,
@@ -70,6 +77,11 @@ class Post {
     this.isSaved, // Add isSaved parameter
     this.relatedPostId, // New field
     this.relatedPostsCount = 0, // New field with default
+    this.isHappening, // Event status fields
+    this.isEnded,
+    this.endedVotesCount,
+    this.happeningVotesCount,
+    this.userStatusVote,
   })  : latitude = latitude ?? location.latitude,
         longitude = longitude ?? location.longitude,
         imageUrl = imageUrl ?? (mediaUrls.isNotEmpty ? mediaUrls[0] : ''),
@@ -86,6 +98,11 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json) {
     final bool isAnonymous = json['is_anonymous'] ?? false;
+
+    // Debug print for userStatusVote
+    print('🔍 Post.fromJson - Post ID: ${json['id']}');
+    print(
+        '🔍 Raw userStatusVote from API: ${json['user_status_vote']} (type: ${json['user_status_vote'].runtimeType})');
 
     final post = Post(
       id: json['id'],
@@ -115,9 +132,21 @@ class Post {
       authorName: isAnonymous ? 'Anonymous' : null,
       isSaved: json['is_saved'], // Map isSaved from API response
       relatedPostId: json['related_post'], // Map related post ID
-      relatedPostsCount:
-          json['related_posts_count'] ?? 0, // Map related posts count
+
+      // Event status fields with debug prints
+      isHappening: json['is_happening'],
+      isEnded: json['is_ended'],
+      endedVotesCount: json['ended_votes_count'],
+      happeningVotesCount: json['happening_votes_count'],
+      userStatusVote: json['user_status_vote'],
     );
+
+    // Debug print the final userStatusVote value
+    print('🔍 Final userStatusVote in Post object: ${post.userStatusVote}');
+    print('🔍 hasUserVotedEnded: ${post.hasUserVotedEnded}');
+    print('🔍 hasUserVotedHappening: ${post.hasUserVotedHappening}');
+    print('🔍 Post status: ${post.status}');
+    print('🔍 isHappening: ${post.isHappening}, isEnded: ${post.isEnded}');
 
     return post;
   }
@@ -149,6 +178,12 @@ class Post {
       'is_saved': isSaved,
       'related_post': relatedPostId, // Include related post ID
       'related_posts_count': relatedPostsCount, // Include related posts count
+      // Event status fields
+      'is_happening': isHappening,
+      'is_ended': isEnded,
+      'ended_votes_count': endedVotesCount,
+      'happening_votes_count': happeningVotesCount,
+      'user_status_vote': userStatusVote,
     };
   }
 
@@ -172,4 +207,23 @@ class Post {
 
   // Helper to check if this post has related posts
   bool get hasRelatedPosts => relatedPostsCount > 0;
+
+  // Event status helper methods
+  bool get isEventHappening => isHappening == true;
+  bool get isEventEnded => isEnded == true;
+  bool get hasUserVotedEnded {
+    // Debug print
+    print(
+        '🔍 hasUserVotedEnded - userStatusVote: $userStatusVote (type: ${userStatusVote.runtimeType})');
+    return userStatusVote == 'ended';
+  }
+
+  bool get hasUserVotedHappening {
+    // Debug print
+    print(
+        '🔍 hasUserVotedHappening - userStatusVote: $userStatusVote (type: ${userStatusVote.runtimeType})');
+    return userStatusVote == 'happening';
+  }
+
+  bool get hasUserVotedStatus => userStatusVote != null;
 }

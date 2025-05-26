@@ -25,10 +25,8 @@ class PostCategory(models.TextChoices):
     OTHER = 'other', _('Other')
 
 class PostStatus(models.TextChoices):
-    PENDING = 'pending', _('Pending')
-    PUBLISHED = 'published', _('Published')
-    REJECTED = 'rejected', _('Rejected')
-    ARCHIVED = 'archived', _('Archived')
+    HAPPENING = 'happening', _('Happening')
+    ENDED = 'ended', _('Ended')
 
 class PostCoordinates(models.Model):
     latitude = models.FloatField()
@@ -66,7 +64,7 @@ class Post(models.Model):
     status = models.CharField(
         max_length=20, 
         choices=PostStatus.choices,
-        default=PostStatus.PUBLISHED
+        default=PostStatus.HAPPENING
     )
     is_verified_location = models.BooleanField(default=True)
     taken_within_app = models.BooleanField(default=True)
@@ -128,7 +126,57 @@ class Post(models.Model):
     def has_related_posts(self):
         """Return True if this post has related posts"""
         return self.related_posts_count > 0
+    
+    @property
+    def is_happening(self):
+        """Return True if the event is currently happening"""
+        return self.status == PostStatus.HAPPENING
+    
+    @property
+    def is_ended(self):
+        """Return True if the event has ended"""
+        return self.status == PostStatus.ENDED
+    
+    def get_ended_votes_count(self):
+        """Get count of users who voted that this event has ended"""
+        return self.status_votes.filter(voted_ended=True).count()
+    
+    def get_happening_votes_count(self):
+        """Get count of users who voted that this event is still happening"""
+        return self.status_votes.filter(voted_ended=False).count()
+    
+    def should_mark_as_ended(self, threshold=3):
+        """Check if event should be marked as ended based on user votes"""
+        ended_votes = self.get_ended_votes_count()
+        total_votes = self.status_votes.count()
+        
+        # If we have at least threshold votes and majority says ended
+        if total_votes >= threshold:
+            return ended_votes > (total_votes / 2)
+        
+        # If we have overwhelming ended votes (e.g., 5+ people say ended)
+        return ended_votes >= 5
 
+    def check_and_update_status(self):
+        """Check if post should be marked as ended based on time (auto-updates)"""
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        # Only check posts that are still happening
+        if self.status != PostStatus.HAPPENING:
+            return False
+            
+        # Set time threshold for auto-ending (24 hours by default)
+        time_threshold = timezone.now() - timedelta(hours=24)
+        
+        # If post is older than threshold, mark as ended
+        if self.created_at < time_threshold:
+            self.status = PostStatus.ENDED
+            self.save(update_fields=['status'])
+            return True
+            
+        return False
+    
 class PostVote(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='votes')
@@ -141,5 +189,19 @@ class PostVote(models.Model):
     def __str__(self):
         vote_type = "Upvote" if self.is_upvote else "Downvote"
         return f"{vote_type} by {self.user.username} on {self.post.title}"
+
+class EventStatusVote(models.Model):
+    """Track user votes for event status (happening/ended)"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='status_votes')
+    voted_ended = models.BooleanField(default=True, help_text="True if user thinks event ended")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'post')
+        
+    def __str__(self):
+        status = "ended" if self.voted_ended else "still happening"
+        return f"{self.user.username} voted {self.post.title} as {status}"
 
 

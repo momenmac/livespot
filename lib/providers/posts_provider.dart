@@ -52,9 +52,12 @@ class PostsProvider with ChangeNotifier {
       return false;
     }
 
-    _isLoading = true;
     _errorMessage = null;
-    notifyListeners();
+
+    debugPrint(
+        '🚀 PostsProvider.fetchPosts: Starting fetch with refresh=$refresh, date=$date');
+    debugPrint('🚀 PostsProvider.fetchPosts: Setting loading to true...');
+    _setLoading(true);
 
     try {
       final result = await _postsService.getPosts(
@@ -66,6 +69,8 @@ class PostsProvider with ChangeNotifier {
       );
 
       final List<Post> newPosts = result['posts'] as List<Post>;
+      debugPrint(
+          '🚀 PostsProvider.fetchPosts: Received ${newPosts.length} posts from service');
 
       if (refresh) {
         _posts = newPosts;
@@ -83,15 +88,19 @@ class PostsProvider with ChangeNotifier {
       _errorMessage = null;
 
       debugPrint(
-          'Loaded ${newPosts.length} posts. Has more: $_hasMore, Next page: $_currentPage');
+          '🚀 PostsProvider.fetchPosts: Successfully loaded ${newPosts.length} posts. Total posts: ${_posts.length}');
+      debugPrint(
+          '🚀 PostsProvider.fetchPosts: Has more: $_hasMore, Next page: $_currentPage');
       return true;
     } catch (e) {
       _errorMessage = 'Failed to fetch posts: $e';
-      debugPrint(_errorMessage);
+      debugPrint('❌ PostsProvider.fetchPosts: Error occurred: $e');
+      debugPrint(
+          '❌ PostsProvider.fetchPosts: Setting error message: $_errorMessage');
       return false;
     } finally {
+      debugPrint('🚀 PostsProvider.fetchPosts: Setting loading to false...');
       _setLoading(false);
-      notifyListeners();
     }
   }
 
@@ -269,6 +278,70 @@ class PostsProvider with ChangeNotifier {
       debugPrint(_errorMessage);
       // Rethrow to allow proper error handling in UI
       throw Exception(_errorMessage);
+    }
+  }
+
+  // Vote on event status (ended/happening)
+  Future<Map<String, dynamic>> voteOnEventStatus({
+    required Post post,
+    required bool eventEnded,
+  }) async {
+    try {
+      debugPrint(
+          '🎯 PostsProvider: Voting on event status for post ${post.id}, eventEnded: $eventEnded');
+
+      final result = await _postsService.voteOnEventStatus(
+        postId: post.id,
+        eventEnded: eventEnded,
+      );
+
+      // Update post with new event status information
+      final postIndex = _posts.indexWhere((p) => p.id == post.id);
+      if (postIndex != -1) {
+        _posts[postIndex].isHappening = result['status'] == 'HAPPENING';
+        _posts[postIndex].isEnded = result['status'] == 'ENDED';
+        _posts[postIndex].endedVotesCount = result['ended_votes'];
+        _posts[postIndex].happeningVotesCount = result['happening_votes'];
+        _posts[postIndex].userStatusVote = eventEnded ? 'ended' : 'happening';
+
+        debugPrint(
+            '🔄 PostsProvider: Updated post status - isHappening: ${_posts[postIndex].isHappening}, isEnded: ${_posts[postIndex].isEnded}');
+
+        // Schedule notification for the next frame to avoid setState during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          notifyListeners();
+        });
+      }
+
+      _errorMessage = null;
+      return result;
+    } catch (e) {
+      _errorMessage = 'Failed to vote on event status: $e';
+      debugPrint('❌ PostsProvider: Error in voteOnEventStatus: $e');
+      throw Exception(_errorMessage);
+    }
+  }
+
+  // Check if user is within 100 meters of a post location
+  Future<bool> isUserNearPost(Post post,
+      {double maxDistanceMeters = 100.0}) async {
+    try {
+      final currentPosition = await _locationService.getCurrentPosition();
+
+      final distance = _locationService.calculateDistanceInMeters(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        post.latitude,
+        post.longitude,
+      );
+
+      debugPrint(
+          '🎯 PostsProvider: User distance from post ${post.id}: ${distance.toStringAsFixed(1)}m');
+
+      return distance <= maxDistanceMeters;
+    } catch (e) {
+      debugPrint('❌ PostsProvider: Error checking user proximity: $e');
+      return false;
     }
   }
 
@@ -655,7 +728,10 @@ class PostsProvider with ChangeNotifier {
   // Helper method to update loading state
   void _setLoading(bool loading) {
     _isLoading = loading;
+    debugPrint('🔧 PostsProvider._setLoading: Setting loading to $loading');
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint(
+          '🔧 PostsProvider._setLoading: Notifying listeners after frame callback');
       notifyListeners();
     });
   }

@@ -13,10 +13,12 @@ import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'dart:io';
-import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter_application_2/services/location/location_cache_service.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/media/media_preview_page.dart';
+import 'package:flutter_application_2/ui/pages/media/gallery_preview_page.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_application_2/ui/pages/home/components/post_detail/event_status_section.dart';
 
 class PostDetailPage extends StatefulWidget {
   final String title;
@@ -67,6 +69,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _mapInitialized = false; // Remove 'late' as it's initialized here
   bool _isLoadingVote = false; // Add loading state for vote operations
   bool _isLoading = false; // Add loading state for save operations
+  bool _isCalculatingDistance =
+      false; // Add loading state for distance calculation
 
   // Add state for related posts
   List<Post> _relatedPosts = [];
@@ -142,22 +146,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       });
 
       // Always recalculate distance from user's current location if not set or zero
-      if ((widget.post!.distance == 0.0 || widget.post!.distance.isNaN)) {
-        final locationService = LocationService();
-        try {
-          final userPosition = await locationService.getCurrentPosition();
-          final double calculatedDistance = locationService.calculateDistance(
-            userPosition.latitude,
-            userPosition.longitude,
-            widget.post!.latitude,
-            widget.post!.longitude,
-          );
-          setState(() {
-            widget.post!.distance = calculatedDistance; // Store in meters
-          });
-        } catch (e) {
-          // Could not get user location, leave distance as 0
-        }
+      if (widget.post!.distance == 0.0 || widget.post!.distance.isNaN) {
+        _calculateDistance();
       }
 
       // Log initialization for debugging
@@ -229,6 +219,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   // Handle upvote with proper API interaction
   void _handleUpvote() async {
     if (_isLoadingVote) return; // Prevent multiple simultaneous votes
+
+    // Check distance restriction first
+    if (!_isUserWithinRange()) {
+      _showDistanceRestrictionError();
+      return;
+    }
 
     setState(() => _isLoadingVote = true);
 
@@ -349,6 +345,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   // Handle downvote with proper API interaction
   void _handleDownvote() async {
     if (_isLoadingVote) return; // Prevent multiple simultaneous votes
+
+    // Check distance restriction first
+    if (!_isUserWithinRange()) {
+      _showDistanceRestrictionError();
+      return;
+    }
 
     setState(() => _isLoadingVote = true);
 
@@ -591,6 +593,25 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return 'https://via.placeholder.com/400x200?text=No+Image';
   }
 
+  // Get all media URLs for the post
+  List<String> _getAllMediaUrls() {
+    if (widget.post?.hasMedia == true && widget.post!.mediaUrls.isNotEmpty) {
+      return widget.post!.mediaUrls
+          .map((url) => _getFixedImageUrl(url))
+          .toList();
+    }
+
+    if (widget.post?.imageUrl != null && widget.post!.imageUrl.isNotEmpty) {
+      return [_getFixedImageUrl(widget.post!.imageUrl)];
+    }
+
+    if (widget.imageUrl.isNotEmpty) {
+      return [_getFixedImageUrl(widget.imageUrl)];
+    }
+
+    return [];
+  }
+
   // Helper method to check if media is a video
   bool _isVideoFile(String url) {
     final String lowerUrl = url.toLowerCase();
@@ -708,13 +729,25 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Open media preview page
   void _openMediaPreview(String mediaUrl) {
+    // Get all media URLs from the post
+    List<String> allMediaUrls = _getAllMediaUrls();
+
+    if (allMediaUrls.isEmpty) {
+      // If no media URLs found, add the current one
+      allMediaUrls = [mediaUrl];
+    }
+
+    // Find the index of the tapped media in the list
+    int initialIndex = allMediaUrls.indexOf(mediaUrl);
+    if (initialIndex < 0) initialIndex = 0;
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MediaPreviewPage(
-          mediaUrl: mediaUrl,
+        builder: (context) => GalleryPreviewPage(
+          mediaUrls: allMediaUrls,
           title: widget.title,
-          isVideo: _isVideoFile(mediaUrl),
+          initialIndex: initialIndex,
         ),
       ),
     );
@@ -751,16 +784,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Helper method to format distance properly in km or m
   String _formatDistance(double? distanceInMeters) {
-    // Always use post.distance in meters if available
-    if (widget.post?.distance != null && widget.post!.distance > 0) {
-      double meters = widget.post!.distance;
-      if (meters < 1000) {
-        return '${meters.toInt()} m';
-      } else {
-        return '${(meters / 1000).toStringAsFixed(1)} km';
-      }
-    }
-    // Then check if we're given a valid distance parameter
     if (distanceInMeters != null && distanceInMeters > 0) {
       if (distanceInMeters < 1000) {
         return '${distanceInMeters.toInt()} m';
@@ -785,8 +808,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         }
       }
     }
-    // Default: show 300m instead of "Nearby"
-    return '300 m';
+    // Default: show Unknown instead of a hardcoded value
+    return 'Unknown';
   }
 
   // Navigate to the user's profile
@@ -882,7 +905,81 @@ class _PostDetailPageState extends State<PostDetailPage> {
     }
   }
 
+  // Calculate distance using cached location service
+  Future<void> _calculateDistance() async {
+    if (widget.post == null) return;
+
+    setState(() {
+      _isCalculatingDistance = true;
+    });
+
+    try {
+      final locationCache = LocationCacheService();
+
+      // Try to get cached location first
+      var userPosition = locationCache.cachedPosition;
+
+      if (userPosition == null) {
+        // Force update if no cached position
+        userPosition = await locationCache.forceUpdate();
+      }
+
+      if (userPosition != null) {
+        final double calculatedDistance = locationCache.calculateDistance(
+          widget.post!.latitude,
+          widget.post!.longitude,
+        );
+
+        setState(() {
+          widget.post!.distance = calculatedDistance; // Store in meters
+          _isCalculatingDistance = false;
+        });
+
+        debugPrint(
+            '🎯 Distance calculated: ${calculatedDistance.toStringAsFixed(1)}m');
+      } else {
+        // Fallback - couldn't get location
+        setState(() {
+          _isCalculatingDistance = false;
+        });
+        debugPrint('❌ Could not get user location for distance calculation');
+      }
+    } catch (e) {
+      setState(() {
+        _isCalculatingDistance = false;
+      });
+      debugPrint('❌ Error calculating distance: $e');
+    }
+  }
+
   // Add method to check if user is within 100m of the post
+  bool _isUserWithinRange() {
+    if (widget.post == null) return false;
+
+    // If we're still calculating distance, don't allow voting
+    if (_isCalculatingDistance) return false;
+
+    // If distance is 0 or unknown, allow voting (fallback)
+    if (widget.post!.distance <= 0) return true;
+
+    // Check if user is within 100 meters (distance is stored in meters)
+    return widget.post!.distance <= 100.0;
+  }
+
+  // Show distance restriction error message
+  void _showDistanceRestrictionError() {
+    final distanceText = widget.post!.distance > 0
+        ? _formatDistance(widget.post!.distance)
+        : "Unknown distance";
+
+    ResponsiveSnackBar.showError(
+      context: context,
+      message:
+          'You must be within 100m of this location to vote. You are currently $distanceText away.',
+      duration: const Duration(seconds: 4),
+    );
+  }
+
   bool _isWithinRange() {
     if (widget.post?.distance == null) return false;
     // Convert distance to meters if needed and check if within 100m
@@ -892,8 +989,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final honestyScore = widget.post?.honestyScore ?? widget.honesty;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1086,11 +1181,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              widget.post?.distance != null
-                                  ? _formatDistance(widget.post!.distance *
-                                      1000) // Convert miles to meters
-                                  : _formatDistance(
-                                      300), // Default reasonable distance if none provided
+                              widget.post != null && widget.post!.distance > 0
+                                  ? _formatDistance(widget
+                                      .post!.distance) // Use meters directly
+                                  : _isCalculatingDistance
+                                      ? "Calculating..."
+                                      : "Unknown",
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -1120,53 +1216,27 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     widget.description,
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
 
-                  // Honesty Score Indicator
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _getHonestyScoreColor(honestyScore).withAlpha(
-                          26), // Replaced withOpacity (0.1 * 255 = 25.5)
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _getHonestyScoreColor(honestyScore),
-                        width: 1,
-                      ),
+                  // Event Status Section
+                  if (widget.post != null)
+                    EventStatusSection(
+                      post: widget.post!,
+                      onStatusUpdated: () => setState(() {}),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.verified,
-                          color: _getHonestyScoreColor(honestyScore),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Honesty: $honestyScore%',
-                          style: TextStyle(
-                            color: _getHonestyScoreColor(honestyScore),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
                   const SizedBox(height: 16),
 
-                  // Engagement metrics
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
+                  // Engagement metrics - Single row layout
+                  Row(
                     children: [
                       // Upvotes - Using arrow up instead of thumb up
                       GestureDetector(
-                        onTap: widget.post != null ? _handleUpvote : null,
+                        onTap: widget.post != null && _isUserWithinRange()
+                            ? _handleUpvote
+                            : (widget.post != null && !_isUserWithinRange())
+                                ? () => _showDistanceRestrictionError()
+                                : null,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1176,14 +1246,17 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   : Icons.arrow_upward_outlined,
                               color: _hasUpvoted
                                   ? ThemeConstants.primaryColor
-                                  : Colors.grey,
-                              size: 20,
+                                  : (!_isUserWithinRange() &&
+                                          widget.post != null)
+                                      ? Colors.grey.withOpacity(0.5)
+                                      : Colors.grey,
+                              size: 18,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 3),
                             _isLoadingVote
                                 ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
+                                    width: 14,
+                                    height: 14,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2),
                                   )
@@ -1192,16 +1265,26 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     style: TextStyle(
                                       color: _hasUpvoted
                                           ? ThemeConstants.primaryColor
-                                          : Colors.grey,
+                                          : (!_isUserWithinRange() &&
+                                                  widget.post != null)
+                                              ? Colors.grey.withOpacity(0.5)
+                                              : Colors.grey,
+                                      fontSize: 13,
                                     ),
                                   ),
                           ],
                         ),
                       ),
 
+                      const SizedBox(width: 16),
+
                       // Downvotes - Using arrow down instead of thumb down
                       GestureDetector(
-                        onTap: widget.post != null ? _handleDownvote : null,
+                        onTap: widget.post != null && _isUserWithinRange()
+                            ? _handleDownvote
+                            : (widget.post != null && !_isUserWithinRange())
+                                ? () => _showDistanceRestrictionError()
+                                : null,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1211,14 +1294,17 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   : Icons.arrow_downward_outlined,
                               color: _hasDownvoted
                                   ? Colors.redAccent
-                                  : Colors.grey,
-                              size: 20,
+                                  : (!_isUserWithinRange() &&
+                                          widget.post != null)
+                                      ? Colors.grey.withOpacity(0.5)
+                                      : Colors.grey,
+                              size: 18,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 3),
                             _isLoadingVote
                                 ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
+                                    width: 14,
+                                    height: 14,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2),
                                   )
@@ -1227,12 +1313,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     style: TextStyle(
                                       color: _hasDownvoted
                                           ? Colors.redAccent
-                                          : Colors.grey,
+                                          : (!_isUserWithinRange() &&
+                                                  widget.post != null)
+                                              ? Colors.grey.withOpacity(0.5)
+                                              : Colors.grey,
+                                      fontSize: 13,
                                     ),
                                   ),
                           ],
                         ),
                       ),
+
+                      const SizedBox(width: 16),
 
                       // Comments count - now shows thread count
                       Row(
@@ -1241,18 +1333,98 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           const Icon(
                             Icons.comment_outlined,
                             color: Colors.grey,
-                            size: 20,
+                            size: 18,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Text(
                             '${_relatedPosts.length}', // Show thread count instead of comments
-                            style: const TextStyle(color: Colors.grey),
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 13),
                           ),
                         ],
                       ),
 
-                      // Share and Save buttons
-                      _buildAdditionalActionButtons(),
+                      const Spacer(),
+
+                      // Share, Honesty, and Save buttons
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Compact honesty rate indicator
+                          _buildMiniHonestyIndicator(),
+
+                          const SizedBox(width: 12),
+
+                          // Share button
+                          GestureDetector(
+                            onTap: () {
+                              // Share post functionality
+                              Share.share(
+                                'Check out this post: ${widget.post?.title ?? widget.title}',
+                              );
+                            },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.share_outlined,
+                                  color: Colors.grey,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Share',
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          // Save button
+                          if (widget.post != null)
+                            GestureDetector(
+                              onTap: _isLoading ? null : _toggleSavePost,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _isLoading
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.grey,
+                                          ),
+                                        )
+                                      : Icon(
+                                          widget.post!.isSaved == true
+                                              ? Icons.bookmark
+                                              : Icons.bookmark_border,
+                                          color: widget.post!.isSaved == true
+                                              ? Colors.amber
+                                              : Colors.grey,
+                                          size: 18,
+                                        ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    widget.post!.isSaved == true
+                                        ? 'Unsave'
+                                        : 'Save',
+                                    style: TextStyle(
+                                      color: widget.post!.isSaved == true
+                                          ? Colors.amber
+                                          : Colors.grey,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -1561,17 +1733,43 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 style: const TextStyle(fontSize: 13),
               ),
               // Show media if available
-              if (post.hasMedia) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: GestureDetector(
+                  onTap: () {
+                    // Open gallery preview with all media URLs from this post
+                    List<String> mediaUrls = post.mediaUrls.isNotEmpty
+                        ? post.mediaUrls
+                            .map((url) => _getFixedImageUrl(url))
+                            .toList()
+                        : [_getFixedImageUrl(post.imageUrl)];
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GalleryPreviewPage(
+                          mediaUrls: mediaUrls,
+                          title: post.title,
+                          initialIndex: 0,
+                        ),
+                      ),
+                    );
+                  },
                   child: SizedBox(
                     height: 120,
                     width: double.infinity,
-                    child: _buildMediaWidget(post.imageUrl, fit: BoxFit.cover),
+                    child: _buildMediaWidget(
+                      post.mediaUrls.isNotEmpty
+                          ? post.mediaUrls.first
+                          : post.imageUrl,
+                      fit: BoxFit.cover,
+                      isClickable:
+                          false, // We handle the tap in the parent GestureDetector
+                    ),
                   ),
                 ),
-              ],
+              ),
               const SizedBox(height: 8),
               // Post stats row
               Row(
@@ -1631,75 +1829,37 @@ class _PostDetailPageState extends State<PostDetailPage> {
         ));
   }
 
-  // Modify _buildAdditionalActionButtons to send correct related post ID
-  Widget _buildAdditionalActionButtons() {
+  // Very compact honesty indicator for action buttons row
+  Widget _buildMiniHonestyIndicator() {
+    final int honestyScore = widget.post?.honestyScore ?? 0;
+
     return Container(
-      constraints: const BoxConstraints(maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: _getHonestyScoreColor(honestyScore).withAlpha(30),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _getHonestyScoreColor(honestyScore).withAlpha(100),
+          width: 0.8,
+        ),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Share button
-          GestureDetector(
-            onTap: () {
-              // Share post functionality
-              Share.share(
-                'Check out this post: ${widget.post?.title ?? widget.title}',
-              );
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(
-                  Icons.share_outlined,
-                  color: Colors.grey,
-                  size: 20,
-                ),
-                SizedBox(width: 4),
-                Text(
-                  'Share',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
+          Icon(
+            Icons.verified,
+            color: _getHonestyScoreColor(honestyScore),
+            size: 12,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            '$honestyScore%',
+            style: TextStyle(
+              color: _getHonestyScoreColor(honestyScore),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
-
-          // Save button
-          if (widget.post != null)
-            GestureDetector(
-              onTap: _isLoading ? null : _toggleSavePost,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.grey,
-                          ),
-                        )
-                      : Icon(
-                          widget.post!.isSaved == true
-                              ? Icons.bookmark
-                              : Icons.bookmark_border,
-                          color: widget.post!.isSaved == true
-                              ? Colors.amber
-                              : Colors.grey,
-                          size: 20,
-                        ),
-                  const SizedBox(width: 4),
-                  Text(
-                    widget.post!.isSaved == true ? 'Unsave' : 'Save',
-                    style: TextStyle(
-                      color: widget.post!.isSaved == true
-                          ? Colors.amber
-                          : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );
@@ -1717,6 +1877,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       return Colors.red;
     }
   }
+
+  // These methods have been moved to the EventStatusSection widget
 
   @override
   void dispose() {

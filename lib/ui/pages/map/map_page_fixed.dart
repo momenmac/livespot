@@ -1035,6 +1035,17 @@ class _MapPageState extends State<MapPage> {
                                             tags: [],
                                             isSaved: post[
                                                 'is_saved'], // Add isSaved field from API response
+                                            // Event status fields for EventStatusSection
+                                            isHappening:
+                                                post['is_happening'] ?? false,
+                                            isEnded: post['is_ended'] ?? false,
+                                            endedVotesCount:
+                                                post['ended_votes_count'] ?? 0,
+                                            happeningVotesCount:
+                                                post['happening_votes_count'] ??
+                                                    0,
+                                            userStatusVote:
+                                                post['user_status_vote'],
                                           ),
                                         ),
                                       ),

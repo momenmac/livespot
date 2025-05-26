@@ -67,6 +67,21 @@ class PostsService {
         final String responseBody = utf8.decode(response.bodyBytes);
         final dynamic decodedBody = json.decode(responseBody);
 
+        // Debug print the API response
+        debugPrint('🔍 Posts API Response Body Sample:');
+        if (decodedBody is Map && decodedBody.containsKey('results')) {
+          final results = decodedBody['results'] as List;
+          if (results.isNotEmpty) {
+            final firstPost = results.first;
+            debugPrint(
+                '🔍 First post user_status_vote: ${firstPost['user_status_vote']} (type: ${firstPost['user_status_vote'].runtimeType})');
+            debugPrint('🔍 First post status: ${firstPost['status']}');
+            debugPrint(
+                '🔍 First post is_happening: ${firstPost['is_happening']}');
+            debugPrint('🔍 First post is_ended: ${firstPost['is_ended']}');
+          }
+        }
+
         if (decodedBody is Map && decodedBody.containsKey('results')) {
           // Parse paginated response
           final posts = (decodedBody['results'] as List)
@@ -710,6 +725,44 @@ class PostsService {
       }
     } catch (e) {
       debugPrint('Error toggling save status: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Vote on event status (ended/happening)
+  Future<Map<String, dynamic>> voteOnEventStatus({
+    required int postId,
+    required bool eventEnded,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/posts/$postId/vote_status/');
+      final headers = await _getHeaders();
+
+      // Debug the request being sent
+      debugPrint(
+          'Voting on event status with URL: $url and eventEnded=$eventEnded');
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({'event_ended': eventEnded}),
+      );
+
+      debugPrint('Event status vote response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final responseData = json.decode(responseBody);
+        debugPrint('Event status vote response: $responseData');
+        return responseData;
+      } else {
+        debugPrint(
+            'Failed to vote on event status: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Failed to vote on event status: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error voting on event status: $e');
       throw Exception('Network error: $e');
     }
   }

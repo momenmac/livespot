@@ -17,6 +17,12 @@ class PostSerializer(serializers.ModelSerializer):
     user_vote = serializers.IntegerField(read_only=True)
     is_saved = serializers.SerializerMethodField(read_only=True)
     related_posts_count = serializers.SerializerMethodField(read_only=True)
+    # Event status fields
+    is_happening = serializers.SerializerMethodField(read_only=True)
+    is_ended = serializers.SerializerMethodField(read_only=True)
+    ended_votes_count = serializers.SerializerMethodField(read_only=True)
+    happening_votes_count = serializers.SerializerMethodField(read_only=True)
+    user_status_vote = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Post
@@ -26,11 +32,15 @@ class PostSerializer(serializers.ModelSerializer):
             'upvotes', 'downvotes', 'honesty_score', 'status',
             'is_verified_location', 'taken_within_app',
             'tags', 'user_vote', 'is_anonymous', 'is_saved',
-            'related_post', 'related_posts_count'
+            'related_post', 'related_posts_count', 'is_happening', 
+            'is_ended', 'ended_votes_count', 'happening_votes_count',
+            'user_status_vote'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 
                            'downvotes', 'honesty_score', 'user_vote', 
-                           'is_saved', 'related_posts_count']
+                           'is_saved', 'related_posts_count', 'is_happening',
+                           'is_ended', 'ended_votes_count', 'happening_votes_count',
+                           'user_status_vote']
         
     def create(self, validated_data):
         # Extract location data and create PostCoordinates object
@@ -155,6 +165,34 @@ class PostSerializer(serializers.ModelSerializer):
         else:
             print(f"⚠️ PostSerializer.get_is_saved: No authenticated user in request context")
         return False
+    
+    def get_is_happening(self, obj):
+        """Check if the event is currently happening"""
+        return obj.is_happening
+    
+    def get_is_ended(self, obj):
+        """Check if the event has ended"""
+        return obj.is_ended
+    
+    def get_ended_votes_count(self, obj):
+        """Get count of users who voted that this event has ended"""
+        return obj.get_ended_votes_count()
+    
+    def get_happening_votes_count(self, obj):
+        """Get count of users who voted that this event is still happening"""
+        return obj.get_happening_votes_count()
+    
+    def get_user_status_vote(self, obj):
+        """Get the current user's vote on whether this event has ended"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            from .models import EventStatusVote
+            try:
+                vote = EventStatusVote.objects.get(user=request.user, post=obj)
+                return 'ended' if vote.voted_ended else 'happening'  # Return string values
+            except EventStatusVote.DoesNotExist:
+                return None  # User hasn't voted on status
+        return None
 
 class PostVoteSerializer(serializers.ModelSerializer):
     class Meta:

@@ -57,9 +57,11 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
   }
 
+  // Make sure we properly dispose all page controllers
   @override
   void dispose() {
     _pageController.dispose();
+    // Clean up any other resources
     // Restore system UI when leaving the page
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -319,7 +321,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                           _buildInteractionButton(
                             icon: Icons.comment,
                             label:
-                                '${threadPostsCount}', // Show related posts count
+                                '$threadPostsCount', // Show related posts count
                             onTap: () => _navigateToPostDetail(),
                           ),
                           _buildHonestyButton(),
@@ -332,8 +334,8 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                       ),
                     ),
 
-                    // Media pagination indicator (if multiple media) - vertical on the right side
-                    if (_mediaUrls.length > 1)
+                    // Post navigation indicator (for multiple posts) - vertical on the right side
+                    if (_threadPosts.length > 1)
                       Positioned(
                         right: 10.0,
                         top: 0,
@@ -349,19 +351,27 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: List.generate(
-                                _mediaUrls.length,
-                                (index) => Container(
-                                  width: 5.0,
-                                  height: _currentPage == index ? 20.0 : 5.0,
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 3.0),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(5),
-                                    color: _currentPage == index
-                                        ? ThemeConstants.primaryColor
-                                        : Colors.white.withOpacity(0.5),
-                                  ),
-                                ),
+                                _threadPosts.length,
+                                (index) {
+                                  // Determine if this post is currently shown
+                                  final currentPost = _getCurrentPost();
+                                  final postAtIndex = _threadPosts[index];
+                                  final isCurrentPost =
+                                      currentPost.id == postAtIndex.id;
+
+                                  return Container(
+                                    width: 5.0,
+                                    height: isCurrentPost ? 20.0 : 5.0,
+                                    margin: const EdgeInsets.symmetric(
+                                        vertical: 3.0),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(5),
+                                      color: isCurrentPost
+                                          ? ThemeConstants.primaryColor
+                                          : Colors.white.withOpacity(0.5),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -373,17 +383,68 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
   }
 
   Widget _buildReelItem(String mediaUrl, int index) {
+    // Get current post
+    final currentPost = _getCurrentPost();
+
+    // Get all media URLs for this specific post
+    List<String> postMediaUrls = [];
+    if (currentPost.mediaUrls.isNotEmpty) {
+      postMediaUrls = List.from(currentPost.mediaUrls)
+          .map((url) => _getFixedMediaUrl(url))
+          .where((url) => url.isNotEmpty)
+          .toList();
+    } else if (currentPost.imageUrl.isNotEmpty) {
+      postMediaUrls = [_getFixedMediaUrl(currentPost.imageUrl)];
+    }
+
+    // Create a horizontal page controller for this post's media
+    final PageController horizontalPageController = PageController();
+
     return GestureDetector(
       // Allow vertical scrolling to pass through to PageView
       onVerticalDragUpdate: null,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Media content
-          _isVideoFile(mediaUrl)
-              ? _VideoPlayer(
-                  videoUrl: mediaUrl, autoPlay: index == _currentPage)
-              : _buildImageWidget(mediaUrl),
+          // We'll use StatefulBuilder to manage the current media index state within this item
+          StatefulBuilder(builder: (context, setItemState) {
+            // Keep track of the current media index within this post
+            int currentMediaIndex = 0;
+
+            return Column(
+              children: [
+                // Media content with horizontal swipe
+                Expanded(
+                  child: postMediaUrls.length > 1
+                      ? PageView.builder(
+                          scrollDirection: Axis.horizontal,
+                          controller: horizontalPageController,
+                          itemCount: postMediaUrls.length,
+                          onPageChanged: (mediaIndex) {
+                            // Update current media index when swiped
+                            setItemState(() {
+                              currentMediaIndex = mediaIndex;
+                            });
+                          },
+                          itemBuilder: (context, mediaIndex) {
+                            final postMediaUrl = postMediaUrls[mediaIndex];
+                            return _isVideoFile(postMediaUrl)
+                                ? _VideoPlayer(
+                                    videoUrl: postMediaUrl,
+                                    autoPlay: index == _currentPage &&
+                                        mediaIndex == currentMediaIndex)
+                                : _buildImageWidget(postMediaUrl);
+                          },
+                        )
+                      : _isVideoFile(mediaUrl)
+                          ? _VideoPlayer(
+                              videoUrl: mediaUrl,
+                              autoPlay: index == _currentPage)
+                          : _buildImageWidget(mediaUrl),
+                ),
+              ],
+            );
+          }),
 
           // Content info overlay (bottom gradient)
           Positioned(
@@ -412,15 +473,15 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage: _getCurrentPost().authorProfilePic !=
-                                      null &&
-                                  _getCurrentPost().authorProfilePic!.isNotEmpty
-                              ? NetworkImage(_getFixedMediaUrl(
-                                  _getCurrentPost().authorProfilePic))
-                              : null,
+                          backgroundImage:
+                              currentPost.authorProfilePic != null &&
+                                      currentPost.authorProfilePic!.isNotEmpty
+                                  ? NetworkImage(_getFixedMediaUrl(
+                                      currentPost.authorProfilePic))
+                                  : null,
                           backgroundColor: ThemeConstants.primaryColor,
-                          child: _getCurrentPost().authorProfilePic == null ||
-                                  _getCurrentPost().authorProfilePic!.isEmpty
+                          child: currentPost.authorProfilePic == null ||
+                                  currentPost.authorProfilePic!.isEmpty
                               ? const Icon(Icons.person, color: Colors.white)
                               : null,
                         ),
@@ -431,14 +492,14 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                             Row(
                               children: [
                                 Text(
-                                  _getCurrentPost().getDisplayName(),
+                                  currentPost.getDisplayName(),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
                                   ),
                                 ),
-                                if (_getCurrentPost().isAuthorVerified)
+                                if (currentPost.isAuthorVerified)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 4.0),
                                     child: Icon(
@@ -450,7 +511,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                               ],
                             ),
                             Text(
-                              '${DateTime.now().difference(_getCurrentPost().timePosted).inDays} days ago',
+                              '${DateTime.now().difference(currentPost.timePosted).inDays} days ago',
                               style: const TextStyle(color: Colors.white70),
                             ),
                           ],
@@ -461,7 +522,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                   const SizedBox(height: 12),
                   // Post title
                   Text(
-                    _getCurrentPost().title,
+                    currentPost.title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -471,18 +532,18 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                   const SizedBox(height: 8),
                   // Post description
                   Text(
-                    _getCurrentPost().description,
+                    currentPost.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white70),
                   ),
                   // Tags row
-                  if (_getCurrentPost().tags.isNotEmpty)
+                  if (currentPost.tags.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Wrap(
                         spacing: 8,
-                        children: _getCurrentPost().tags.map((tag) {
+                        children: currentPost.tags.map((tag) {
                           return Text(
                             "#$tag",
                             style: TextStyle(
@@ -494,7 +555,52 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                       ),
                     ),
                   const SizedBox(height: 16),
-                  // Media pagination indicator removed from here (moved to main Stack)
+
+                  // Horizontal media pagination indicator for multiple media within a post
+                  if (postMediaUrls.length > 1)
+                    StatefulBuilder(builder: (context, setDotsState) {
+                      horizontalPageController.addListener(() {
+                        if (horizontalPageController.page!.round() !=
+                            horizontalPageController.page) {
+                          // Only update during actual page changes to avoid excessive rebuilds
+                          setDotsState(() {});
+                        }
+                      });
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          postMediaUrls.length,
+                          (dotIndex) => GestureDetector(
+                            onTap: () {
+                              // Navigate to this media item when dot is tapped
+                              horizontalPageController.animateToPage(
+                                dotIndex,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            },
+                            child: Container(
+                              width: 8.0,
+                              height: 8.0,
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 4.0),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: (horizontalPageController.hasClients
+                                            ? horizontalPageController.page
+                                                    ?.round() ??
+                                                0
+                                            : 0) ==
+                                        dotIndex
+                                    ? ThemeConstants.primaryColor
+                                    : Colors.white.withOpacity(0.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
@@ -626,7 +732,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
     if (_isFilePath(mediaUrl)) {
       return Image.file(
         File(mediaUrl),
-        fit: BoxFit.cover,
+        fit: BoxFit.fitWidth,
         errorBuilder: (context, error, stackTrace) {
           return _buildErrorPlaceholder();
         },
@@ -634,7 +740,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
     } else {
       return CachedNetworkImage(
         imageUrl: mediaUrl,
-        fit: BoxFit.cover,
+        fit: BoxFit.fitWidth,
         placeholder: (context, url) => const Center(
           child: CircularProgressIndicator(
             color: Colors.white,

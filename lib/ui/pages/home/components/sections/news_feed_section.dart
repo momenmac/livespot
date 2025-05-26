@@ -66,26 +66,43 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
   Future<void> _fetchPosts({bool refresh = false}) async {
     if (!mounted) return;
 
+    debugPrint(
+        '🔥🔥🔥 NewsFeedSection._fetchPosts: Starting with refresh=$refresh 🔥🔥🔥');
+
     try {
       // Show loading state immediately
+      debugPrint(
+          '🔥 _fetchPosts: BEFORE setState _isLoading=true (current: $_isLoading)');
       setState(() {
         _isLoading = true;
       });
+      debugPrint(
+          '🔥 _fetchPosts: AFTER setState _isLoading=true (current: $_isLoading)');
 
       // Format date as YYYY-MM-DD for API
       final formattedDate =
           widget.selectedDate.toIso8601String().split('T').first;
+      debugPrint(
+          '🔥 NewsFeedSection._fetchPosts: Formatted date: $formattedDate');
 
       final provider = Provider.of<PostsProvider>(context, listen: false);
+      debugPrint(
+          '🔥 _fetchPosts: BEFORE provider.fetchPosts, provider.isLoading=${provider.isLoading}, provider.posts.length=${provider.posts.length}');
 
       // Wait for fetch to complete and ensure we have data
       final success =
           await provider.fetchPosts(date: formattedDate, refresh: refresh);
+      debugPrint(
+          '🔥 _fetchPosts: AFTER provider.fetchPosts, success=$success, provider.isLoading=${provider.isLoading}, provider.posts.length=${provider.posts.length}');
 
       if (mounted) {
+        debugPrint(
+            '🔥 _fetchPosts: BEFORE setState _isLoading=false (current: $_isLoading)');
         setState(() {
           _isLoading = false;
         });
+        debugPrint(
+            '🔥 _fetchPosts: AFTER setState _isLoading=false (current: $_isLoading)');
       }
 
       if (!success && mounted) {
@@ -95,6 +112,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         );
       }
     } catch (e) {
+      debugPrint('❌ NewsFeedSection._fetchPosts: Exception occurred: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -225,16 +243,33 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         // Posts content
         Consumer<PostsProvider>(
           builder: (context, postsProvider, child) {
-            // Show local loading state first
-            if (_isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+            // Debug print provider state with more details
+            debugPrint('🎯🎯🎯 NewsFeedSection Consumer BUILD START 🎯🎯🎯');
+            debugPrint('🎯 Local _isLoading=$_isLoading');
+            debugPrint('🎯 Provider isLoading=${postsProvider.isLoading}');
+            debugPrint(
+                '🎯 Provider posts.length=${postsProvider.posts.length}');
+            debugPrint(
+                '🎯 Provider errorMessage=${postsProvider.errorMessage}');
+            debugPrint('🎯 Provider hasMore=${postsProvider.hasMore}');
 
             final posts = postsProvider.posts;
             final hasError = postsProvider.errorMessage != null;
 
+            debugPrint('🎯 posts.isEmpty=${posts.isEmpty}');
+            debugPrint('🎯 hasError=$hasError');
+
+            // Show local loading state first
+            if (_isLoading) {
+              debugPrint(
+                  '🎯 CONDITION: _isLoading is true -> Showing local loading indicator');
+              return const Center(child: CircularProgressIndicator());
+            }
+
             // Show loading indicator for initial load or refresh
             if (postsProvider.isLoading && posts.isNotEmpty) {
+              debugPrint(
+                  '🎯 CONDITION: provider.isLoading && posts.isNotEmpty -> Showing stack with loading overlay');
               // Show loading indicator over existing content if we have posts
               return Stack(
                 children: [
@@ -251,6 +286,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
             // Show error if we have one and no posts
             if (hasError && posts.isEmpty) {
+              debugPrint(
+                  '🎯 CONDITION: hasError && posts.isEmpty -> Showing error message');
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -275,6 +312,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
             // Show no news message if we have no posts and aren't loading
             if (posts.isEmpty) {
+              debugPrint(
+                  '🎯 CONDITION: posts.isEmpty -> Showing no news message');
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -297,6 +336,9 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               );
             }
 
+            debugPrint(
+                '🎯 CONDITION: DEFAULT -> Showing posts list with ${posts.length} posts');
+            debugPrint('🎯🎯🎯 NewsFeedSection Consumer BUILD END 🎯🎯🎯');
             return _buildPostsList(posts);
           },
         ),

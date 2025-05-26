@@ -170,18 +170,6 @@ class _MapPageState extends State<MapPage> {
 
     final DateTime selectedDate = _controller.selectedDate;
 
-    // Force setting today's date if no date is selected
-    if (selectedDate == null) {
-      print(
-          '⚠️ No date selected - forcing today\'s date to ensure proper filtering');
-      _controller.selectedDate = DateTime.now();
-      // Wait for the controller to update before proceeding
-      await Future.delayed(const Duration(milliseconds: 50));
-      // Try again with the date set
-      if (mounted) _fetchMapLocations();
-      return;
-    }
-
     // ALWAYS include the date parameter when selectedDate is available
     String dateParam;
 
@@ -722,6 +710,12 @@ class _MapPageState extends State<MapPage> {
       isAnonymous: post['is_anonymous'] ?? false,
       tags: [],
       isSaved: post['is_saved'], // Add isSaved field from API response
+      // Event status fields for EventStatusSection
+      isHappening: post['is_happening'] ?? false,
+      isEnded: post['is_ended'] ?? false,
+      endedVotesCount: post['ended_votes_count'] ?? 0,
+      happeningVotesCount: post['happening_votes_count'] ?? 0,
+      userStatusVote: post['user_status_vote'],
     );
 
     // Calculate position for the bubble
@@ -750,25 +744,36 @@ class _MapPageState extends State<MapPage> {
             ),
           ),
 
-          // Position the speech bubble above the marker with dynamic sizing and adaptive positioning
+          // Position the speech bubble aligned with the marker for better positioning
           Positioned(
+            // Center bubble horizontally with the marker point as the reference
             left: max(
                 10,
-                min(MediaQuery.of(context).size.width - 310,
-                    screenPoint.x - 150)), // Keep bubble on screen
+                min(
+                    MediaQuery.of(context).size.width - 290,
+                    screenPoint.x -
+                        140)), // Keep bubble on screen and center on marker
             // Adjust vertical position - if near top of screen, put bubble below marker instead
             top: screenPoint.y < MediaQuery.of(context).size.height * 0.3
-                ? screenPoint.y + 40 // Place below the marker if close to top
-                : max(MediaQuery.of(context).padding.top + 10,
-                    screenPoint.y - 210), // Otherwise above
+                ? screenPoint.y +
+                    0 // Place below the marker if close to top (reduced from 40 to 30)
+                : max(
+                    MediaQuery.of(context).padding.top + 10,
+                    screenPoint.y -
+                        190), // Otherwise above (reduced from 210 to 190)
             child: AnimatedSpeechBubble(
-              bubbleColor: Theme.of(context).cardColor,
-              cornerRadius: 20.0,
-              arrowWidth: 22.0,
-              arrowHeight: 12.0,
-              elevation: 6.0,
-              shadowColor: Colors.black26,
-              animationDuration: const Duration(milliseconds: 300),
+              bubbleColor: Theme.of(context).brightness == Brightness.dark
+                  ? Color(0xFF2A2A2A) // Darker background for dark mode
+                  : Colors.white, // White background for light mode
+              cornerRadius: 16.0,
+              arrowWidth: 16.0, // Reduced from 18.0 to 16.0
+              arrowHeight: 8.0, // Reduced from 10.0 to 8.0
+              elevation: 4.0,
+              shadowColor: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.black38
+                  : Colors.black26,
+              animationDuration:
+                  const Duration(milliseconds: 250), // Faster animation
               // Set arrow direction based on bubble position
               arrowAlignment: screenPoint.y <
                       MediaQuery.of(context).size.height * 0.3
@@ -777,63 +782,213 @@ class _MapPageState extends State<MapPage> {
                   : Alignment
                       .bottomCenter, // Arrow points down if bubble is above marker
               child: Container(
-                width: 320,
+                width: 280,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20.0),
+                  borderRadius: BorderRadius.circular(16.0),
                   border: Border.all(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]!
+                        : Colors.grey[300]!,
                     width: 1,
                   ),
                 ),
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Enhanced title with better typography
-                    Container(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Directionality(
-                        textDirection: _isArabicText(title)
-                            ? TextDirection.rtl
-                            : TextDirection.ltr,
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color:
-                                Theme.of(context).textTheme.titleLarge?.color,
-                            letterSpacing: 0.3,
+                    // Thumbnail and title row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Thumbnail image (if available)
+                        if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+                          Container(
+                            width: 42,
+                            height: 42,
+                            margin: const EdgeInsets.only(right: 8, bottom: 2),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[300]!,
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.black26
+                                      : Colors.black12,
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(5),
+                              child: Image.network(
+                                thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: Colors.grey[300],
+                                  child: Icon(
+                                    Icons.image_not_supported,
+                                    size: 18,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[200],
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.0,
+                                          valueColor: AlwaysStoppedAnimation<
+                                                  Color>(
+                                              Theme.of(context).primaryColor),
+                                          value: loadingProgress
+                                                      .expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: _isArabicText(title)
-                              ? TextAlign.right
-                              : TextAlign.left,
+
+                        // Title and category column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Row with category badge and honesty rate
+                              Row(
+                                children: [
+                                  // Category badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(
+                                        bottom: 4, right: 6),
+                                    decoration: BoxDecoration(
+                                      color: CategoryUtils.getCategoryColor(
+                                              category)
+                                          .withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      category.toUpperCase(),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: CategoryUtils.getCategoryColor(
+                                            category),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Honesty rate badge
+                                  if (honesty > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      margin: const EdgeInsets.only(bottom: 4),
+                                      decoration: BoxDecoration(
+                                        color: _getHonestyColor(honesty.toInt())
+                                            .withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.verified_user,
+                                            size: 10,
+                                            color: _getHonestyColor(
+                                                honesty.toInt()),
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            "${honesty.toInt()}%",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: _getHonestyColor(
+                                                  honesty.toInt()),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+
+                              // Title
+                              Directionality(
+                                textDirection: _isArabicText(title)
+                                    ? TextDirection.rtl
+                                    : TextDirection.ltr,
+                                child: Text(
+                                  title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.white
+                                        : Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.color,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: _isArabicText(title)
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ],
+                    ),
+
+                    // Thinner divider with better light/dark mode support
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[700]
+                            : Colors.grey[300],
                       ),
                     ),
 
-                    // Subtle divider
-                    Container(
-                      height: 1,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Theme.of(context).primaryColor.withOpacity(0.3),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Enhanced content preview
+                    // Compacted content preview with better dark mode support
                     if (content.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.only(bottom: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
                         child: Directionality(
                           textDirection: _isArabicText(content)
                               ? TextDirection.rtl
@@ -841,15 +996,14 @@ class _MapPageState extends State<MapPage> {
                           child: Text(
                             content,
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.color
-                                  ?.withOpacity(0.8),
-                              height: 1.4,
+                              fontSize: 12,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.grey[300]
+                                  : Colors.grey[700],
+                              height: 1.3,
                             ),
-                            maxLines: 3,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             textAlign: _isArabicText(content)
                                 ? TextAlign.right
@@ -858,303 +1012,214 @@ class _MapPageState extends State<MapPage> {
                         ),
                       ),
 
-                    // Date and location info
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 14,
-                            color: Theme.of(context).primaryColor,
+                    // Compact date, verification badge and location row
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today,
+                            size: 12,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          formattedDate,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            formattedDate,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                              fontWeight: FontWeight.w500,
+                        ),
+                        const Spacer(),
+                        // Show verification badge if post is verified
+                        if (post['is_verified'] == true)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.withOpacity(0.3)),
                             ),
-                          ),
-                          const Spacer(),
-                          if (post['location'] != null &&
-                              post['location']['name'] != null)
-                            Row(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.location_on,
-                                  size: 14,
-                                  color: Theme.of(context).primaryColor,
-                                ),
+                                Icon(Icons.verified,
+                                    size: 10, color: Colors.green),
                                 const SizedBox(width: 2),
                                 Text(
-                                  post['location']['name'],
+                                  'Verified',
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).primaryColor,
+                                    color: Colors.green,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w500,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
-                        ],
-                      ),
+                          ),
+                        const SizedBox(width: 6),
+                        if (post['location'] != null &&
+                            post['location']['name'] != null)
+                          Row(
+                            children: [
+                              Icon(Icons.location_on,
+                                  size: 12,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  post['location']['name'],
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
 
-                    // Enhanced button section with better styling
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        children: [
-                          // Action buttons row with improved design
-                          Row(
-                            children: [
-                              // View details button with gradient
-                              Expanded(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Theme.of(context).primaryColor,
-                                        Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.8),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(12),
-                                      onTap: () {
-                                        removeOverlay();
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                PostDetailPage(
-                                              title: title,
-                                              description: content,
-                                              imageUrl: thumbnailUrl ?? '',
-                                              location: post['location'] != null
-                                                  ? (post['location']['name'] ??
-                                                      'Unknown location')
-                                                  : 'Unknown location',
-                                              time: formattedDate,
-                                              honesty: honesty.toInt(),
-                                              upvotes: post['upvotes'] ?? 0,
-                                              comments:
-                                                  post['comments_count'] ??
-                                                      post['threads_count'] ??
-                                                      0,
-                                              isVerified:
-                                                  post['is_verified'] ?? false,
-                                              post: postObj,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 12, horizontal: 16),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.article_outlined,
-                                              size: 20,
-                                              color: Colors.white,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Details',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 15,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                    // Buttons with better light/dark mode appearance
+                    Row(
+                      children: [
+                        // View details button
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () {
+                              // Close the overlay
+                              removeOverlay();
+
+                              // Navigate to post detail page
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => PostDetailPage(
+                                    title: title,
+                                    description: content,
+                                    imageUrl: thumbnailUrl ?? '',
+                                    location: post['location'] != null
+                                        ? (post['location']['name'] ??
+                                            'Unknown location')
+                                        : 'Unknown location',
+                                    time: formattedDate,
+                                    honesty: honesty.toInt(),
+                                    upvotes: post['upvotes'] ?? 0,
+                                    comments: post['comments_count'] ??
+                                        post['threads_count'] ??
+                                        0,
+                                    isVerified: post['is_verified'] ?? false,
+                                    post: postObj,
                                   ),
                                 ),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.white
+                                  : Theme.of(context).primaryColor,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
                               ),
-
-                              const SizedBox(width: 12),
-
-                              // View media button with enhanced styling
-                              Expanded(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: mediaUrls.isEmpty
-                                        ? LinearGradient(
-                                            colors: [
-                                              Colors.grey.shade300,
-                                              Colors.grey.shade400
-                                            ],
-                                          )
-                                        : LinearGradient(
-                                            colors: [
-                                              ThemeConstants.green,
-                                              ThemeConstants.green
-                                                  .withOpacity(0.8),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: mediaUrls.isEmpty
-                                        ? []
-                                        : [
-                                            BoxShadow(
-                                              color: ThemeConstants.green
-                                                  .withOpacity(0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(12),
-                                      onTap: mediaUrls.isEmpty
-                                          ? null
-                                          : () {
-                                              removeOverlay();
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      ReelsPage(
-                                                    post: postObj,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 12, horizontal: 16),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              _hasVideoContent(mediaUrls)
-                                                  ? Icons.play_circle_outline
-                                                  : Icons
-                                                      .photo_library_outlined,
-                                              size: 20,
-                                              color: mediaUrls.isEmpty
-                                                  ? Colors.grey.shade600
-                                                  : Colors.white,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              mediaUrls.isEmpty
-                                                  ? 'No Media'
-                                                  : (_hasVideoContent(mediaUrls)
-                                                      ? 'Videos'
-                                                      : 'Photos'),
-                                              style: TextStyle(
-                                                color: mediaUrls.isEmpty
-                                                    ? Colors.grey.shade600
-                                                    : Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 15,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                              backgroundColor: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context)
+                                      .primaryColor
+                                      .withOpacity(0.2)
+                                  : Theme.of(context)
+                                      .primaryColor
+                                      .withOpacity(0.1),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.article_outlined, size: 14),
+                                const SizedBox(width: 4),
+                                const Text('Details',
+                                    style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Media button (conditionally shown for posts with media)
+                        if (mediaUrls.isNotEmpty)
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () {
+                                // Close the overlay
+                                removeOverlay();
 
-                          // Additional info row with stats
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              // Upvotes
-                              _buildStatItem(
-                                icon: Icons.thumb_up_outlined,
-                                count: post['upvotes'] ?? 0,
-                                label: 'Upvotes',
-                                color: Colors.blue,
-                              ),
-                              // Comments
-                              _buildStatItem(
-                                icon: Icons.comment_outlined,
-                                count: post['comments_count'] ??
-                                    post['threads_count'] ??
-                                    0,
-                                label: 'Comments',
-                                color: Colors.orange,
-                              ),
-                              // Verification status
-                              if (post['is_verified'] == true)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: Colors.green.withOpacity(0.3)),
+                                // Navigate based on media type
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ReelsPage(
+                                      post: postObj,
+                                    ),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.verified,
-                                          size: 14, color: Colors.green),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Verified',
-                                        style: TextStyle(
-                                          color: Colors.green,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                );
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: _hasVideoContent(mediaUrls)
+                                    ? Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.red[300]
+                                        : Colors.red.shade700
+                                    : Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.blue[300]
+                                        : Colors.blue.shade700,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                            ],
+                                backgroundColor: _hasVideoContent(mediaUrls)
+                                    ? Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.red.shade900.withOpacity(0.3)
+                                        : Colors.red.shade50
+                                    : Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.blue.shade900.withOpacity(0.3)
+                                        : Colors.blue.shade50,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _hasVideoContent(mediaUrls)
+                                        ? Icons.play_circle
+                                        : Icons.image,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _hasVideoContent(mediaUrls)
+                                        ? 'Video'
+                                        : 'Media',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -1600,45 +1665,18 @@ class _MapPageState extends State<MapPage> {
     return false;
   }
 
-  // Helper method to build stat items for the speech bubble
-  Widget _buildStatItem({
-    required IconData icon,
-    required int count,
-    required String label,
-    required Color color,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          count.toString(),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: Theme.of(context).textTheme.bodyMedium?.color,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Theme.of(context).textTheme.bodySmall?.color,
-          ),
-        ),
-      ],
-    );
+  // Helper method to get appropriate color for honesty score
+  Color _getHonestyColor(int honesty) {
+    if (honesty >= 80) {
+      return Colors.green;
+    } else if (honesty >= 60) {
+      return Colors.lightGreen;
+    } else if (honesty >= 40) {
+      return Colors.amber;
+    } else if (honesty >= 20) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
   }
 }
