@@ -441,31 +441,49 @@ class PostsProvider with ChangeNotifier {
     try {
       // First make the API call
       final result = await _postsService.toggleSavePost(postId);
-      final success = result['success'] ?? false;
+      debugPrint('🔗 PostsProvider: toggleSavePost result: $result');
 
-      if (success) {
+      // Check for the actual response format: {status: saved} or {status: unsaved}
+      final String? status = result['status'];
+
+      if (status != null && (status == 'saved' || status == 'unsaved')) {
         // Only update the local state if the API call was successful
         final postIndex = _posts.indexWhere((p) => p.id == postId);
         if (postIndex != -1) {
-          // Use the response to set the exact state rather than toggling
-          // This ensures UI and server state are in sync
-          final bool currentState = _posts[postIndex].isSaved ?? false;
-          _posts[postIndex].isSaved = !currentState;
+          // Set the exact state based on server response
+          final bool newSavedState = status == 'saved';
+          _posts[postIndex].isSaved = newSavedState;
+
+          debugPrint(
+              '🔗 PostsProvider: Updated post $postId isSaved to $newSavedState');
 
           // Schedule notification for the next frame to avoid setState during build
           WidgetsBinding.instance.addPostFrameCallback((_) {
             notifyListeners();
           });
         }
-      }
 
-      _errorMessage = null;
-      return success;
+        _errorMessage = null;
+        return true; // API call was successful
+      } else {
+        _errorMessage = 'Invalid response from server: $result';
+        debugPrint('❌ PostsProvider: Invalid response format: $result');
+        return false;
+      }
     } catch (e) {
       _errorMessage = 'Failed to save/unsave post: $e';
-      debugPrint(_errorMessage);
+      debugPrint('❌ PostsProvider: Error in toggleSavePost: $e');
       return false;
     }
+  }
+
+  // Get the current saved state of a post from the provider's local state
+  bool? getPostSavedState(int postId) {
+    final postIndex = _posts.indexWhere((p) => p.id == postId);
+    if (postIndex != -1) {
+      return _posts[postIndex].isSaved;
+    }
+    return null; // Post not found in local state
   }
 
   // Fetch stories from users the current user is following

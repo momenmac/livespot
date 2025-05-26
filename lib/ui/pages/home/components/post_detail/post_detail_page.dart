@@ -120,6 +120,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       debugPrint('   - ID: ${widget.post!.id}');
       debugPrint('   - Title: ${widget.post!.title}');
       debugPrint('   - Content: ${widget.post!.content}');
+      debugPrint('   - isSaved: ${widget.post!.isSaved}');
+      debugPrint('   - userVote: ${widget.post!.userVote}');
 
       setState(() {
         // Initialize vote counts from the actual post data
@@ -161,7 +163,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       // Log initialization for debugging
       developer.log(
         'Initialized post detail with: upvotes=$_upvotes, downvotes=$_downvotes, '
-        'userVote=${widget.post!.userVote}, hasUpvoted=$_hasUpvoted, hasDownvoted=$_hasDownvoted, distance=${widget.post!.distance}',
+        'userVote=${widget.post!.userVote}, hasUpvoted=$_hasUpvoted, hasDownvoted=$_hasDownvoted, '
+        'isSaved=${widget.post!.isSaved}, distance=${widget.post!.distance}',
         name: 'PostDetailPage',
       );
     }
@@ -467,26 +470,50 @@ class _PostDetailPageState extends State<PostDetailPage> {
   void _toggleSavePost() async {
     if (_isLoading || widget.post == null) return;
 
+    debugPrint(
+        '🔖 PostDetailPage: Starting save toggle for post ${widget.post!.id}');
+    debugPrint(
+        '🔖 PostDetailPage: Current isSaved state: ${widget.post!.isSaved}');
+
+    // Store the previous state for potential rollback
+    final previousSavedState = widget.post!.isSaved ?? false;
+
     setState(() {
       _isLoading = true;
+      // Optimistically update UI for better user experience
+      widget.post!.isSaved = !previousSavedState;
     });
+
+    debugPrint(
+        '🔖 PostDetailPage: Optimistically updated to: ${widget.post!.isSaved}');
 
     try {
       // Get the posts provider
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-
-      // Optimistically update UI for better user experience
-      final previousSavedState = widget.post!.isSaved ?? false;
-      setState(() {
-        widget.post!.isSaved = !previousSavedState;
-      });
 
       // Call API through provider
       final success = await postsProvider.toggleSavePost(widget.post!.id);
 
       if (!mounted) return; // Add check before using context
 
-      if (!success) {
+      if (success) {
+        debugPrint('✅ PostDetailPage: Save toggle successful');
+        // Get the actual status from the provider's local state after API update
+        final actualSavedState =
+            postsProvider.getPostSavedState(widget.post!.id);
+        debugPrint(
+            '🔗 PostDetailPage: Provider says post is saved: $actualSavedState');
+
+        // Update the widget's post state to match the provider's state
+        if (actualSavedState != null) {
+          setState(() {
+            widget.post!.isSaved = actualSavedState;
+          });
+          debugPrint(
+              '🔖 PostDetailPage: Final state synchronized to: ${widget.post!.isSaved}');
+        }
+      } else {
+        debugPrint('❌ PostDetailPage: Save toggle failed, reverting state');
         // Revert on API failure
         setState(() {
           widget.post!.isSaved = previousSavedState;
@@ -502,16 +529,17 @@ class _PostDetailPageState extends State<PostDetailPage> {
         );
       }
     } catch (e) {
-      // Handle exceptions
+      debugPrint('❌ PostDetailPage: Exception in _toggleSavePost: $e');
+      // Revert state on exception by restoring the actual previous saved state
       setState(() {
-        widget.post!.isSaved = !(widget.post!.isSaved ?? false);
+        widget.post!.isSaved = previousSavedState;
       });
 
+      // Show error message
       if (mounted) {
-        // Add check before using context
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text('Error updating save status: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -521,6 +549,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         setState(() {
           _isLoading = false;
         });
+        debugPrint(
+            '🔖 PostDetailPage: Save toggle completed. Final state: ${widget.post!.isSaved}');
       }
     }
   }

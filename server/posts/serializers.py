@@ -145,9 +145,15 @@ class PostSerializer(serializers.ModelSerializer):
                 profile = UserProfile.objects.get(user=user)
                 # Check if the profile has saved_posts attribute and if this post is in it
                 if hasattr(profile, 'saved_posts'):
-                    return profile.saved_posts.filter(id=obj.id).exists()
+                    is_saved = profile.saved_posts.filter(id=obj.id).exists()
+                    # Debug logging to track is_saved calculation
+                    print(f"🔖 PostSerializer.get_is_saved: Post {obj.id} for user {user.id} -> {is_saved}")
+                    return is_saved
             except UserProfile.DoesNotExist:
+                print(f"⚠️ PostSerializer.get_is_saved: UserProfile not found for user {user.id}")
                 pass
+        else:
+            print(f"⚠️ PostSerializer.get_is_saved: No authenticated user in request context")
         return False
 
 class PostVoteSerializer(serializers.ModelSerializer):

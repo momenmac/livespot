@@ -131,10 +131,9 @@ class _MapPageState extends State<MapPage> {
     final today = DateTime.now();
     final selectedDate = _controller.selectedDate;
 
-    final dateParam = selectedDate != null &&
-            (selectedDate.year != today.year ||
-                selectedDate.month != today.month ||
-                selectedDate.day != today.day)
+    final dateParam = (selectedDate.year != today.year ||
+            selectedDate.month != today.month ||
+            selectedDate.day != today.day)
         ? "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}"
         : null;
 
@@ -953,6 +952,14 @@ class _MapPageState extends State<MapPage> {
                                     final isVerified =
                                         post['is_verified'] ?? false;
 
+                                    // Debug logging to check is_saved field
+                                    debugPrint(
+                                        '🔖 MapPageFixed: Creating Post object for post ${post['id']}');
+                                    debugPrint(
+                                        '🔖 MapPageFixed: API response is_saved: ${post['is_saved']}');
+                                    debugPrint(
+                                        '🔖 MapPageFixed: API response type: ${post['is_saved'].runtimeType}');
+
                                     // Navigate with all required parameters
                                     Navigator.push(
                                       context,
@@ -1026,6 +1033,8 @@ class _MapPageState extends State<MapPage> {
                                             isAnonymous:
                                                 post['is_anonymous'] ?? false,
                                             tags: [],
+                                            isSaved: post[
+                                                'is_saved'], // Add isSaved field from API response
                                           ),
                                         ),
                                       ),

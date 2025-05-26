@@ -47,7 +47,7 @@ class SpeechBubble extends StatelessWidget {
             padding: padding,
             child: child,
           ),
-          
+
           // The arrow pointing to the marker
           if (arrowAlignment == Alignment.bottomCenter)
             Positioned(
@@ -110,7 +110,7 @@ class _TrianglePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path();
-    
+
     if (pointDown) {
       // Arrow pointing down
       path.moveTo(0, 0);
@@ -124,7 +124,7 @@ class _TrianglePainter extends CustomPainter {
       path.lineTo(size.width, size.height);
       path.close();
     }
-    
+
     // Draw fill and stroke
     canvas.drawPath(path, _fillPaint);
     canvas.drawPath(path, _strokePaint);

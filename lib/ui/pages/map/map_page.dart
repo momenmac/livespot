@@ -168,7 +168,7 @@ class _MapPageState extends State<MapPage> {
   Future<void> _fetchMapLocations() async {
     if (!mounted) return;
 
-    final DateTime? selectedDate = _controller.selectedDate;
+    final DateTime selectedDate = _controller.selectedDate;
 
     // Force setting today's date if no date is selected
     if (selectedDate == null) {
@@ -285,9 +285,6 @@ class _MapPageState extends State<MapPage> {
 
       // Extra clear logging to help debug API requests
       print('🌐 Final API request URL: $url');
-      if (dateParam == null) {
-        print('⚠️ WARNING: Making request WITHOUT date parameter!');
-      }
 
       // Debug the actual URL being sent
       print('🔍 API URL with filters: $url');
@@ -526,7 +523,8 @@ class _MapPageState extends State<MapPage> {
   }
 
   // Show speech bubble popover with post details when marker is tapped
-  void _showSpeechBubblePopover(BuildContext context, dynamic post, LatLng position) {
+  void _showSpeechBubblePopover(
+      BuildContext context, dynamic post, LatLng position) {
     // Get post details with proper encoding for Arabic text
     final category = post['category'] ?? 'general';
 
@@ -561,32 +559,44 @@ class _MapPageState extends State<MapPage> {
     List<String> mediaUrls = [];
 
     // Extract all media URLs from the post
-    if (post.containsKey('media_urls') && post['media_urls'] is List && (post['media_urls'] as List).isNotEmpty) {
+    if (post.containsKey('media_urls') &&
+        post['media_urls'] is List &&
+        (post['media_urls'] as List).isNotEmpty) {
       // Handle direct media_urls array
       mediaUrls = List<String>.from(post['media_urls']);
       thumbnailUrl = mediaUrls[0];
-    } else if (post.containsKey('media') && post['media'] is List && (post['media'] as List).isNotEmpty) {
+    } else if (post.containsKey('media') &&
+        post['media'] is List &&
+        (post['media'] as List).isNotEmpty) {
       var mediaList = post['media'];
 
       // Collect all media URLs from the list
       for (var item in mediaList) {
         String? url;
-        
+
         // If item is a direct string URL
         if (item is String) {
           url = item;
-        } 
+        }
         // If item is a map with URL in a field
         else if (item is Map) {
           // Try common keys for image URLs
-          for (final key in ['image_url', 'url', 'path', 'src', 'uri', 'thumb', 'thumbnail']) {
+          for (final key in [
+            'image_url',
+            'url',
+            'path',
+            'src',
+            'uri',
+            'thumb',
+            'thumbnail'
+          ]) {
             if (item.containsKey(key)) {
               url = item[key];
               break;
             }
           }
         }
-        
+
         // Add valid URL to our list
         if (url != null && url.isNotEmpty) {
           // Make relative URLs absolute
@@ -596,12 +606,14 @@ class _MapPageState extends State<MapPage> {
           mediaUrls.add(url);
         }
       }
-      
+
       // Use the first media URL as thumbnail
       if (mediaUrls.isNotEmpty) {
         thumbnailUrl = mediaUrls[0];
       }
-    } else if (post.containsKey('mediaUrls') && post['mediaUrls'] is List && (post['mediaUrls'] as List).isNotEmpty) {
+    } else if (post.containsKey('mediaUrls') &&
+        post['mediaUrls'] is List &&
+        (post['mediaUrls'] as List).isNotEmpty) {
       // Handle direct mediaUrls array with camelCase
       mediaUrls = List<String>.from(post['mediaUrls']);
       thumbnailUrl = mediaUrls[0];
@@ -658,10 +670,17 @@ class _MapPageState extends State<MapPage> {
       }
     }
 
-    final DateTime? postDate = post['created_at'] != null ? DateTime.parse(post['created_at']) : null;
+    final DateTime? postDate =
+        post['created_at'] != null ? DateTime.parse(post['created_at']) : null;
     final String formattedDate = postDate != null
         ? "${postDate.day}/${postDate.month}/${postDate.year} at ${postDate.hour}:${postDate.minute.toString().padLeft(2, '0')}"
         : "Unknown date";
+
+    // Debug logging to check is_saved field
+    debugPrint('🔖 MapPage: Creating Post object for post ${post['id']}');
+    debugPrint('🔖 MapPage: API response is_saved: ${post['is_saved']}');
+    debugPrint(
+        '🔖 MapPage: API response type: ${post['is_saved'].runtimeType}');
 
     // Create a Post object for the ReelsPage navigation
     final postObj = Post(
@@ -674,12 +693,14 @@ class _MapPageState extends State<MapPage> {
       honestyScore: honesty.toInt(),
       upvotes: post['upvotes'] ?? 0,
       downvotes: post['downvotes'] ?? 0,
-      userVote: 0,
+      userVote: post['user_vote'] ?? 0,
       mediaUrls: mediaUrls,
       latitude: post['location']['latitude']?.toDouble() ?? 0.0,
       longitude: post['location']['longitude']?.toDouble() ?? 0.0,
       location: _createPostLocation(
-        post['location'] != null ? (post['location']['name'] ?? 'Unknown location') : 'Unknown location',
+        post['location'] != null
+            ? (post['location']['name'] ?? 'Unknown location')
+            : 'Unknown location',
         post['location']['latitude']?.toDouble(),
         post['location']['longitude']?.toDouble(),
       ),
@@ -687,21 +708,27 @@ class _MapPageState extends State<MapPage> {
         post['author']?['id'] ?? 0,
         post['is_anonymous'] == true
             ? 'Anonymous'
-            : (post['author']?['display_name'] ?? post['author']?['username'] ?? 'Anonymous'),
+            : (post['author']?['display_name'] ??
+                post['author']?['username'] ??
+                'Anonymous'),
         post['is_verified'] ?? false,
-        profileImage: post['is_anonymous'] == true ? null : post['author']?['profile_picture'],
+        profileImage: post['is_anonymous'] == true
+            ? null
+            : post['author']?['profile_picture'],
       ),
       status: post['status'] ?? 'published',
       isVerifiedLocation: post['is_verified_location'] ?? true,
       takenWithinApp: post['taken_within_app'] ?? true,
       isAnonymous: post['is_anonymous'] ?? false,
       tags: [],
+      isSaved: post['is_saved'], // Add isSaved field from API response
     );
 
     // Calculate position for the bubble
     // We need to convert the map coordinates to screen coordinates
-    final screenPoint = _controller.mapController.camera.latLngToScreenPoint(position);
-    
+    final screenPoint =
+        _controller.mapController.camera.latLngToScreenPoint(position);
+
     // Show overlay
     OverlayState? overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
@@ -725,11 +752,15 @@ class _MapPageState extends State<MapPage> {
 
           // Position the speech bubble above the marker with dynamic sizing and adaptive positioning
           Positioned(
-            left: max(10, min(MediaQuery.of(context).size.width - 310, screenPoint.x - 150)), // Keep bubble on screen
+            left: max(
+                10,
+                min(MediaQuery.of(context).size.width - 310,
+                    screenPoint.x - 150)), // Keep bubble on screen
             // Adjust vertical position - if near top of screen, put bubble below marker instead
             top: screenPoint.y < MediaQuery.of(context).size.height * 0.3
                 ? screenPoint.y + 40 // Place below the marker if close to top
-                : max(MediaQuery.of(context).padding.top + 10, screenPoint.y - 210), // Otherwise above
+                : max(MediaQuery.of(context).padding.top + 10,
+                    screenPoint.y - 210), // Otherwise above
             child: AnimatedSpeechBubble(
               bubbleColor: Theme.of(context).cardColor,
               cornerRadius: 20.0,
@@ -739,9 +770,12 @@ class _MapPageState extends State<MapPage> {
               shadowColor: Colors.black26,
               animationDuration: const Duration(milliseconds: 300),
               // Set arrow direction based on bubble position
-              arrowAlignment: screenPoint.y < MediaQuery.of(context).size.height * 0.3
-                  ? Alignment.topCenter // Arrow points up if bubble is below marker
-                  : Alignment.bottomCenter, // Arrow points down if bubble is above marker
+              arrowAlignment: screenPoint.y <
+                      MediaQuery.of(context).size.height * 0.3
+                  ? Alignment
+                      .topCenter // Arrow points up if bubble is below marker
+                  : Alignment
+                      .bottomCenter, // Arrow points down if bubble is above marker
               child: Container(
                 width: 320,
                 decoration: BoxDecoration(
@@ -760,22 +794,27 @@ class _MapPageState extends State<MapPage> {
                     Container(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Directionality(
-                        textDirection: _isArabicText(title) ? TextDirection.rtl : TextDirection.ltr,
+                        textDirection: _isArabicText(title)
+                            ? TextDirection.rtl
+                            : TextDirection.ltr,
                         child: Text(
                           title,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: Theme.of(context).textTheme.titleLarge?.color,
+                            color:
+                                Theme.of(context).textTheme.titleLarge?.color,
                             letterSpacing: 0.3,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          textAlign: _isArabicText(title) ? TextAlign.right : TextAlign.left,
+                          textAlign: _isArabicText(title)
+                              ? TextAlign.right
+                              : TextAlign.left,
                         ),
                       ),
                     ),
-                    
+
                     // Subtle divider
                     Container(
                       height: 1,
@@ -790,30 +829,39 @@ class _MapPageState extends State<MapPage> {
                         ),
                       ),
                     ),
-                    
+
                     // Enhanced content preview
                     if (content.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Directionality(
-                          textDirection: _isArabicText(content) ? TextDirection.rtl : TextDirection.ltr,
+                          textDirection: _isArabicText(content)
+                              ? TextDirection.rtl
+                              : TextDirection.ltr,
                           child: Text(
                             content,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.8),
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color
+                                  ?.withOpacity(0.8),
                               height: 1.4,
                             ),
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                            textAlign: _isArabicText(content) ? TextAlign.right : TextAlign.left,
+                            textAlign: _isArabicText(content)
+                                ? TextAlign.right
+                                : TextAlign.left,
                           ),
                         ),
                       ),
-                      
+
                     // Date and location info
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 10),
                       decoration: BoxDecoration(
                         color: Theme.of(context).primaryColor.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(8),
@@ -835,7 +883,8 @@ class _MapPageState extends State<MapPage> {
                             ),
                           ),
                           const Spacer(),
-                          if (post['location'] != null && post['location']['name'] != null)
+                          if (post['location'] != null &&
+                              post['location']['name'] != null)
                             Row(
                               children: [
                                 Icon(
@@ -860,7 +909,7 @@ class _MapPageState extends State<MapPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Enhanced button section with better styling
                     Container(
                       decoration: BoxDecoration(
@@ -880,7 +929,9 @@ class _MapPageState extends State<MapPage> {
                                     gradient: LinearGradient(
                                       colors: [
                                         Theme.of(context).primaryColor,
-                                        Theme.of(context).primaryColor.withOpacity(0.8),
+                                        Theme.of(context)
+                                            .primaryColor
+                                            .withOpacity(0.8),
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
@@ -888,7 +939,9 @@ class _MapPageState extends State<MapPage> {
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                                        color: Theme.of(context)
+                                            .primaryColor
+                                            .withOpacity(0.3),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -903,27 +956,35 @@ class _MapPageState extends State<MapPage> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => PostDetailPage(
+                                            builder: (context) =>
+                                                PostDetailPage(
                                               title: title,
                                               description: content,
                                               imageUrl: thumbnailUrl ?? '',
                                               location: post['location'] != null
-                                                  ? (post['location']['name'] ?? 'Unknown location')
+                                                  ? (post['location']['name'] ??
+                                                      'Unknown location')
                                                   : 'Unknown location',
                                               time: formattedDate,
                                               honesty: honesty.toInt(),
                                               upvotes: post['upvotes'] ?? 0,
-                                              comments: post['comments_count'] ?? post['threads_count'] ?? 0,
-                                              isVerified: post['is_verified'] ?? false,
+                                              comments:
+                                                  post['comments_count'] ??
+                                                      post['threads_count'] ??
+                                                      0,
+                                              isVerified:
+                                                  post['is_verified'] ?? false,
                                               post: postObj,
                                             ),
                                           ),
                                         );
                                       },
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12, horizontal: 16),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.article_outlined,
@@ -946,70 +1007,87 @@ class _MapPageState extends State<MapPage> {
                                   ),
                                 ),
                               ),
-                              
+
                               const SizedBox(width: 12),
-                              
+
                               // View media button with enhanced styling
                               Expanded(
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    gradient: mediaUrls.isEmpty 
+                                    gradient: mediaUrls.isEmpty
                                         ? LinearGradient(
-                                            colors: [Colors.grey.shade300, Colors.grey.shade400],
+                                            colors: [
+                                              Colors.grey.shade300,
+                                              Colors.grey.shade400
+                                            ],
                                           )
                                         : LinearGradient(
                                             colors: [
                                               ThemeConstants.green,
-                                              ThemeConstants.green.withOpacity(0.8),
+                                              ThemeConstants.green
+                                                  .withOpacity(0.8),
                                             ],
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                           ),
                                     borderRadius: BorderRadius.circular(12),
-                                    boxShadow: mediaUrls.isEmpty ? [] : [
-                                      BoxShadow(
-                                        color: ThemeConstants.green.withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                                    boxShadow: mediaUrls.isEmpty
+                                        ? []
+                                        : [
+                                            BoxShadow(
+                                              color: ThemeConstants.green
+                                                  .withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                   ),
                                   child: Material(
                                     color: Colors.transparent,
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
-                                      onTap: mediaUrls.isEmpty 
+                                      onTap: mediaUrls.isEmpty
                                           ? null
                                           : () {
                                               removeOverlay();
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => ReelsPage(
+                                                  builder: (context) =>
+                                                      ReelsPage(
                                                     post: postObj,
                                                   ),
                                                 ),
                                               );
                                             },
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12, horizontal: 16),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              _hasVideoContent(mediaUrls) 
+                                              _hasVideoContent(mediaUrls)
                                                   ? Icons.play_circle_outline
-                                                  : Icons.photo_library_outlined,
+                                                  : Icons
+                                                      .photo_library_outlined,
                                               size: 20,
-                                              color: mediaUrls.isEmpty ? Colors.grey.shade600 : Colors.white,
+                                              color: mediaUrls.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : Colors.white,
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              mediaUrls.isEmpty 
+                                              mediaUrls.isEmpty
                                                   ? 'No Media'
-                                                  : (_hasVideoContent(mediaUrls) ? 'Videos' : 'Photos'),
+                                                  : (_hasVideoContent(mediaUrls)
+                                                      ? 'Videos'
+                                                      : 'Photos'),
                                               style: TextStyle(
-                                                color: mediaUrls.isEmpty ? Colors.grey.shade600 : Colors.white,
+                                                color: mediaUrls.isEmpty
+                                                    ? Colors.grey.shade600
+                                                    : Colors.white,
                                                 fontWeight: FontWeight.w600,
                                                 fontSize: 15,
                                               ),
@@ -1023,7 +1101,7 @@ class _MapPageState extends State<MapPage> {
                               ),
                             ],
                           ),
-                          
+
                           // Additional info row with stats
                           const SizedBox(height: 12),
                           Row(
@@ -1039,23 +1117,28 @@ class _MapPageState extends State<MapPage> {
                               // Comments
                               _buildStatItem(
                                 icon: Icons.comment_outlined,
-                                count: post['comments_count'] ?? post['threads_count'] ?? 0,
+                                count: post['comments_count'] ??
+                                    post['threads_count'] ??
+                                    0,
                                 label: 'Comments',
                                 color: Colors.orange,
                               ),
                               // Verification status
                               if (post['is_verified'] == true)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: Colors.green.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                    border: Border.all(
+                                        color: Colors.green.withOpacity(0.3)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.verified, size: 14, color: Colors.green),
+                                      Icon(Icons.verified,
+                                          size: 14, color: Colors.green),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Verified',
@@ -1506,10 +1589,10 @@ class _MapPageState extends State<MapPage> {
   bool _hasVideoContent(List<String> urls) {
     for (final url in urls) {
       final lowerUrl = url.toLowerCase();
-      if (lowerUrl.endsWith('.mp4') || 
-          lowerUrl.endsWith('.mov') || 
-          lowerUrl.endsWith('.avi') || 
-          lowerUrl.endsWith('.webm') || 
+      if (lowerUrl.endsWith('.mp4') ||
+          lowerUrl.endsWith('.mov') ||
+          lowerUrl.endsWith('.avi') ||
+          lowerUrl.endsWith('.webm') ||
           lowerUrl.contains('video')) {
         return true;
       }

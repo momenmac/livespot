@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.db.models import Q, Count
 from django.contrib.postgres.search import SearchVector
+from django.http import JsonResponse
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -31,6 +32,14 @@ class PostViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsAuthorOrReadOnly]
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'content', 'tags']
+    
+    def get_serializer_context(self):
+        """
+        Ensure the serializer has access to the request context for user-specific fields like is_saved
+        """
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
     
     def perform_create(self, serializer):
         serializer.save()
@@ -215,6 +224,15 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        print(f"🎯 VOTE DEBUG - Starting vote process for post {post.id}, user {request.user.id}, is_upvote: {is_upvote}")
+        
+        # Check current vote state before operation
+        try:
+            existing_vote = PostVote.objects.get(post=post, user=request.user)
+            print(f"📋 VOTE DEBUG - Existing vote found: is_upvote={existing_vote.is_upvote}")
+        except PostVote.DoesNotExist:
+            print(f"📋 VOTE DEBUG - No existing vote found")
+        
         serializer = PostVoteSerializer(
             data={'post': post.id, 'is_upvote': is_upvote},
             context={'request': request}
@@ -223,6 +241,7 @@ class PostViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             try:
                 vote = serializer.save()
+                print(f"💾 VOTE DEBUG - Serializer save completed. Vote removed: {hasattr(vote, '_vote_removed') and vote._vote_removed}")
                 
                 # Check if vote was removed (has our custom attribute)
                 vote_removed = hasattr(vote, '_vote_removed') and vote._vote_removed
@@ -239,6 +258,7 @@ class PostViewSet(viewsets.ModelViewSet):
                     post.honesty_score = 50  # Default value when there are no votes
                 
                 post.save()
+                print(f"📊 VOTE DEBUG - Post updated: upvotes={post.upvotes}, downvotes={post.downvotes}")
                 
                 # Determine user's current vote status for the response
                 user_vote = 0  # Default: no vote
@@ -250,27 +270,39 @@ class PostViewSet(viewsets.ModelViewSet):
                             user=request.user
                         )
                         user_vote = 1 if user_vote_obj.is_upvote else -1
+                        print(f"✅ VOTE DEBUG - Found user vote: {user_vote} for post {post.id} user {request.user.id}")
                     except PostVote.DoesNotExist:
                         user_vote = 0
+                        print(f"⚠️ VOTE DEBUG - No vote found for post {post.id} user {request.user.id}")
+                        # Additional debug: check if there are any votes for this user/post combination
+                        all_votes = PostVote.objects.filter(post=post, user=request.user)
+                        print(f"🔍 VOTE DEBUG - All votes for this combination: {list(all_votes)}")
+                else:
+                    print(f"🗑️ VOTE DEBUG - Vote was removed for post {post.id} user {request.user.id}")
                 
                 # Set user_vote on post for serialization
                 setattr(post, '_user_vote', user_vote)
                 
-                return Response(
-                    {
-                        'upvotes': post.upvotes,
-                        'downvotes': post.downvotes,
-                        'honesty_score': post.honesty_score,
-                        'vote_removed': vote_removed,
-                        'user_vote': user_vote
-                    }
-                )
+                response_data = {
+                    'upvotes': post.upvotes,
+                    'downvotes': post.downvotes,
+                    'honesty_score': post.honesty_score,
+                    'vote_removed': vote_removed,
+                    'user_vote': user_vote
+                }
+                print(f"📤 VOTE DEBUG - Returning response: {response_data}")
+                
+                return Response(response_data)
             except Exception as e:
+                print(f"❌ VOTE DEBUG - Exception occurred: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return Response(
                     {"error": f"Failed to process vote: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         
+        print(f"❌ VOTE DEBUG - Serializer validation failed: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['get'])

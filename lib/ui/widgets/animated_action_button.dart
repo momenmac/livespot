@@ -8,13 +8,13 @@ class AnimatedActionButton extends StatefulWidget {
   final List<BoxShadow>? boxShadow;
 
   const AnimatedActionButton({
-    Key? key,
+    super.key,
     required this.child,
     this.onTap,
     this.gradient,
     this.borderRadius = const BorderRadius.all(Radius.circular(12)),
     this.boxShadow,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedActionButton> createState() => _AnimatedActionButtonState();
@@ -84,11 +84,13 @@ class _AnimatedActionButtonState extends State<AnimatedActionButton>
               decoration: BoxDecoration(
                 gradient: widget.gradient,
                 borderRadius: widget.borderRadius,
-                boxShadow: _isPressed 
-                    ? widget.boxShadow?.map((shadow) => shadow.copyWith(
-                        blurRadius: shadow.blurRadius * 0.5,
-                        offset: shadow.offset * 0.5,
-                      )).toList()
+                boxShadow: _isPressed
+                    ? widget.boxShadow
+                        ?.map((shadow) => shadow.copyWith(
+                              blurRadius: shadow.blurRadius * 0.5,
+                              offset: shadow.offset * 0.5,
+                            ))
+                        .toList()
                     : widget.boxShadow,
               ),
               child: Material(
