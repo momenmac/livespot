@@ -503,11 +503,16 @@ class PostsService {
       // Add authorization headers
       request.headers.addAll(headers);
 
-      // Add file with content type
-      final fileName = filePath.split('/').last;
+      // Add file with content type - enhanced video detection
+      final fileName = filePath.split('/').last.toLowerCase();
       String contentType = 'image';
-      if (fileName.toLowerCase().endsWith('.mp4') ||
-          fileName.toLowerCase().endsWith('.mov')) {
+      if (fileName.endsWith('.mp4') ||
+          fileName.endsWith('.mov') ||
+          fileName.endsWith('.avi') ||
+          fileName.endsWith('.mkv') ||
+          fileName.endsWith('.webm') ||
+          fileName.endsWith('.3gp') ||
+          fileName.endsWith('.flv')) {
         contentType = 'video';
       }
 

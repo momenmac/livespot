@@ -52,10 +52,7 @@ class _EventStatusSectionState extends State<EventStatusSection> {
 
       var userPosition = locationCache.cachedPosition;
 
-      if (userPosition == null) {
-        // Force update if no cached position
-        userPosition = await locationCache.forceUpdate();
-      }
+      userPosition ??= await locationCache.forceUpdate();
 
       if (userPosition != null) {
         final double calculatedDistance = locationCache.calculateDistance(

@@ -7,6 +7,7 @@ import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/services/auth/token_manager.dart';
+import 'package:geolocator/geolocator.dart';
 
 class PostsProvider with ChangeNotifier {
   final PostsService _postsService;
@@ -442,6 +443,53 @@ class PostsProvider with ChangeNotifier {
     } finally {
       _setLoading(false);
       notifyListeners();
+    }
+  }
+
+  // Add video post with upload functionality
+  Future<Post?> addVideoPost({
+    required String title,
+    required String content,
+    required String category,
+    required List<String> tags,
+    required String videoPath,
+    required Position? position,
+    required String? address,
+    required bool isAnonymous,
+  }) async {
+    try {
+      _setLoading(true);
+
+      if (position == null) {
+        throw Exception('Location is required');
+      }
+
+      // First upload the video
+      final String? mediaUrl = await uploadMedia(videoPath);
+      if (mediaUrl == null) {
+        throw Exception('Failed to upload video');
+      }
+
+      // Create the post with the uploaded video URL
+      final post = await createPost(
+        title: title,
+        content: content,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        address: address,
+        category: category,
+        mediaUrls: [mediaUrl],
+        tags: tags,
+        isAnonymous: isAnonymous,
+      );
+
+      return post;
+    } catch (e) {
+      _errorMessage = 'Failed to create video post: $e';
+      debugPrint(_errorMessage);
+      throw Exception(_errorMessage);
+    } finally {
+      _setLoading(false);
     }
   }
 

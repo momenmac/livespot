@@ -919,10 +919,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       // Try to get cached location first
       var userPosition = locationCache.cachedPosition;
 
-      if (userPosition == null) {
-        // Force update if no cached position
-        userPosition = await locationCache.forceUpdate();
-      }
+      userPosition ??= await locationCache.forceUpdate();
 
       if (userPosition != null) {
         final double calculatedDistance = locationCache.calculateDistance(

@@ -381,9 +381,8 @@ class _CustomScaffoldState extends State<CustomScaffold> {
               unreadNotificationCount: widget.unreadNotificationCount,
               unreadMessageCount: widget.unreadMessageCount,
             ),
-      floatingActionButton: isLargeScreen 
-          ? null 
-          : AdminFloatingActionButton(key: _fabKey),
+      floatingActionButton:
+          isLargeScreen ? null : AdminFloatingActionButton(key: _fabKey),
       floatingActionButtonLocation:
           isLargeScreen ? null : FloatingActionButtonLocation.centerDocked,
       body: GestureDetector(
@@ -460,7 +459,8 @@ class _AdminFloatingActionButtonState extends State<AdminFloatingActionButton>
         width: 65,
         height: 65,
         child: FloatingActionButton(
-          onPressed: () => NavigationService().navigateTo(AppRoutes.camera),
+          onPressed: () =>
+              NavigationService().navigateTo(AppRoutes.unifiedCamera),
           tooltip: 'Camera',
           shape: const CircleBorder(),
           child: const Icon(Icons.camera_alt_outlined, size: 35),
@@ -494,7 +494,7 @@ class _AdminFloatingActionButtonState extends State<AdminFloatingActionButton>
                   mini: true,
                   onPressed: () {
                     debugPrint("Camera button pressed - navigating to camera");
-                    NavigationService().navigateTo(AppRoutes.camera);
+                    NavigationService().navigateTo(AppRoutes.unifiedCamera);
                     _toggle();
                   },
                   child: const Icon(Icons.camera_alt_outlined, size: 20),

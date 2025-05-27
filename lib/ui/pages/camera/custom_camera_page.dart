@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
-import 'package:flutter_application_2/ui/pages/camera/photo_preview_page.dart';
+import 'package:flutter_application_2/ui/pages/camera/media_preview_page.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -259,8 +259,9 @@ class _CustomCameraPageState extends State<CustomCameraPage>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PhotoPreviewPage(
-            imagePath: photo.path,
+          builder: (context) => MediaPreviewPage(
+            mediaPath: photo.path,
+            mediaType: 'photo',
             position: _currentPosition,
             address: _currentAddress,
           ),
@@ -430,11 +431,14 @@ class _CustomCameraPageState extends State<CustomCameraPage>
                     ),
                   ),
 
-                  // Camera flip button
+                  // Video camera switch button
                   _buildControlButton(
-                    icon: Icons.flip_camera_ios,
-                    onTap: _toggleCameraDirection,
-                    label: 'Flip',
+                    icon: Icons.videocam,
+                    onTap: () {
+                      Navigator.of(context)
+                          .pushReplacementNamed('/video-camera');
+                    },
+                    label: 'Video',
                   ),
                 ],
               ),
