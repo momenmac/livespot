@@ -36,6 +36,7 @@ class MediaFile(models.Model):
     original_filename = models.CharField(max_length=255, blank=True)
     file_size = models.IntegerField(default=0)  # Size in bytes
     firebase_url = models.URLField(max_length=500, blank=True, null=True)
+    thumbnail_url = models.URLField(max_length=500, blank=True, null=True)  # For video thumbnails
     uploaded_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

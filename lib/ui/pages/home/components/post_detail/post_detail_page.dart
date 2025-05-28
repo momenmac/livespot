@@ -13,11 +13,12 @@ import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:flutter_application_2/ui/widgets/post_options_popup.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_application_2/services/location/location_cache_service.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
-import 'package:flutter_application_2/ui/pages/media/media_preview_page.dart';
 import 'package:flutter_application_2/ui/pages/media/gallery_preview_page.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:flutter_application_2/ui/pages/home/components/post_detail/event_status_section.dart';
 
 class PostDetailPage extends StatefulWidget {
@@ -78,7 +79,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Video player controller
   VideoPlayerController? _videoController;
-  bool _isVideoInitialized = false;
 
   @override
   void initState() {
@@ -642,7 +642,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
         await _videoController!.initialize();
         setState(() {
-          _isVideoInitialized = true;
+          // Video initialized successfully
         });
       } catch (e) {
         debugPrint('Error initializing video: $e');
@@ -695,35 +695,79 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   // Build video thumbnail with play button overlay
   Widget _buildVideoThumbnail(String videoUrl, BoxFit fit) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Video thumbnail or placeholder
-        _videoController != null && _isVideoInitialized
-            ? VideoPlayer(_videoController!)
-            : Container(
-                color: Colors.grey[300],
-                child: const Center(
-                  child: Icon(
-                    Icons.video_file,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
-                ),
+    return FutureBuilder<Uint8List?>(
+      future: _generateVideoThumbnail(videoUrl),
+      builder: (context, snapshot) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Video thumbnail or fallback
+            if (snapshot.hasData && snapshot.data != null)
+              Image.memory(
+                snapshot.data!,
+                fit: fit,
+                errorBuilder: (context, error, stackTrace) => _buildVideoFallback(),
+              )
+            else if (snapshot.connectionState == ConnectionState.waiting)
+              _buildVideoLoading()
+            else
+              _buildVideoFallback(),
+            
+            // Play button overlay
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
               ),
-        // Play button overlay
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.play_arrow,
-            color: Colors.white,
-            size: 48,
-          ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 48,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Generate video thumbnail
+  Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
+    try {
+      final uint8list = await VideoThumbnail.thumbnailData(
+        video: videoUrl,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 400, // specify the width of the thumbnail
+        quality: 75,
+      );
+      return uint8list;
+    } catch (e) {
+      print('Error generating video thumbnail: $e');
+      return null;
+    }
+  }
+
+  // Fallback widget for video thumbnail loading
+  Widget _buildVideoLoading() {
+    return Container(
+      color: Colors.grey[300],
+      child: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  // Fallback widget for video thumbnail error
+  Widget _buildVideoFallback() {
+    return Container(
+      color: Colors.grey[300],
+      child: const Center(
+        child: Icon(
+          Icons.video_file,
+          size: 48,
+          color: Colors.grey,
         ),
-      ],
+      ),
     );
   }
 

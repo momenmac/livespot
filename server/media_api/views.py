@@ -15,8 +15,111 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import MediaFile
 from .serializers import MediaFileSerializer, MediaFileUploadSerializer, MediaFileResponseSerializer
+from .file_processor import FileProcessor
 
 logger = logging.getLogger(__name__)
+
+# Try to import magic for better file type detection
+try:
+    import magic
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
+    logger.warning("python-magic not available, falling back to mimetypes")
+
+
+def get_proper_file_extension(mime_type, content_type, original_filename=None):
+    """
+    Get the proper file extension based on MIME type and content type.
+    This ensures uploaded files have correct extensions regardless of their original filename.
+    """
+    # Try to get extension from original filename if it's valid
+    if original_filename and '.' in original_filename:
+        original_ext = original_filename.split('.')[-1].lower()
+        # Validate the extension matches the content type
+        if content_type == 'image' and original_ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']:
+            return original_ext
+        elif content_type == 'video' and original_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp', 'flv']:
+            return original_ext
+        elif content_type == 'audio' and original_ext in ['mp3', 'wav', 'aac', 'ogg', 'flac']:
+            return original_ext
+    
+    # Map MIME types to proper extensions
+    mime_to_ext = {
+        # Images
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+        'image/bmp': 'bmp',
+        'image/tiff': 'tiff',
+        # Videos
+        'video/mp4': 'mp4',
+        'video/quicktime': 'mov',
+        'video/x-msvideo': 'avi',
+        'video/x-matroska': 'mkv',
+        'video/webm': 'webm',
+        'video/3gpp': '3gp',
+        'video/x-flv': 'flv',
+        # Audio
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/aac': 'aac',
+        'audio/ogg': 'ogg',
+        'audio/flac': 'flac',
+    }
+    
+    # Return extension based on MIME type
+    if mime_type and mime_type in mime_to_ext:
+        return mime_to_ext[mime_type]
+    
+    # Fallback to default extensions based on content type
+    if content_type == 'image':
+        return 'jpg'
+    elif content_type == 'video':
+        return 'mp4'
+    elif content_type == 'audio':
+        return 'mp3'
+    else:
+        return 'bin'  # Binary file fallback
+
+
+def detect_content_type_from_file(file_path, original_content_type=None):
+    """
+    Detect the actual content type of a file using python-magic if available.
+    This helps ensure we're handling the file with the correct type.
+    """
+    try:
+        if HAS_MAGIC:
+            # Use python-magic to detect the actual MIME type
+            mime_type = magic.from_file(file_path, mime=True)
+            
+            if mime_type.startswith('image/'):
+                return 'image', mime_type
+            elif mime_type.startswith('video/'):
+                return 'video', mime_type
+            elif mime_type.startswith('audio/'):
+                return 'audio', mime_type
+            else:
+                # Fallback to original content type if detection fails
+                return original_content_type or 'image', mime_type
+        else:
+            # Fallback to mimetypes module
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if mime_type:
+                if mime_type.startswith('image/'):
+                    return 'image', mime_type
+                elif mime_type.startswith('video/'):
+                    return 'video', mime_type
+                elif mime_type.startswith('audio/'):
+                    return 'audio', mime_type
+            
+            return original_content_type or 'image', mime_type or 'application/octet-stream'
+    except Exception as e:
+        logger.warning(f"Failed to detect file type: {e}")
+        # Final fallback
+        return original_content_type or 'image', 'application/octet-stream'
 
 # Initialize Firebase once
 def get_firebase_storage():
@@ -66,20 +169,26 @@ class MediaFileViewSet(viewsets.ModelViewSet):
                 # Get file path
                 file_path = media_file.file.path
                 
-                # Determine content type for blob
-                content_type, _ = mimetypes.guess_type(file_path)
+                # Determine content type for blob and get proper file extension
+                detected_content_type, detected_mime_type = detect_content_type_from_file(file_path, media_file.content_type)
+                
+                # Use detected MIME type or fallback
+                content_type = detected_mime_type or mimetypes.guess_type(file_path)[0]
                 if not content_type:
-                    if media_file.content_type == 'image':
+                    if detected_content_type == 'image':
                         content_type = 'image/jpeg'
-                    elif media_file.content_type == 'video':
+                    elif detected_content_type == 'video':
                         content_type = 'video/mp4'
-                    elif media_file.content_type == 'audio':
+                    elif detected_content_type == 'audio':
                         content_type = 'audio/mpeg'
                     else:
                         content_type = 'application/octet-stream'
                 
-                # Create a unique Firebase path
-                firebase_path = f"attachments/{media_file.content_type}/{media_file.id}.{file_path.split('.')[-1]}"
+                # Get proper file extension based on MIME type and content type
+                proper_extension = get_proper_file_extension(content_type, detected_content_type, media_file.original_filename)
+                
+                # Create a unique Firebase path with proper extension
+                firebase_path = f"attachments/{detected_content_type}/{media_file.id}.{proper_extension}"
                 
                 # Upload file to Firebase
                 blob = bucket.blob(firebase_path)
@@ -137,20 +246,26 @@ def upload_media(request):
                 # Get file path
                 file_path = media_file.file.path
                 
-                # Determine content type for blob
-                mime_type, _ = mimetypes.guess_type(file_path)
+                # Determine content type for blob and get proper file extension
+                detected_content_type, detected_mime_type = detect_content_type_from_file(file_path, content_type)
+                
+                # Use detected MIME type or fallback
+                mime_type = detected_mime_type or mimetypes.guess_type(file_path)[0]
                 if not mime_type:
-                    if content_type == 'image':
+                    if detected_content_type == 'image':
                         mime_type = 'image/jpeg'
-                    elif content_type == 'video':
+                    elif detected_content_type == 'video':
                         mime_type = 'video/mp4'
-                    elif content_type == 'audio':
+                    elif detected_content_type == 'audio':
                         mime_type = 'audio/mpeg'
                     else:
                         mime_type = 'application/octet-stream'
                 
-                # Create a unique Firebase path
-                firebase_path = f"attachments/{content_type}/{media_file.id}.{file_obj.name.split('.')[-1]}"
+                # Get proper file extension based on MIME type and content type
+                proper_extension = get_proper_file_extension(mime_type, detected_content_type, file_obj.name)
+                
+                # Create a unique Firebase path with proper extension
+                firebase_path = f"attachments/{detected_content_type}/{media_file.id}.{proper_extension}"
                 
                 # Upload file to Firebase
                 blob = bucket.blob(firebase_path)
@@ -181,6 +296,50 @@ def upload_media(request):
         if firebase_url:
             response_data['url'] = firebase_url
             response_data['firebase_url'] = firebase_url
+        
+        # Post-process the file to fix extensions and paths if needed
+        try:
+            # Check if file has wrong extension or is a .temp file
+            if media_file.file and media_file.file.path:
+                file_path = media_file.file.path
+                file_name = os.path.basename(file_path)
+                
+                # Detect actual file type and fix if needed
+                detected_content_type, detected_mime_type = detect_content_type_from_file(file_path, content_type)
+                
+                # If detected type is different from stored type, or file has .temp extension
+                should_fix = (
+                    file_name.endswith('.temp') or
+                    detected_content_type != media_file.content_type or
+                    (detected_content_type == 'video' and media_file.content_type == 'image')
+                )
+                
+                if should_fix:
+                    logger.info(f"Post-processing file {file_name}: detected as {detected_content_type}/{detected_mime_type}")
+                    
+                    if file_name.endswith('.temp'):
+                        # Process .temp files
+                        if FileProcessor.process_temp_file(media_file):
+                            # Refresh the response data with updated URLs
+                            media_file.refresh_from_db()
+                            serializer = MediaFileResponseSerializer(media_file)
+                            response_data = serializer.data
+                            logger.info(f"Successfully processed .temp file: {response_data.get('firebase_url', response_data.get('url'))}")
+                            
+                            # Generate thumbnail for videos
+                            if media_file.content_type == 'video':
+                                FileProcessor.process_video_with_thumbnail(media_file)
+                    else:
+                        # Fix extension for files with wrong extensions
+                        if FileProcessor.fix_file_extension_and_path(media_file, detected_mime_type):
+                            # Refresh the response data with updated URLs
+                            media_file.refresh_from_db()
+                            serializer = MediaFileResponseSerializer(media_file)
+                            response_data = serializer.data
+                            logger.info(f"Successfully fixed file extension: {response_data.get('firebase_url', response_data.get('url'))}")
+                            
+        except Exception as e:
+            logger.warning(f"File post-processing failed (continuing anyway): {e}")
         
         return Response(response_data, status=status.HTTP_201_CREATED)
         
@@ -239,21 +398,27 @@ def direct_upload(request):
                 # Get file path
                 file_path = media_file.file.path
                 
-                # Determine content type for blob
+                # Determine content type for blob and get proper file extension
+                detected_content_type, detected_mime_type = detect_content_type_from_file(file_path, content_type)
+                
+                # Use detected MIME type or fallback
                 import mimetypes
-                mime_type, _ = mimetypes.guess_type(file_path)
+                mime_type = detected_mime_type or mimetypes.guess_type(file_path)[0]
                 if not mime_type:
-                    if content_type == 'image':
+                    if detected_content_type == 'image':
                         mime_type = 'image/jpeg'
-                    elif content_type == 'video':
+                    elif detected_content_type == 'video':
                         mime_type = 'video/mp4'
-                    elif content_type == 'audio':
+                    elif detected_content_type == 'audio':
                         mime_type = 'audio/mpeg'
                     else:
                         mime_type = 'application/octet-stream'
                 
-                # Create a unique Firebase path
-                firebase_path = f"attachments/{content_type}/{media_file.id}.{file_name.split('.')[-1]}"
+                # Get proper file extension based on MIME type and content type
+                proper_extension = get_proper_file_extension(mime_type, detected_content_type, file_name)
+                
+                # Create a unique Firebase path with proper extension
+                firebase_path = f"attachments/{detected_content_type}/{media_file.id}.{proper_extension}"
                 
                 # Upload file to Firebase
                 blob = bucket.blob(firebase_path)
@@ -277,7 +442,57 @@ def direct_upload(request):
             
         # Return the media file data
         serializer = MediaFileResponseSerializer(media_file)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response_data = serializer.data
+        
+        # Post-process the file to fix extensions and paths if needed
+        try:
+            # Check if file has wrong extension or is a .temp file
+            if media_file.file and media_file.file.path:
+                file_path = media_file.file.path
+                file_name = os.path.basename(file_path) if hasattr(file_path, 'split') else file_name
+                
+                # Detect actual file type and fix if needed
+                detected_content_type, detected_mime_type = detect_content_type_from_file(file_path, content_type)
+                
+                # If detected type is different from stored type, or file has .temp extension
+                should_fix = (
+                    file_name.endswith('.temp') or
+                    detected_content_type != media_file.content_type or
+                    (detected_content_type == 'video' and media_file.content_type == 'image')
+                )
+                
+                if should_fix:
+                    logger.info(f"Post-processing direct upload {file_name}: detected as {detected_content_type}/{detected_mime_type}")
+                    
+                    if file_name.endswith('.temp'):
+                        # Process .temp files
+                        if FileProcessor.process_temp_file(media_file):
+                            # Refresh the response data with updated URLs
+                            media_file.refresh_from_db()
+                            serializer = MediaFileResponseSerializer(media_file)
+                            response_data = serializer.data
+                            logger.info(f"Successfully processed .temp file: {response_data.get('firebase_url', response_data.get('url'))}")
+                            
+                            # Generate thumbnail for videos
+                            if media_file.content_type == 'video':
+                                FileProcessor.process_video_with_thumbnail(media_file)
+                    else:
+                        # Fix extension for files with wrong extensions
+                        if FileProcessor.fix_file_extension_and_path(media_file, detected_mime_type):
+                            # Refresh the response data with updated URLs
+                            media_file.refresh_from_db()
+                            serializer = MediaFileResponseSerializer(media_file)
+                            response_data = serializer.data
+                            
+                            # Generate thumbnail for videos
+                            if media_file.content_type == 'video':
+                                FileProcessor.process_video_with_thumbnail(media_file)
+                            logger.info(f"Successfully fixed file extension: {response_data.get('firebase_url', response_data.get('url'))}")
+                            
+        except Exception as e:
+            logger.warning(f"Direct upload post-processing failed (continuing anyway): {e}")
+            
+        return Response(response_data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         logger.error(f"Direct upload error: {e}")

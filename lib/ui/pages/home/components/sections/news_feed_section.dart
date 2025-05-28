@@ -4,10 +4,13 @@ import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/ui/pages/home/components/all_news_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
+import 'package:flutter_application_2/ui/pages/media/gallery_preview_page.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 class NewsFeedSection extends StatefulWidget {
   final DateTime selectedDate;
@@ -153,19 +156,6 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     }
   }
 
-  void _handleVote(Post post, bool isUpvote) {
-    try {
-      Provider.of<PostsProvider>(context, listen: false)
-          .voteOnPost(post, isUpvote);
-    } catch (e) {
-      debugPrint('Error voting on post: $e');
-      // Show a snackbar or other error notification
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to register your vote: $e')),
-      );
-    }
-  }
-
   void _navigateToPostDetail(Post post) {
     Navigator.push(
       context,
@@ -193,6 +183,32 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         builder: (context) => const AllNewsPage(),
       ),
     );
+  }
+
+  // Open media preview (gallery with video support)
+  void _openMediaPreview(Post post) {
+    // Get all media URLs from the post
+    List<String> allMediaUrls = [];
+
+    if (post.hasMedia && post.mediaUrls.isNotEmpty) {
+      allMediaUrls =
+          post.mediaUrls.map((url) => _getFixedImageUrl(url)).toList();
+    } else if (post.imageUrl.isNotEmpty) {
+      allMediaUrls = [_getFixedImageUrl(post.imageUrl)];
+    }
+
+    if (allMediaUrls.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GalleryPreviewPage(
+            mediaUrls: allMediaUrls,
+            title: post.title,
+            initialIndex: 0,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -434,7 +450,10 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               decoration: BoxDecoration(
                 color: isDarkMode ? Colors.grey[800] : ThemeConstants.greyLight,
               ),
-              child: _buildImage(_getBestImageUrl(post)),
+              child: GestureDetector(
+                onTap: () => _openMediaPreview(post),
+                child: _buildImage(_getBestImageUrl(post)),
+              ),
             ),
 
             // Content overlay with gradient
@@ -699,7 +718,10 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               SizedBox(
                 height: 126, // Fixed height for image
                 width: double.infinity,
-                child: _buildImage(_getBestImageUrl(post)),
+                child: GestureDetector(
+                  onTap: () => _openMediaPreview(post),
+                  child: _buildImage(_getBestImageUrl(post)),
+                ),
               ),
 
               // Content - use Expanded to avoid overflow
@@ -856,12 +878,14 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
   // Enhanced image URL handling with support for different path types
   Widget _buildImage(String? imageUrl, {BoxFit fit = BoxFit.cover}) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
     // Handle null or empty image URL
     if (imageUrl == null || imageUrl.isEmpty) {
       return _buildPlaceholderImage();
+    }
+
+    // Check if it's a video file
+    if (_isVideoFile(imageUrl)) {
+      return _buildVideoThumbnail(imageUrl, fit: fit);
     }
 
     // Check if it's a file path or network URL
@@ -886,6 +910,300 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         },
       );
     }
+  }
+
+  // Extract thumbnail URL from video URL or post data - Direct server approach
+  String? _extractThumbnailUrl(String videoUrl) {
+    // This method constructs the thumbnail URL using the server's base URL + path pattern
+    try {
+      // Extract the relative path from the video URL
+      String relativePath = '';
+
+      if (videoUrl.contains('attachments/video/')) {
+        // Extract path after domain (e.g., /media/attachments/video/filename.mp4)
+        int pathIndex = videoUrl.indexOf('attachments/video/');
+        relativePath = videoUrl.substring(pathIndex);
+
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll(
+            'attachments/video/', 'media/attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+
+        // Construct full URL using ApiUrls.baseUrl without extra /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        print('🎥 Constructed server thumbnail URL: $thumbnailUrl');
+        return thumbnailUrl;
+      } else if (videoUrl.contains('attachments/image/') &&
+          videoUrl.endsWith('.mp4')) {
+        // Handle videos that were incorrectly placed in image directory
+        int pathIndex = videoUrl.indexOf('attachments/image/');
+        relativePath = videoUrl.substring(pathIndex);
+
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll(
+            'attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+
+        // Construct full URL using ApiUrls.baseUrl without extra /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        print(
+            '🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
+        return thumbnailUrl;
+      }
+    } catch (e) {
+      print('🎥 Error extracting thumbnail URL: $e');
+    }
+    return null;
+  }
+
+  // Build video thumbnail with play overlay - Server-first approach
+  Widget _buildVideoThumbnail(String videoUrl, {BoxFit fit = BoxFit.cover}) {
+    // Try to get server-generated thumbnail first
+    String? thumbnailUrl = _extractThumbnailUrl(videoUrl);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Server thumbnail first, then client-side generation as fallback
+          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+            Image.network(
+              thumbnailUrl,
+              fit: fit,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return _buildVideoLoading();
+              },
+              errorBuilder: (context, error, stackTrace) {
+                print(
+                    '🎥 Server thumbnail failed, trying client generation: $error, URL: $thumbnailUrl');
+                // Fallback to client-side thumbnail generation
+                return FutureBuilder<Widget>(
+                  future: _buildVideoThumbnailWidget(videoUrl, fit),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return snapshot.data!;
+                    } else if (snapshot.hasError) {
+                      print(
+                          '🎥 Client thumbnail also failed: ${snapshot.error}');
+                      return _buildVideoPattern();
+                    } else {
+                      return _buildVideoLoading();
+                    }
+                  },
+                );
+              },
+            )
+          else
+            // No server thumbnail available, try client-side generation
+            FutureBuilder<Widget>(
+              future: _buildVideoThumbnailWidget(videoUrl, fit),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return snapshot.data!;
+                } else if (snapshot.hasError) {
+                  print(
+                      '🎥 Video thumbnail generation failed: ${snapshot.error}');
+                  return _buildVideoPattern();
+                } else {
+                  return _buildVideoLoading();
+                }
+              },
+            ),
+
+          // Play button overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 36,
+              ),
+            ),
+          ),
+
+          // Video indicator badge
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.videocam,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'VIDEO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build video thumbnail widget with multiple fallback strategies
+  Future<Widget> _buildVideoThumbnailWidget(String videoUrl, BoxFit fit) async {
+    try {
+      // Strategy 1: Try video_thumbnail package
+      final thumbnailData = await _generateVideoThumbnail(videoUrl);
+      if (thumbnailData != null && thumbnailData.isNotEmpty) {
+        print('🎥 Successfully generated video thumbnail');
+        return Image.memory(
+          thumbnailData,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            print('🎥 Error displaying thumbnail: $error');
+            return _buildVideoPattern();
+          },
+        );
+      }
+    } catch (e) {
+      print('🎥 Video thumbnail generation failed: $e');
+    }
+
+    // Strategy 2: Return a nice video pattern fallback
+    return _buildVideoPattern();
+  }
+
+  // Generate video thumbnail with improved error handling
+  Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
+    try {
+      String processedVideoUrl = _getFixedImageUrl(videoUrl);
+      print('🎥 Processing video URL: $processedVideoUrl');
+
+      // Multiple attempts with different parameters
+      List<Map<String, dynamic>> attempts = [
+        {'timeMs': 1000, 'quality': 75},
+        {'timeMs': 2000, 'quality': 85},
+        {'timeMs': 500, 'quality': 65},
+        {'timeMs': 0, 'quality': 75}, // Try at the very beginning
+      ];
+
+      for (var attempt in attempts) {
+        try {
+          print(
+              '🎥 Attempting thumbnail generation with timeMs: ${attempt['timeMs']}, quality: ${attempt['quality']}');
+
+          final uint8list = await VideoThumbnail.thumbnailData(
+            video: processedVideoUrl,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 400,
+            maxHeight: 300,
+            timeMs: attempt['timeMs'],
+            quality: attempt['quality'],
+          );
+
+          if (uint8list != null && uint8list.isNotEmpty) {
+            print(
+                '🎥 Success! Generated thumbnail with ${uint8list.length} bytes');
+            return uint8list;
+          }
+        } catch (e) {
+          print('🎥 Attempt failed: $e');
+          continue;
+        }
+      }
+
+      print('🎥 All thumbnail generation attempts failed');
+      return null;
+    } catch (e) {
+      print('🎥 Critical error in thumbnail generation: $e');
+      return null;
+    }
+  }
+
+  // Create a nice video pattern background
+  Widget _buildVideoPattern() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.0,
+          colors: [
+            Colors.grey[700]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.movie_creation_outlined,
+              size: 64,
+              color: Colors.white.withOpacity(0.7),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Video Preview',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Fallback widget for video thumbnail loading
+  Widget _buildVideoLoading() {
+    return Container(
+      color: Colors.grey[300],
+      child: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
   }
 
   // Helper to build consistent placeholder for missing images
@@ -923,6 +1241,18 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     return path.startsWith('/') ||
         path.startsWith('file:/') ||
         !path.contains('://');
+  }
+
+  // Check if a URL/path points to a video file
+  bool _isVideoFile(String url) {
+    final String lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm') ||
+        lowerUrl.contains('.m4v') ||
+        lowerUrl.contains('.3gp');
   }
 
   // Get the best available image URL from a post

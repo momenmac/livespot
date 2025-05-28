@@ -71,6 +71,7 @@ dependencies:
   shimmer: ^3.0.0 # Added for shimmer loading effects
   camera: ^0.11.1
   video_player: ^2.9.5
+  video_thumbnail: ^0.5.3 # For generating video thumbnails
 
 dev_dependencies:
   flutter_test:
