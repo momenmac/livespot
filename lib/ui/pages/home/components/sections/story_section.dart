@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/story_viewer_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/all_updates_page.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
@@ -8,9 +9,14 @@ import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:developer' as developer;
 
+// Add video thumbnail support
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:video_thumbnail/video_thumbnail.dart';
+
 class StorySection extends StatefulWidget {
   final DateTime selectedDate;
-  
+
   const StorySection({
     super.key,
     required this.selectedDate,
@@ -52,22 +58,19 @@ class _StorySectionState extends State<StorySection> {
       setState(() {
         _dataLoaded = false;
       });
-      
+
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
       postsProvider.clearStories();
 
       // Use addPostFrameCallback to ensure state is updated before fetching
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        
+
         try {
           final now = DateTime.now();
           final normalizedToday = DateTime(now.year, now.month, now.day);
-          final normalizedSelected = DateTime(
-            widget.selectedDate.year,
-            widget.selectedDate.month,
-            widget.selectedDate.day
-          );
+          final normalizedSelected = DateTime(widget.selectedDate.year,
+              widget.selectedDate.month, widget.selectedDate.day);
 
           // Don't fetch stories for future dates
           if (normalizedSelected.isAfter(normalizedToday)) {
@@ -80,21 +83,27 @@ class _StorySectionState extends State<StorySection> {
           }
 
           // Always send date parameter
-          final String dateStr = widget.selectedDate.toIso8601String().split('T')[0];
-          developer.log('Fetching stories for date: $dateStr', name: 'StorySection');
+          final String dateStr =
+              widget.selectedDate.toIso8601String().split('T')[0];
+          developer.log('Fetching stories for date: $dateStr',
+              name: 'StorySection');
 
           // Wait a frame to ensure the UI has updated after clearing stories
           await Future.microtask(() {});
 
           // Fetch stories with explicit date
-          final stories = await postsProvider.fetchFollowingStories(date: dateStr);
+          final stories =
+              await postsProvider.fetchFollowingStories(date: dateStr);
 
           // Ensure we clear stories again if none were found
           if (stories.isEmpty) {
             postsProvider.clearStories();
-            developer.log('No stories found for date: $dateStr, clearing stories', name: 'StorySection');
+            developer.log(
+                'No stories found for date: $dateStr, clearing stories',
+                name: 'StorySection');
           } else {
-            developer.log('Loaded ${stories.length} stories for date: $dateStr', name: 'StorySection');
+            developer.log('Loaded ${stories.length} stories for date: $dateStr',
+                name: 'StorySection');
           }
 
           if (mounted) {
@@ -114,6 +123,248 @@ class _StorySectionState extends State<StorySection> {
       if (mounted) {
         developer.log('Error in _loadStories: $e', name: 'StorySection');
       }
+    }
+  }
+
+  // Check if a URL/path points to a video file
+  bool _isVideoFile(String url) {
+    final String lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm') ||
+        lowerUrl.contains('.m4v') ||
+        lowerUrl.contains('.3gp');
+  }
+
+  // Helper to fix image/video URLs
+  String _getFixedUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    if (url.startsWith('http://localhost:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://localhost:8000'.length);
+    }
+    if (url.startsWith('http://127.0.0.1:8000')) {
+      return ApiUrls.baseUrl + url.substring('http://127.0.0.1:8000'.length);
+    }
+    if (url.startsWith('/')) {
+      return ApiUrls.baseUrl + url;
+    }
+    return url;
+  }
+
+  // Extract thumbnail URL from video URL for story thumbnails
+  String? _extractThumbnailUrl(String videoUrl) {
+    try {
+      String relativePath = '';
+
+      if (videoUrl.contains('attachments/video/')) {
+        int pathIndex = videoUrl.indexOf('attachments/video/');
+        relativePath = videoUrl.substring(pathIndex);
+        relativePath = relativePath.replaceAll(
+            'attachments/video/', 'media/attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        return thumbnailUrl;
+      } else if (videoUrl.contains('attachments/image/') &&
+          videoUrl.endsWith('.mp4')) {
+        int pathIndex = videoUrl.indexOf('attachments/image/');
+        relativePath = videoUrl.substring(pathIndex);
+        relativePath = relativePath.replaceAll(
+            'attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        return thumbnailUrl;
+      }
+    } catch (e) {
+      developer.log('Error extracting story thumbnail URL: $e',
+          name: 'StorySection');
+    }
+    return null;
+  }
+
+  // Build story avatar with video support and proper circle fitting
+  Widget _buildStoryAvatar(String imageUrl) {
+    // Check if it's a video
+    if (_isVideoFile(imageUrl)) {
+      // Try to get server thumbnail first
+      String? thumbnailUrl = _extractThumbnailUrl(imageUrl);
+
+      return Stack(
+        children: [
+          Container(
+            width: 62, // Fixed size for proper circle fitting
+            height: 62,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey[300],
+            ),
+            child: ClipOval(
+              child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                  ? Image.network(
+                      thumbnailUrl,
+                      width: 62,
+                      height: 62,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to client-side generation
+                        return FutureBuilder<Uint8List?>(
+                          future: _generateVideoThumbnail(imageUrl),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data != null) {
+                              return Image.memory(
+                                snapshot.data!,
+                                width: 62,
+                                height: 62,
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return Container(
+                              width: 62,
+                              height: 62,
+                              decoration: BoxDecoration(
+                                gradient: RadialGradient(
+                                  colors: [
+                                    Colors.grey[600]!,
+                                    Colors.grey[800]!
+                                  ],
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.videocam,
+                                size: 24,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    )
+                  : FutureBuilder<Uint8List?>(
+                      future: _generateVideoThumbnail(imageUrl),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data != null) {
+                          return Image.memory(
+                            snapshot.data!,
+                            width: 62,
+                            height: 62,
+                            fit: BoxFit.cover,
+                          );
+                        }
+                        return Container(
+                          width: 62,
+                          height: 62,
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              colors: [Colors.grey[600]!, Colors.grey[800]!],
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.videocam,
+                            size: 24,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+          // Video indicator
+          Positioned(
+            bottom: 2,
+            right: 2,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                color: Colors.black87,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 10,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      // Regular image handling with proper circle fitting
+      return Container(
+        width: 62,
+        height: 62,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: ThemeConstants.greyLight.withOpacity(0.3),
+        ),
+        child: ClipOval(
+          child: Image.network(
+            _getFixedUrl(imageUrl),
+            width: 62,
+            height: 62,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 62,
+                height: 62,
+                color: ThemeConstants.greyLight.withOpacity(0.3),
+                child: const Icon(
+                  Icons.image_not_supported,
+                  size: 24,
+                  color: Colors.grey,
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  // Generate video thumbnail with better error handling
+  Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
+    try {
+      String processedVideoUrl = _getFixedUrl(videoUrl);
+      developer.log('🎥 Processing video URL for thumbnail: $processedVideoUrl',
+          name: 'StorySection');
+
+      List<Map<String, dynamic>> attempts = [
+        {'timeMs': 1000, 'quality': 85},
+        {'timeMs': 2000, 'quality': 75},
+        {'timeMs': 500, 'quality': 85},
+        {'timeMs': 0, 'quality': 75},
+      ];
+
+      for (var attempt in attempts) {
+        try {
+          final uint8list = await VideoThumbnail.thumbnailData(
+            video: processedVideoUrl,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 200,
+            maxHeight: 200,
+            timeMs: attempt['timeMs'],
+            quality: attempt['quality'],
+          );
+
+          if (uint8list != null && uint8list.isNotEmpty) {
+            developer.log('🎥 Successfully generated story thumbnail',
+                name: 'StorySection');
+            return uint8list;
+          }
+        } catch (e) {
+          developer.log('🎥 Thumbnail attempt failed: $e',
+              name: 'StorySection');
+          continue;
+        }
+      }
+
+      developer.log('🎥 All story thumbnail generation attempts failed',
+          name: 'StorySection');
+      return null;
+    } catch (e) {
+      developer.log('🎥 Critical error in story thumbnail generation: $e',
+          name: 'StorySection');
+      return null;
     }
   }
 
@@ -209,9 +460,6 @@ class _StorySectionState extends State<StorySection> {
                 // Add story button (for the current user)
                 _buildAddStoryItem(),
 
-                // All stories/updates button
-                _buildAllUpdatesItem(),
-
                 // Show stories from API
                 if (storyWidgets.isEmpty && _dataLoaded)
                   _buildEmptyStoriesWidget()
@@ -249,27 +497,34 @@ class _StorySectionState extends State<StorySection> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(2.5),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(35),
-                    child: userProfile?.profilePictureUrl != null &&
-                            userProfile!.profilePictureUrl.isNotEmpty
-                        ? Image.network(
-                            userProfile.profilePictureUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Icon(
+                  child: Container(
+                    width: 65,
+                    height: 65,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ThemeConstants.greyLight.withOpacity(0.3),
+                    ),
+                    child: ClipOval(
+                      child: userProfile?.profilePictureUrl != null &&
+                              userProfile!.profilePictureUrl.isNotEmpty
+                          ? Image.network(
+                              userProfile.profilePictureUrl,
+                              width: 65,
+                              height: 65,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(
+                                Icons.person,
+                                size: 32,
+                                color: ThemeConstants.grey,
+                              ),
+                            )
+                          : Icon(
                               Icons.person,
-                              size: 40,
+                              size: 32,
                               color: ThemeConstants.grey,
                             ),
-                          )
-                        : Container(
-                            color: ThemeConstants.greyLight.withOpacity(0.3),
-                            child: Icon(
-                              Icons.person,
-                              size: 40,
-                              color: ThemeConstants.grey,
-                            ),
-                          ),
+                    ),
                   ),
                 ),
               ),
@@ -289,59 +544,16 @@ class _StorySectionState extends State<StorySection> {
             ],
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             'Your story',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.black,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : Colors.black,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAllUpdatesItem() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const AllUpdatesPage(),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          children: [
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: ThemeConstants.grey.withOpacity(0.2),
-                  width: 2,
-                ),
-                color: ThemeConstants.greyLight.withOpacity(0.3),
-              ),
-              child: const Icon(
-                Icons.notifications_outlined,
-                size: 30,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Updates',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -376,7 +588,7 @@ class _StorySectionState extends State<StorySection> {
     if (stories.isEmpty) {
       developer.log('Warning: Empty stories list for user: $username',
           name: 'StorySection');
-      return const SizedBox.shrink(); // Return empty widget for empty stories
+      return const SizedBox.shrink();
     }
 
     final bool hasMultipleStories = stories.length > 1;
@@ -447,23 +659,7 @@ class _StorySectionState extends State<StorySection> {
                         ),
                   Padding(
                     padding: const EdgeInsets.all(4),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(35),
-                      child: Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: ThemeConstants.greyLight.withOpacity(0.3),
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              size: 30,
-                              color: Colors.grey,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                    child: _buildStoryAvatar(imageUrl),
                   ),
                 ],
               ),
@@ -473,9 +669,11 @@ class _StorySectionState extends State<StorySection> {
               width: 70,
               child: Text(
                 username,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.black,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -7,7 +7,6 @@ import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:flutter_application_2/ui/auth/password/forgot_password_screen.dart';
 import 'package:flutter_application_2/ui/auth/password/reset_password_screen.dart';
 import 'package:flutter_application_2/ui/pages/camera/custom_camera_page.dart';
-import 'package:flutter_application_2/ui/pages/camera/video_camera_page.dart';
 
 import 'package:flutter_application_2/ui/pages/camera/camera_selection_page.dart';
 import 'package:flutter_application_2/ui/pages/camera/unified_camera_page.dart';
@@ -62,9 +61,7 @@ class AppRoutes {
     },
     camera: (args) => const CustomCameraPage(),
     unifiedCamera: (args) => const UnifiedCameraPage(),
-    cameraSelection: (args) => const CameraSelectionPage(),
-    videoCamera: (args) => const VideoCameraPage(),
-    // videoPreview: (args) {
+    cameraSelection: (args) => const CameraSelectionPage(),    // videoPreview: (args) {
     //   // Deprecated: Use MediaPreviewPage directly via MaterialPageRoute navigation
     //   return const Placeholder();
     // },

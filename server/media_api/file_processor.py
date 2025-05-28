@@ -313,15 +313,19 @@ class FileProcessor:
             if not FileProcessor._is_video_file(video_path):
                 return False
                 
-            # Generate thumbnail
-            thumbnail_filename = f"{media_file.id}_thumb.jpg"
+            # Generate thumbnail with same base name as video file
+            # Extract filename without extension from video path
+            video_filename = os.path.basename(video_path)
+            video_name_without_ext = os.path.splitext(video_filename)[0]
+            
+            thumbnail_filename = f"{video_name_without_ext}_thumb.jpg"
             thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'attachments', 'thumbnails')
             os.makedirs(thumbnail_dir, exist_ok=True)
             thumbnail_path = os.path.join(thumbnail_dir, thumbnail_filename)
             
             if FileProcessor.generate_video_thumbnail(video_path, thumbnail_path):
-                # Upload thumbnail to Firebase
-                FileProcessor._upload_thumbnail_to_firebase(media_file, thumbnail_path)
+                # Don't upload to Firebase, serve directly from server
+                logger.info(f"Generated thumbnail: {thumbnail_path}")
                 return True
                 
             return False

@@ -435,6 +435,8 @@ class PostViewSet(viewsets.ModelViewSet):
                     'comments': 0,  # Thread functionality removed
                     'isVerified': post.is_verified_location,
                     'is_admin': post.author.is_admin,
+                    'profile_picture_url': post.author.profile_picture.url if post.author.profile_picture else None,
+                    'author_id': post.author.id,
                     'location': {
                         'coordinates': {
                             'latitude': post.location.latitude,
