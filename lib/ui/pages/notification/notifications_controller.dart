@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_model.dart';
+import 'notification_popup.dart';
 
 // TODO: Add Firebase imports when ready:
 // import 'package:firebase_messaging/firebase_messaging.dart';
@@ -196,6 +197,114 @@ class NotificationsController extends ChangeNotifier {
 
     _notifications.clear();
     notifyListeners();
+  }
+
+  // Global key for accessing navigator
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+  static void showNotification({
+    required String title,
+    required String message,
+    IconData? icon,
+    VoidCallback? onTap,
+  }) {
+    print('🚀🚀🚀 SHOW NOTIFICATION CALLED! 🚀🚀🚀');
+    print('📞 NotificationsController.showNotification() invoked');
+    print('📝 Title: "$title"');
+    print('💬 Message: "$message"');
+    print('🏷️ Icon: ${icon?.codePoint ?? 'null'}');
+    print('🗂️ onTap callback: ${onTap != null ? 'provided' : 'null'}');
+
+    print('🔍 Checking navigator key...');
+    print('🔗 navigatorKey: ${navigatorKey.toString()}');
+    print('🎯 navigatorKey.currentContext: ${navigatorKey.currentContext}');
+    print('🏗️ navigatorKey.currentState: ${navigatorKey.currentState}');
+
+    if (navigatorKey.currentContext == null) {
+      print('❌❌❌ CRITICAL: Navigator context is NULL!');
+      print('❌ Cannot show notification - no context available');
+      print(
+          '❌ This means the navigatorKey is not properly connected to MaterialApp');
+      return;
+    }
+
+    print('✅✅✅ SUCCESS: Navigator context found!');
+    print('✅ Context type: ${navigatorKey.currentContext.runtimeType}');
+    print('✅ Context hashCode: ${navigatorKey.currentContext.hashCode}');
+    try {
+      print('🎨 Getting overlay state...');
+      // Get overlay state directly from the navigator state
+      final NavigatorState? navigatorState = navigatorKey.currentState;
+      print('📊 Navigator state: ${navigatorState.toString()}');
+
+      if (navigatorState == null) {
+        print('❌❌❌ CRITICAL: Navigator state is NULL!');
+        print('❌ Cannot show notification - navigator not ready');
+        return;
+      }
+
+      // Get the overlay from the navigator state
+      final OverlayState? overlayState = navigatorState.overlay;
+      print('🎯 Overlay state from navigator: ${overlayState.toString()}');
+
+      if (overlayState == null) {
+        print('❌❌❌ CRITICAL: Overlay state is NULL!');
+        print('❌ Cannot show notification - overlay not available');
+        return;
+      }
+
+      print('✅✅✅ SUCCESS: Overlay state obtained successfully!');
+
+      OverlayEntry? entry;
+      print('🏗️ Creating overlay entry...');
+
+      entry = OverlayEntry(
+        builder: (context) {
+          print(
+              '🎯 OverlayEntry builder called - creating NotificationPopup widget');
+          return NotificationPopup(
+            title: title,
+            message: message,
+            icon: icon,
+            backgroundColor: Theme.of(context).cardColor,
+            textColor:
+                Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87,
+            onTap: () {
+              print('🎯🎯🎯 NOTIFICATION TAPPED! 🎯🎯🎯');
+              print('🎯 Notification popup tapped: $title');
+              print('🗑️ Removing overlay entry...');
+              entry?.remove();
+              print('📞 Calling onTap callback...');
+              onTap?.call();
+              print('✅ onTap callback completed');
+            },
+            onDismiss: () {
+              print('❌ NOTIFICATION DISMISSED: $title');
+              print('🗑️ Removing overlay entry...');
+              entry?.remove();
+              print('✅ Dismiss completed');
+            },
+          );
+        },
+      );
+
+      print('📌 Inserting overlay entry into overlay state...');
+      overlayState.insert(entry);
+      print('✅✅✅ SUCCESS: Notification popup inserted into overlay!');
+      print('🎉 Notification should now be visible on screen');
+
+      // Auto dismiss after 4 seconds
+      print('⏰ Setting up auto-dismiss timer (4 seconds)...');
+      Future.delayed(const Duration(seconds: 4), () {
+        print('⏰ Auto-dismiss timer triggered');
+        print('Auto-dismissing notification: $title');
+        entry?.remove();
+        print('✅ Auto-dismiss completed');
+      });
+    } catch (e) {
+      print('❌❌❌ ERROR showing notification: $e');
+      print('🔍 Error details: ${e.toString()}');
+    }
   }
 
   @override

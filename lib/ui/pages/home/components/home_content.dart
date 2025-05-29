@@ -12,6 +12,7 @@ import 'widgets/date_picker_widget.dart';
 // Add authentication related imports
 import 'package:provider/provider.dart'; // Make sure to add provider dependency if not already added
 import 'package:flutter_application_2/services/auth/auth_service.dart'; // Create or update this import path as needed
+import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 
 class HomeContent extends StatefulWidget {
   final VoidCallback? onMapToggle;
@@ -93,6 +94,70 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
 
+  // Add method to test notification popup
+  void _testNotificationPopup() {
+    print('🏠🔥🔥🔥 HOME PAGE TEST NOTIFICATION BUTTON PRESSED! 🔥🔥🔥');
+    print('📱 Home page _testNotificationPopup() called');
+    print('🎯 About to show notification popup from HOME PAGE...');
+
+    // Test different types of notifications
+    final notifications = [
+      {
+        'title': 'New Message',
+        'message': 'You have received a new message from John Doe',
+        'icon': Icons.message,
+      },
+      {
+        'title': 'Friend Request',
+        'message': 'Sarah wants to be your friend',
+        'icon': Icons.person_add,
+      },
+      {
+        'title': 'System Update',
+        'message': 'Your app has been updated to the latest version',
+        'icon': Icons.system_update,
+      },
+      {
+        'title': 'Like Notification',
+        'message': 'Someone liked your recent post',
+        'icon': Icons.thumb_up,
+      },
+    ];
+
+    // Show a random notification
+    final randomNotification =
+        notifications[DateTime.now().millisecond % notifications.length];
+
+    print(
+        '🏠🎲 HOME PAGE - Selected random notification: ${randomNotification['title']}');
+    print('🏠💭 HOME PAGE - Message: ${randomNotification['message']}');
+    print(
+        '🏠🔄 HOME PAGE - Now calling NotificationsController.showNotification...');
+
+    try {
+      NotificationsController.showNotification(
+        title: randomNotification['title'] as String,
+        message: randomNotification['message'] as String,
+        icon: randomNotification['icon'] as IconData,
+        onTap: () {
+          print(
+              '🏠🎯 HOME PAGE - NOTIFICATION TAPPED! onTap callback executed');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notification tapped!')),
+          );
+        },
+      );
+      print(
+          '🏠✅ HOME PAGE - NotificationsController.showNotification call completed');
+    } catch (e) {
+      print(
+          '🏠❌ HOME PAGE ERROR calling NotificationsController.showNotification: $e');
+      print('🏠🔍 HOME PAGE Error details: ${e.toString()}');
+    }
+
+    print('🏠🏁 HOME PAGE _testNotificationPopup() function finished');
+  }
+
   @override
   Widget build(BuildContext context) {
     // Show loading indicator if checking auth status
@@ -112,6 +177,12 @@ class _HomeContentState extends State<HomeContent> {
           icon: const Icon(Icons.location_on_outlined),
         ),
         actions: [
+          // Test notification button
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _testNotificationPopup,
+            tooltip: 'Test Notification',
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {

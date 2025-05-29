@@ -18,6 +18,7 @@ import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
+import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
@@ -600,7 +601,7 @@ class _MyAppState extends State<MyApp> {
             theme:
                 TAppTheme.lightTheme, // <-- Use your custom light theme here!
             darkTheme: TAppTheme.darkTheme,
-            navigatorKey: NavigationService().navigatorKey,
+            navigatorKey: NotificationsController.navigatorKey,
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],

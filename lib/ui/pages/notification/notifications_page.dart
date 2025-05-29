@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_2/ui/pages/notification/notification_model.dart';
+import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 import 'package:intl/intl.dart';
 import 'notification_filter.dart';
 
@@ -124,11 +124,68 @@ class _NotificationsPageState extends State<NotificationsPage>
   }
 
   // TODO: Implement notification reset functionality for settings page
-
   void _hideBanner() {
     setState(() {
       _showBanner = false;
     });
+  }
+
+  void _testNotificationPopup() {
+    print('🔥🔥🔥 TEST NOTIFICATION BUTTON PRESSED! 🔥🔥🔥');
+    print('📱 Function _testNotificationPopup() called');
+    print('🎯 About to show notification popup...');
+
+    // Test different types of notifications
+    final notifications = [
+      {
+        'title': 'New Message',
+        'message': 'You have received a new message from John Doe',
+        'icon': Icons.message,
+      },
+      {
+        'title': 'Friend Request',
+        'message': 'Sarah wants to be your friend',
+        'icon': Icons.person_add,
+      },
+      {
+        'title': 'System Update',
+        'message': 'Your app has been updated to the latest version',
+        'icon': Icons.system_update,
+      },
+      {
+        'title': 'Like Notification',
+        'message': 'Someone liked your recent post',
+        'icon': Icons.thumb_up,
+      },
+    ];
+
+    // Show a random notification
+    final randomNotification =
+        notifications[DateTime.now().millisecond % notifications.length];
+
+    print('🎲 Selected random notification: ${randomNotification['title']}');
+    print('💭 Message: ${randomNotification['message']}');
+    print('🔄 Now calling NotificationsController.showNotification...');
+
+    try {
+      NotificationsController.showNotification(
+        title: randomNotification['title'] as String,
+        message: randomNotification['message'] as String,
+        icon: randomNotification['icon'] as IconData,
+        onTap: () {
+          print('🎯 NOTIFICATION TAPPED! onTap callback executed');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notification tapped!')),
+          );
+        },
+      );
+      print('✅ NotificationsController.showNotification call completed');
+    } catch (e) {
+      print('❌ ERROR calling NotificationsController.showNotification: $e');
+      print('🔍 Error details: ${e.toString()}');
+    }
+
+    print('🏁 _testNotificationPopup() function finished');
   }
 
   String _getDateHeader(DateTime date) {
@@ -471,6 +528,12 @@ class _NotificationsPageState extends State<NotificationsPage>
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               automaticallyImplyLeading: false,
               actions: [
+                // Test notification button
+                IconButton(
+                  icon: const Icon(Icons.bug_report),
+                  tooltip: 'Test Notification',
+                  onPressed: _testNotificationPopup,
+                ),
                 if (hasUnreadNotifications)
                   IconButton(
                     icon: const Icon(Icons.done_all),
