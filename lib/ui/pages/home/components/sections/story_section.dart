@@ -3,6 +3,8 @@ import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/story_viewer_page.dart';
 import 'package:flutter_application_2/ui/pages/home/components/story/all_updates_page.dart';
+import 'package:flutter_application_2/ui/pages/posts/admin_create_post_page.dart';
+import 'package:flutter_application_2/ui/pages/camera/unified_camera_page.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +12,6 @@ import 'dart:math' as math;
 import 'dart:developer' as developer;
 
 // Add video thumbnail support
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
@@ -35,6 +36,10 @@ class StorySection extends StatefulWidget {
 class _StorySectionState extends State<StorySection> {
   bool _dataLoaded = false;
 
+  // Add caching for user posts to prevent excessive API calls
+  Map<String, Future<List<dynamic>>> _userPostsCache = {};
+  Map<String, List<dynamic>> _userPostsData = {};
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +51,14 @@ class _StorySectionState extends State<StorySection> {
     super.didUpdateWidget(oldWidget);
     // Reload stories when selected date changes
     if (!DateUtils.isSameDay(oldWidget.selectedDate, widget.selectedDate)) {
+      // Clear cache when date changes
+      _userPostsCache.clear();
+      _userPostsData.clear();
+
+      // Also clear provider cache
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      postsProvider.clearUserPostsByDateCache();
+
       _loadStories();
     }
   }
@@ -476,84 +489,476 @@ class _StorySectionState extends State<StorySection> {
   Widget _buildAddStoryItem() {
     // Get current user profile from provider
     final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
     final userProfile = userProfileProvider.currentUserProfile;
 
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      child: Column(
-        children: [
-          Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: ThemeConstants.grey.withOpacity(0.2),
-                    width: 2,
+    // If no user profile, show the add story button
+    if (userProfile == null) {
+      return _buildSimpleAddStoryItem();
+    }
+
+    final currentUserId = userProfile.account.id;
+    final formattedDate = widget.selectedDate.toIso8601String().split('T')[0];
+    final cacheKey = '${currentUserId}_$formattedDate';
+
+    // Check if we already have cached data
+    if (_userPostsData.containsKey(cacheKey)) {
+      final cachedData = _userPostsData[cacheKey]!;
+      if (cachedData.isEmpty) {
+        return _buildSimpleAddStoryItem();
+      }
+      return _buildUserStoryWidget(cachedData, userProfile);
+    }
+
+    // Check if we have an ongoing request
+    if (!_userPostsCache.containsKey(cacheKey)) {
+      _userPostsCache[cacheKey] =
+          postsProvider.getUserPostsByDate(currentUserId, formattedDate);
+    }
+
+    return FutureBuilder<List<dynamic>>(
+      future: _userPostsCache[cacheKey],
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingStoryItem();
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          // Cache the empty result
+          _userPostsData[cacheKey] = [];
+          // No posts for this date, show add story button
+          return _buildSimpleAddStoryItem();
+        }
+
+        // Cache the successful result
+        final userPosts = snapshot.data!;
+        _userPostsData[cacheKey] = userPosts;
+
+        return _buildUserStoryWidget(userPosts, userProfile);
+      },
+    );
+  }
+
+  Widget _buildUserStoryWidget(List<dynamic> userPosts, dynamic userProfile) {
+    final firstPost = userPosts.first;
+
+    // Get the first media URL if available
+    String? imageUrl;
+    if (firstPost.mediaUrls != null && firstPost.mediaUrls!.isNotEmpty) {
+      imageUrl = _getFixedUrl(firstPost.mediaUrls!.first);
+    }
+
+    return GestureDetector(
+      onTap: () => _navigateToUserStory(userPosts),
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: ThemeConstants.primaryColor,
+                      width: 2.5,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(3),
+                    child: ClipOval(
+                      child: imageUrl != null && imageUrl.isNotEmpty
+                          ? _buildStoryMediaPreview(imageUrl)
+                          : _buildDefaultUserStoryContent(userProfile),
+                    ),
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(2.5),
-                  child: Container(
-                    width: 65,
-                    height: 65,
+                // Story count indicator if multiple posts
+                if (userPosts.length > 1)
+                  Container(
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
+                      color: ThemeConstants.primaryColor,
                       shape: BoxShape.circle,
-                      color: ThemeConstants.greyLight.withOpacity(0.3),
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
-                    child: ClipOval(
-                      child: userProfile?.profilePictureUrl != null &&
-                              userProfile!.profilePictureUrl.isNotEmpty
-                          ? Image.network(
-                              userProfile.profilePictureUrl,
-                              width: 65,
-                              height: 65,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Icon(
+                    child: Center(
+                      child: Text(
+                        userPosts.length.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'My Story',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSimpleAddStoryItem() {
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final userProfile = userProfileProvider.currentUserProfile;
+
+    return GestureDetector(
+      onTap: () => _handleAddStoryTap(userProfile),
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: ThemeConstants.grey.withOpacity(0.2),
+                      width: 2,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.5),
+                    child: Container(
+                      width: 65,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: ThemeConstants.greyLight.withOpacity(0.3),
+                      ),
+                      child: ClipOval(
+                        child: userProfile?.profilePictureUrl != null &&
+                                userProfile!.profilePictureUrl.isNotEmpty
+                            ? Image.network(
+                                userProfile.profilePictureUrl,
+                                width: 65,
+                                height: 65,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(
+                                  Icons.person,
+                                  size: 32,
+                                  color: ThemeConstants.grey,
+                                ),
+                              )
+                            : Icon(
                                 Icons.person,
                                 size: 32,
                                 color: ThemeConstants.grey,
                               ),
-                            )
-                          : Icon(
-                              Icons.person,
-                              size: 32,
-                              color: ThemeConstants.grey,
-                            ),
+                      ),
                     ),
                   ),
                 ),
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: ThemeConstants.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Your story',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
               ),
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Handle add story tap - navigate to different pages based on admin status
+  void _handleAddStoryTap(dynamic userProfile) {
+    // Check if user is admin
+    final bool isAdmin = userProfile?.account?.isAdmin ?? false;
+    
+    if (isAdmin) {
+      // Navigate to admin create post page
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AdminCreatePostPage(),
+        ),
+      );
+    } else {
+      // Navigate to camera page for regular users
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const UnifiedCameraPage(),
+        ),
+      );
+    }
+  }
+
+  Widget _buildLoadingStoryItem() {
+    return Container(
+      margin: const EdgeInsets.only(right: 12),
+      child: Column(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: ThemeConstants.grey.withOpacity(0.2),
+                width: 2,
+              ),
+            ),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
                   color: ThemeConstants.primaryColor,
-                  shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              )
-            ],
+              ),
+            ),
           ),
           const SizedBox(height: 5),
           Text(
-            'Your story',
+            'Loading...',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : Colors.black,
+              color: ThemeConstants.grey,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStoryMediaPreview(String mediaUrl) {
+    if (_isVideoFile(mediaUrl)) {
+      // For videos, try to show thumbnail
+      String? thumbnailUrl = _extractThumbnailUrl(mediaUrl);
+
+      return Stack(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+            ),
+            child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                ? Image.network(
+                    thumbnailUrl,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return FutureBuilder<Uint8List?>(
+                        future: _generateVideoThumbnail(mediaUrl),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data != null) {
+                            return Image.memory(
+                              snapshot.data!,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                            );
+                          }
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                colors: [Colors.grey[600]!, Colors.grey[800]!],
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.videocam,
+                              size: 20,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  )
+                : FutureBuilder<Uint8List?>(
+                    future: _generateVideoThumbnail(mediaUrl),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data != null) {
+                        return Image.memory(
+                          snapshot.data!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                        );
+                      }
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            colors: [Colors.grey[600]!, Colors.grey[800]!],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.videocam,
+                          size: 20,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          // Small video indicator
+          Positioned(
+            bottom: 2,
+            right: 2,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Colors.black87,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 8,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      // For images
+      return Image.network(
+        mediaUrl,
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              colors: [Colors.grey[400]!, Colors.grey[600]!],
+            ),
+          ),
+          child: Icon(
+            Icons.image,
+            size: 20,
+            color: Colors.white.withOpacity(0.8),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildDefaultUserStoryContent(dynamic userProfile) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            ThemeConstants.primaryColor.withOpacity(0.8),
+            ThemeConstants.primaryColor,
+          ],
+        ),
+      ),
+      child: userProfile?.profilePictureUrl != null &&
+              userProfile!.profilePictureUrl.isNotEmpty
+          ? Image.network(
+              userProfile.profilePictureUrl,
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.person,
+                size: 24,
+                color: Colors.white,
+              ),
+            )
+          : Icon(
+              Icons.person,
+              size: 24,
+              color: Colors.white,
+            ),
+    );
+  }
+
+  void _navigateToUserStory(List<dynamic> userPosts) {
+    final userProfileProvider =
+        Provider.of<UserProfileProvider>(context, listen: false);
+    final userProfile = userProfileProvider.currentUserProfile;
+
+    if (userProfile == null) return;
+
+    // Convert posts to story format
+    final stories = userPosts.map((post) {
+      return {
+        'id': post.id,
+        'title': post.title,
+        'content': post.content,
+        'category': post.category,
+        'time': post.createdAt.toIso8601String(),
+        'imageUrl': post.mediaUrls != null && post.mediaUrls!.isNotEmpty
+            ? _getFixedUrl(post.mediaUrls!.first)
+            : '',
+        'upvotes': post.upvotes ?? 0,
+        'honesty_score': post.honestyScore ?? 0,
+        'comments': 0,
+        'isVerified': post.isVerifiedLocation,
+        'is_admin': userProfile.account.isAdmin,
+        'profile_picture_url': userProfile.profilePictureUrl,
+        'location': 'Location available',
+        'author_id': userProfile.account.id,
+      };
+    }).toList();
+
+    final username =
+        '${userProfile.account.firstName} ${userProfile.account.lastName}'
+            .trim();
+    final displayName = username.isNotEmpty ? username : userProfile.username;
+
+    // Navigate to story viewer
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StoryViewerPage(
+          username: displayName,
+          userImageUrl: userProfile.profilePictureUrl,
+          stories: stories,
+        ),
       ),
     );
   }

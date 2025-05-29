@@ -520,9 +520,9 @@ class _AdminFloatingActionButtonState extends State<AdminFloatingActionButton>
                   backgroundColor: ThemeConstants.primaryColor,
                   mini: true,
                   onPressed: () {
-                    debugPrint("Create post button pressed");
-                    // TODO: Navigate to create post page
-                    // NavigationService().navigateTo(AppRoutes.createPost);
+                    debugPrint(
+                        "Create post button pressed - navigating to admin create post");
+                    NavigationService().navigateTo(AppRoutes.adminCreatePost);
                     _toggle();
                   },
                   child: const Icon(Icons.edit_outlined, size: 20),

@@ -35,12 +35,22 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
   String _selectedCategory = CategoryUtils.allCategories.first;
   bool _isAnonymous = false;
   bool _isPosting = false;
-  
+
   // Event status options (matching backend PostStatus model)
   String? _eventStatus;
   final List<Map<String, dynamic>> _eventStatusOptions = [
-    {'value': 'happening', 'label': 'This is currently happening', 'icon': Icons.play_circle_fill, 'color': Colors.green},
-    {'value': 'ended', 'label': 'This has ended', 'icon': Icons.stop_circle, 'color': Colors.red},
+    {
+      'value': 'happening',
+      'label': 'This is currently happening',
+      'icon': Icons.play_circle_fill,
+      'color': Colors.green
+    },
+    {
+      'value': 'ended',
+      'label': 'This has ended',
+      'icon': Icons.stop_circle,
+      'color': Colors.red
+    },
   ];
 
   VideoPlayerController? _videoController;
@@ -69,7 +79,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
 
   bool _isVideoFile(String path) {
     final extension = path.toLowerCase().split('.').last;
-    return ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp'].contains(extension);
+    return ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', '3gp']
+        .contains(extension);
   }
 
   Future<void> _addMoreMedia() async {
@@ -176,7 +187,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         builder: (context) => UnifiedCameraPage(isAddingMedia: true),
       ),
     );
-    
+
     if (result != null && result['type'] == 'photo') {
       setState(() {
         _additionalMedia.add(result['path']);
@@ -191,7 +202,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         builder: (context) => UnifiedCameraPage(isAddingMedia: true),
       ),
     );
-    
+
     if (result != null && result['type'] == 'video') {
       setState(() {
         _additionalMedia.add(result['path']);
@@ -217,7 +228,9 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       controller: controller,
       maxLines: maxLines,
       style: TextStyle(
-        color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.white
+            : Colors.black,
       ),
       decoration: InputDecoration(
         labelText: label,
@@ -233,13 +246,15 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: ThemeConstants.primaryColor, width: 2),
+          borderSide:
+              const BorderSide(color: ThemeConstants.primaryColor, width: 2),
         ),
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
             ? ThemeConstants.darkCardColor
             : Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       validator: validator,
     );
@@ -252,8 +267,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         Text(
           'Category',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+                fontWeight: FontWeight.w600,
+              ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -269,7 +284,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
             child: DropdownButton<String>(
               value: _selectedCategory,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: ThemeConstants.primaryColor),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: ThemeConstants.primaryColor),
               items: CategoryUtils.allCategories.map((category) {
                 return DropdownMenuItem(
                   value: category,
@@ -284,8 +300,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                       Text(
                         CategoryUtils.getCategoryDisplayName(category),
                         style: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.white 
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
                               : Colors.black,
                         ),
                       ),
@@ -312,8 +328,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         Text(
           'Event Status (Optional)',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+                fontWeight: FontWeight.w600,
+              ),
         ),
         const SizedBox(height: 12),
         ..._eventStatusOptions.map((option) {
@@ -322,12 +338,14 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
             child: InkWell(
               onTap: () {
                 setState(() {
-                  _eventStatus = _eventStatus == option['value'] ? null : option['value'];
+                  _eventStatus =
+                      _eventStatus == option['value'] ? null : option['value'];
                 });
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: _eventStatus == option['value']
                       ? option['color'].withOpacity(0.1)
@@ -358,8 +376,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                         style: TextStyle(
                           color: _eventStatus == option['value']
                               ? option['color']
-                              : (Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.white 
+                              : (Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
                                   : Colors.black),
                           fontWeight: _eventStatus == option['value']
                               ? FontWeight.w600
@@ -387,8 +405,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
             Text(
               'Additional Media',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             TextButton.icon(
               onPressed: _addMoreMedia,
@@ -443,7 +461,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
               itemBuilder: (context, index) {
                 final mediaPath = _additionalMedia[index];
                 final isVideo = _isVideoFile(mediaPath);
-                
+
                 return Container(
                   width: 120,
                   margin: const EdgeInsets.only(right: 12),
@@ -478,7 +496,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withOpacity(0.8),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: const Icon(
                                           Icons.play_arrow,
@@ -553,7 +572,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: _isAnonymous 
+              color: _isAnonymous
                   ? Colors.orange.withValues(alpha: 0.1)
                   : ThemeConstants.primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
@@ -578,8 +597,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _isAnonymous 
-                      ? 'Your identity will be hidden' 
+                  _isAnonymous
+                      ? 'Your identity will be hidden'
                       : 'Your profile will be visible',
                   style: TextStyle(
                     color: Colors.grey[600],
@@ -597,7 +616,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
               });
             },
             activeColor: Colors.orange,
-            inactiveTrackColor: ThemeConstants.primaryColor.withValues(alpha: 0.3),
+            inactiveTrackColor:
+                ThemeConstants.primaryColor.withValues(alpha: 0.3),
             inactiveThumbColor: ThemeConstants.primaryColor,
           ),
         ],
@@ -621,10 +641,15 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
     setState(() => _isPosting = true);
 
     try {
+      // Debug logging for event status
+      debugPrint(
+          '🐛 MediaPreviewPage: Creating post with event status: $_eventStatus');
+
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
 
       // Upload main media file
-      final String? mainMediaUrl = await postsProvider.uploadMedia(widget.mediaPath);
+      final String? mainMediaUrl =
+          await postsProvider.uploadMedia(widget.mediaPath);
       if (mainMediaUrl == null) {
         throw Exception('Failed to upload main media file');
       }
@@ -634,11 +659,21 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
 
       // Upload additional media files
       for (String additionalMediaPath in _additionalMedia) {
-        final String? additionalMediaUrl = await postsProvider.uploadMedia(additionalMediaPath);
+        final String? additionalMediaUrl =
+            await postsProvider.uploadMedia(additionalMediaPath);
         if (additionalMediaUrl != null) {
           allMediaUrls.add(additionalMediaUrl);
         }
       }
+
+      // Debug logging before creating post
+      debugPrint('🐛 MediaPreviewPage: About to create post with:');
+      debugPrint('  - Title: ${_titleController.text.trim()}');
+      debugPrint('  - Content: ${_contentController.text.trim()}');
+      debugPrint('  - Category: $_selectedCategory');
+      debugPrint('  - Event Status: $_eventStatus');
+      debugPrint('  - Media URLs: $allMediaUrls');
+      debugPrint('  - Anonymous: $_isAnonymous');
 
       // Create the post with all media URLs
       await postsProvider.createPost(
@@ -651,7 +686,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         mediaUrls: allMediaUrls,
         tags: [], // Tags functionality removed
         isAnonymous: _isAnonymous,
-        // Note: Event status functionality is available in UI but not yet implemented in backend
+        eventStatus: _eventStatus, // Pass the event status to the backend
       );
 
       if (mounted) {
@@ -664,6 +699,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
+      debugPrint('🐛 MediaPreviewPage: Error creating post: $e');
       if (mounted) {
         ResponsiveSnackBar.showError(
           context: context,
@@ -740,7 +776,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
           : Container(
               color: Colors.black,
               child: const Center(
-                child: CircularProgressIndicator(color: ThemeConstants.primaryColor),
+                child: CircularProgressIndicator(
+                    color: ThemeConstants.primaryColor),
               ),
             );
     } else {
@@ -800,7 +837,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: ThemeConstants.primaryColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -833,7 +871,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
             width: double.infinity,
             child: _buildMainMediaPreview(),
           ),
-          
+
           // Form content
           Expanded(
             child: Container(
@@ -865,7 +903,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      
+
                       // Content field
                       _buildStyledTextField(
                         controller: _contentController,
@@ -881,19 +919,19 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Category selector
                       _buildCategorySelector(),
                       const SizedBox(height: 24),
-                      
+
                       // Event status section
                       _buildEventStatusSection(),
                       const SizedBox(height: 24),
-                      
+
                       // Additional media section
                       _buildAdditionalMediaSection(),
                       const SizedBox(height: 24),
-                      
+
                       // Privacy section
                       _buildPrivacySection(),
                       const SizedBox(height: 32),

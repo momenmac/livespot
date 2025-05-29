@@ -35,6 +35,23 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
   bool _isAnonymous = false;
   bool _isPosting = false;
 
+  // Event status options (matching backend PostStatus model)
+  String? _eventStatus;
+  final List<Map<String, dynamic>> _eventStatusOptions = [
+    {
+      'value': 'happening',
+      'label': 'This is currently happening',
+      'icon': Icons.play_circle_fill,
+      'color': Colors.green
+    },
+    {
+      'value': 'ended',
+      'label': 'This has ended',
+      'icon': Icons.stop_circle,
+      'color': Colors.red
+    },
+  ];
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -163,7 +180,7 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         builder: (context) => UnifiedCameraPage(isAddingMedia: true),
       ),
     );
-    
+
     if (result != null && result['type'] == 'photo') {
       setState(() {
         _additionalMedia.add(result['path']);
@@ -178,7 +195,7 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         builder: (context) => UnifiedCameraPage(isAddingMedia: true),
       ),
     );
-    
+
     if (result != null && result['type'] == 'video') {
       setState(() {
         _additionalMedia.add(result['path']);
@@ -204,7 +221,9 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
       controller: controller,
       maxLines: maxLines,
       style: TextStyle(
-        color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.white
+            : Colors.black,
       ),
       decoration: InputDecoration(
         labelText: label,
@@ -220,13 +239,15 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: ThemeConstants.primaryColor, width: 2),
+          borderSide:
+              const BorderSide(color: ThemeConstants.primaryColor, width: 2),
         ),
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
             ? ThemeConstants.darkCardColor
             : Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       validator: validator,
     );
@@ -239,8 +260,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         Text(
           'Category',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+                fontWeight: FontWeight.w600,
+              ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -256,7 +277,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
             child: DropdownButton<String>(
               value: _selectedCategory,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: ThemeConstants.primaryColor),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: ThemeConstants.primaryColor),
               items: CategoryUtils.allCategories.map((category) {
                 return DropdownMenuItem(
                   value: category,
@@ -271,8 +293,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                       Text(
                         CategoryUtils.getCategoryDisplayName(category),
                         style: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.white 
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
                               : Colors.black,
                         ),
                       ),
@@ -299,8 +321,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         Text(
           'Tags',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+                fontWeight: FontWeight.w600,
+              ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -309,11 +331,14 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
               child: TextFormField(
                 controller: _tagController,
                 style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Add tags to reach more people...',
-                  prefixIcon: const Icon(Icons.tag, color: ThemeConstants.primaryColor),
+                  prefixIcon:
+                      const Icon(Icons.tag, color: ThemeConstants.primaryColor),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(color: Colors.grey[300]!),
@@ -324,7 +349,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: ThemeConstants.primaryColor, width: 2),
+                    borderSide: const BorderSide(
+                        color: ThemeConstants.primaryColor, width: 2),
                   ),
                   filled: true,
                   fillColor: Theme.of(context).brightness == Brightness.dark
@@ -356,7 +382,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
             runSpacing: 8,
             children: _selectedTags.map((tag) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -386,7 +413,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: ThemeConstants.primaryColor.withValues(alpha: 0.2),
+                          color: ThemeConstants.primaryColor
+                              .withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -432,7 +460,7 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: _isAnonymous 
+              color: _isAnonymous
                   ? Colors.orange.withValues(alpha: 0.1)
                   : ThemeConstants.primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
@@ -451,17 +479,17 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                 Text(
                   'Privacy Settings',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _isAnonymous 
+                  _isAnonymous
                       ? 'Your identity will be hidden'
                       : 'Your profile will be visible',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                        color: Colors.grey[600],
+                      ),
                 ),
               ],
             ),
@@ -474,6 +502,80 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEventStatusSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Event Status (Optional)',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 12),
+        ..._eventStatusOptions.map((option) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _eventStatus =
+                      _eventStatus == option['value'] ? null : option['value'];
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _eventStatus == option['value']
+                      ? option['color'].withOpacity(0.1)
+                      : (Theme.of(context).brightness == Brightness.dark
+                          ? ThemeConstants.darkCardColor
+                          : Colors.grey[50]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _eventStatus == option['value']
+                        ? option['color']
+                        : Colors.grey[300]!,
+                    width: _eventStatus == option['value'] ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      option['icon'],
+                      color: _eventStatus == option['value']
+                          ? option['color']
+                          : Colors.grey[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        option['label'],
+                        style: TextStyle(
+                          color: _eventStatus == option['value']
+                              ? option['color']
+                              : (Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black),
+                          fontWeight: _eventStatus == option['value']
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ],
     );
   }
 
@@ -514,6 +616,7 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
         mediaUrls: [mediaUrl],
         tags: _selectedTags,
         isAnonymous: _isAnonymous,
+        eventStatus: _eventStatus, // Pass the event status to the backend
       );
 
       if (mounted) {
@@ -557,7 +660,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: ThemeConstants.primaryColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -645,11 +749,13 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                     left: 16,
                     right: 16,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -761,9 +867,10 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
                       // Title section
                       Text(
                         'Share your photo',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
                       const SizedBox(height: 24),
 
@@ -814,6 +921,10 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
 
                       // Privacy options
                       _buildPrivacySection(),
+                      const SizedBox(height: 20),
+
+                      // Event status options
+                      _buildEventStatusSection(),
                       const SizedBox(height: 32),
                     ],
                   ),

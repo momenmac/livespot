@@ -21,6 +21,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/services/auth/token_manager.dart'; // Import TokenManager
 import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
+import 'package:flutter_application_2/services/utils/url_utils.dart'; // Import UrlUtils
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart'; // Import CachedNetworkImage
 
@@ -63,6 +64,33 @@ class _MapPageState extends State<MapPage> {
 
   // Debounce timer for location fetching
   Timer? _fetchDebounceTimer;
+
+  // Helper method to process image URLs for bubble speech
+  String _processImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+
+    // Always keep Firebase Storage URLs as they are
+    if (url.contains('firebasestorage.googleapis.com') ||
+        url.contains('storage.googleapis.com')) {
+      return url;
+    }
+
+    // Handle any localhost or IP-based URLs
+    if (url.contains('localhost') ||
+        url.contains('127.0.0.1') ||
+        url.contains('192.168.')) {
+      // Extract path from URL
+      Uri uri = Uri.parse(url);
+      String path = uri.path;
+      // Ensure no leading slash for concatenation
+      path = path.startsWith('/') ? path.substring(1) : path;
+
+      return '${ApiUrls.baseUrl}/$path';
+    }
+
+    // For relative paths or already fixed URLs
+    return UrlUtils.fixUrl(url);
+  }
 
   @override
   void initState() {
@@ -494,10 +522,10 @@ class _MapPageState extends State<MapPage> {
       print('Found direct imageUrl field: $thumbnailUrl');
     }
 
-    // Check if thumbnailUrl is a relative URL and make it absolute if needed
-    if (thumbnailUrl != null && thumbnailUrl.startsWith('/')) {
-      thumbnailUrl = '${ApiUrls.baseUrl}$thumbnailUrl';
-      print('Converted to absolute URL: $thumbnailUrl');
+    // Process thumbnailUrl with comprehensive URL handling
+    if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+      thumbnailUrl = _processImageUrl(thumbnailUrl);
+      print('Processed thumbnailUrl: $thumbnailUrl');
     }
 
     // Fix for honesty rate - handle different possible structures and formats

@@ -25,6 +25,10 @@ class PostsProvider with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> _userStories = {};
   Map<String, List<Map<String, dynamic>>> get userStories => _userStories;
 
+  // Cache for user posts by date to prevent excessive API calls
+  Map<String, List<Post>> _userPostsByDateCache = {};
+  Map<String, Future<List<Post>>> _ongoingUserPostRequests = {};
+
   // Getters
   List<Post> get posts => _posts;
   bool get isLoading => _isLoading;
@@ -195,6 +199,7 @@ class PostsProvider with ChangeNotifier {
     List<String> mediaUrls = const [],
     List<String> tags = const [],
     bool isAnonymous = false, // New parameter
+    String? eventStatus, // Added eventStatus parameter
   }) async {
     try {
       _setLoading(true);
@@ -209,6 +214,8 @@ class PostsProvider with ChangeNotifier {
         mediaUrls: mediaUrls,
         tags: tags,
         isAnonymous: isAnonymous, // Pass the parameter to the service
+        eventStatus:
+            eventStatus, // Pass the eventStatus parameter to the service
       );
 
       // Add the new post to the beginning of our list
@@ -511,18 +518,54 @@ class PostsProvider with ChangeNotifier {
 
   // Get posts by a specific user on a specific date
   Future<List<Post>> getUserPostsByDate(int userId, String date) async {
-    _setLoading(true);
+    final cacheKey = '${userId}_$date';
+
+    // Return cached data if available
+    if (_userPostsByDateCache.containsKey(cacheKey)) {
+      debugPrint('📋 Using cached data for key: $cacheKey');
+      return _userPostsByDateCache[cacheKey]!;
+    }
+
+    // Return ongoing request if one exists
+    if (_ongoingUserPostRequests.containsKey(cacheKey)) {
+      debugPrint('⏳ Reusing ongoing request for key: $cacheKey');
+      return _ongoingUserPostRequests[cacheKey]!;
+    }
+
+    // Create new request
+    debugPrint('🆕 Creating new request for key: $cacheKey');
+    final future = _fetchUserPostsByDate(userId, date, cacheKey);
+    _ongoingUserPostRequests[cacheKey] = future;
+
+    return future;
+  }
+
+  Future<List<Post>> _fetchUserPostsByDate(
+      int userId, String date, String cacheKey) async {
     try {
+      debugPrint('🔄 Fetching user posts for cache key: $cacheKey');
       final posts = await _postsService.getUserPostsByDate(userId, date);
+
+      // Cache the result
+      _userPostsByDateCache[cacheKey] = posts;
       _errorMessage = null;
+      debugPrint('✅ Cached ${posts.length} posts for key: $cacheKey');
+
       return posts;
     } catch (e) {
       _errorMessage = 'Failed to fetch user posts by date: $e';
-      debugPrint(_errorMessage);
+      debugPrint('❌ Error fetching posts for $cacheKey: $_errorMessage');
       return [];
     } finally {
-      _setLoading(false);
+      // Remove from ongoing requests
+      _ongoingUserPostRequests.remove(cacheKey);
     }
+  }
+
+  // Clear cache when date changes
+  void clearUserPostsByDateCache() {
+    _userPostsByDateCache.clear();
+    _ongoingUserPostRequests.clear();
   }
 
   // Get saved posts for a specific user

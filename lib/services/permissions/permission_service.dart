@@ -209,6 +209,44 @@ class PermissionService {
     }
   }
 
+  // Helper method to select video with proper permission handling
+  Future<XFile?> pickVideo({
+    required BuildContext context,
+    required ImageSource source,
+  }) async {
+    try {
+      debugPrint('🔒 Attempting to pick video from ${source.name}');
+      bool permissionGranted = false;
+
+      if (source == ImageSource.gallery) {
+        permissionGranted = await requestPhotoPermission(context);
+      } else if (source == ImageSource.camera) {
+        permissionGranted = await requestCameraPermission(context);
+      }
+
+      if (!permissionGranted) {
+        debugPrint('🔒 Permission not granted for ${source.name}');
+        return null;
+      }
+
+      // Permission granted, proceed with video selection
+      final picker = ImagePicker();
+      debugPrint('🔒 Picking video from ${source.name}');
+      final XFile? pickedFile = await picker.pickVideo(source: source);
+
+      if (pickedFile == null) {
+        debugPrint('🔒 No video was picked');
+      } else {
+        debugPrint('🔒 Video picked successfully: ${pickedFile.path}');
+      }
+
+      return pickedFile;
+    } catch (e) {
+      debugPrint('🔒 Error picking video: $e');
+      return null;
+    }
+  }
+
   Future<void> _showOpenSettingsDialog({
     required BuildContext context,
     required String title,

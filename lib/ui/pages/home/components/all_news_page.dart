@@ -7,7 +7,10 @@ import 'package:flutter_application_2/ui/pages/home/components/news_search_page.
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/constants/category_utils.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:flutter_application_2/utils/time_formatter.dart';
 
 class AllNewsPage extends StatefulWidget {
   const AllNewsPage({super.key});
@@ -17,25 +20,24 @@ class AllNewsPage extends StatefulWidget {
 }
 
 class _AllNewsPageState extends State<AllNewsPage> {
-  String _selectedFilter = 'Latest';
-  String _searchQuery = '';
-  bool _isSearching = false;
-  List<Post> _searchResults = [];
+  String _selectedFilter = 'Popular';
+  String _selectedCategory = 'All';
+  DateTime _selectedDate = DateTime.now();
+
   bool _isLoadingMore = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
   final List<String> _filterOptions = [
+    'Popular',
     'Latest',
-    'Trending',
     'Most Upvoted',
     'Verified Only',
   ];
 
-  // Track voted posts
-  final Map<int, bool?> _userVotes =
-      {}; // true for upvote, false for downvote, null for no vote
+  // Category options including 'All' and categories from CategoryUtils
+  List<String> get _categoryOptions => ['All', ...CategoryUtils.allCategories];
 
   @override
   void initState() {
@@ -56,7 +58,9 @@ class _AllNewsPageState extends State<AllNewsPage> {
   Future<void> _fetchAllPosts({bool refresh = false}) async {
     try {
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
-      await postsProvider.fetchPosts(refresh: refresh);
+      // Format date for API call
+      final formattedDate = _selectedDate.toIso8601String().split('T').first;
+      await postsProvider.fetchPosts(date: formattedDate, refresh: refresh);
     } catch (e) {
       debugPrint('Error fetching all posts: $e');
       if (mounted) {
@@ -79,7 +83,8 @@ class _AllNewsPageState extends State<AllNewsPage> {
     try {
       final postsProvider = Provider.of<PostsProvider>(context, listen: false);
       if (postsProvider.hasMore && !postsProvider.isFetchingMore) {
-        await postsProvider.loadMorePosts();
+        final formattedDate = _selectedDate.toIso8601String().split('T').first;
+        await postsProvider.loadMorePosts(date: formattedDate);
       }
     } catch (e) {
       debugPrint('Error loading more posts: $e');
@@ -89,36 +94,6 @@ class _AllNewsPageState extends State<AllNewsPage> {
           _isLoadingMore = false;
         });
       }
-    }
-  }
-
-  Future<void> _searchPosts() async {
-    if (_searchQuery.trim().isEmpty) {
-      setState(() {
-        _isSearching = false;
-        _searchResults.clear();
-      });
-      return;
-    }
-
-    setState(() {
-      _isSearching = true;
-    });
-
-    try {
-      final results = await Provider.of<PostsProvider>(context, listen: false)
-          .searchPosts(_searchQuery);
-      setState(() {
-        _searchResults = results;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Search failed: $e')),
-      );
-    } finally {
-      setState(() {
-        _isSearching = false;
-      });
     }
   }
 
@@ -148,63 +123,50 @@ class _AllNewsPageState extends State<AllNewsPage> {
     );
   }
 
-  void _handleVote(Post post, bool isUpvote) {
-    // Save the current state before optimistic update
-    final previousVote = _userVotes[post.id];
-    final previousUpvotes = post.upvotes;
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
 
-    // Apply optimistic UI update
-    setState(() {
-      // If already voted the same way, remove the vote
-      if (_userVotes[post.id] == isUpvote) {
-        _userVotes[post.id] = null; // Clear the vote
-      } else {
-        _userVotes[post.id] = isUpvote; // Set new vote
-      }
-    });
-
-    // Try to update the post vote in provider
-    Provider.of<PostsProvider>(context, listen: false)
-        .voteOnPost(post, isUpvote)
-        .then((result) {
-      // Success case handled by the provider
-      return result;
-    }).catchError((error) {
-      // If the API call fails, revert to previous state
-      if (mounted) {
-        setState(() {
-          _userVotes[post.id] = previousVote;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to register vote: Please try again later'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      debugPrint('Error voting on post: $error');
-
-      // Return an empty map to match the Future's type
-      return <String, dynamic>{};
-    });
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      // Fetch posts for the new date
+      _fetchAllPosts(refresh: true);
+    }
   }
 
   List<Post> _getFilteredPosts(List<Post> posts) {
+    // First filter by category
+    List<Post> categoryFiltered = posts;
+    if (_selectedCategory != 'All') {
+      categoryFiltered = posts
+          .where((post) =>
+              post.category.toLowerCase() == _selectedCategory.toLowerCase())
+          .toList();
+    }
+
+    // Then apply sorting filter
     switch (_selectedFilter) {
+      case 'Popular':
+        // For now, return as-is (server order), can be enhanced later with ML recommendations
+        return categoryFiltered;
       case 'Latest':
-        return List.from(posts)
+        return List.from(categoryFiltered)
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      case 'Trending':
-        return List.from(posts)
-          ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
       case 'Most Upvoted':
-        return List.from(posts)..sort((a, b) => b.upvotes.compareTo(a.upvotes));
+        return List.from(categoryFiltered)
+          ..sort((a, b) => b.upvotes.compareTo(a.upvotes));
       case 'Verified Only':
-        return posts.where((post) => post.author.isVerified).toList();
+        return categoryFiltered.where((post) => post.author.isVerified).toList()
+          ..sort((a, b) => b.createdAt
+              .compareTo(a.createdAt)); // Sort verified posts by latest
       default:
-        return posts;
+        return categoryFiltered;
     }
   }
 
@@ -241,7 +203,133 @@ class _AllNewsPageState extends State<AllNewsPage> {
       ),
       body: Column(
         children: [
-          // Filter chips
+          // Date Picker and Sort Filter Section
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Date Picker
+                Icon(Icons.calendar_today,
+                    size: 20, color: ThemeConstants.primaryColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Date:',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: GestureDetector(
+                    onTap: _selectDate,
+                    child: Container(
+                      height: 32, // Fixed height to match sort dropdown
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 0),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: ThemeConstants.primaryColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
+                            style: TextStyle(
+                              color: ThemeConstants.primaryColor,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11, // Match dropdown font size
+                            ),
+                          ),
+                          Icon(Icons.arrow_drop_down,
+                              color: ThemeConstants.primaryColor,
+                              size: 14), // Match dropdown icon size
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Sort Filter Dropdown
+                Icon(Icons.sort, size: 20, color: ThemeConstants.primaryColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Sort:',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    height: 32, // Fixed height to match date picker
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: ThemeConstants.primaryColor.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedFilter,
+                        isExpanded: true,
+                        isDense: true, // Makes dropdown more compact
+                        icon: Icon(Icons.arrow_drop_down,
+                            color: ThemeConstants.primaryColor, size: 14),
+                        style: TextStyle(
+                          color: ThemeConstants.primaryColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11, // Smaller font size
+                        ),
+                        dropdownColor: theme.cardColor,
+                        items: _filterOptions.map((String filter) {
+                          return DropdownMenuItem<String>(
+                            value: filter,
+                            child: Text(
+                              filter,
+                              style: TextStyle(
+                                color: theme.textTheme.bodyMedium?.color,
+                                fontSize: 11, // Smaller font size
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedFilter = newValue;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Category Filter Section
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -254,55 +342,84 @@ class _AllNewsPageState extends State<AllNewsPage> {
                 ),
               ],
             ),
-            child: SizedBox(
-              height: 34,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _filterOptions.length,
-                itemBuilder: (context, index) {
-                  final filter = _filterOptions[index];
-                  final isSelected = filter == _selectedFilter;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(
-                        filter,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isSelected
-                              ? ThemeConstants.primaryColor
-                              : theme.textTheme.bodyMedium?.color,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      selected: isSelected,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedFilter = filter;
-                          _searchResults.clear();
-                          _isSearching = false;
-                          _searchQuery = '';
-                          _searchController.clear();
-                        });
-                      },
-                      backgroundColor: theme.cardColor,
-                      selectedColor:
-                          ThemeConstants.primaryColor.withOpacity(0.2),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                      padding: EdgeInsets.zero,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      checkmarkColor: ThemeConstants.primaryColor,
-                      visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Categories',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 34,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _categoryOptions.length,
+                    itemBuilder: (context, index) {
+                      final category = _categoryOptions[index];
+                      final isSelected = category == _selectedCategory;
+
+                      if (category == 'All') {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text(
+                              'All',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isSelected
+                                    ? Colors.white
+                                    : ThemeConstants.primaryColor,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            selected: isSelected,
+                            onSelected: (_) {
+                              setState(() {
+                                _selectedCategory = 'All';
+                              });
+                            },
+                            backgroundColor:
+                                ThemeConstants.primaryColor.withOpacity(0.1),
+                            selectedColor: ThemeConstants.primaryColor,
+                            labelPadding:
+                                const EdgeInsets.symmetric(horizontal: 6),
+                            padding: EdgeInsets.zero,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            checkmarkColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        );
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = category;
+                            });
+                          },
+                          child: CategoryUtils.buildCategoryChip(
+                            category: category,
+                            isSelected: isSelected,
+                            height: 32,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -426,11 +543,6 @@ class _AllNewsPageState extends State<AllNewsPage> {
   Widget _buildNewsListItem(Post post) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-
-    // Check if this post has been voted on
-    final userVote = _userVotes[post.id];
-    final hasUpvoted = userVote == true;
-    final hasDownvoted = userVote == false;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -559,6 +671,26 @@ class _AllNewsPageState extends State<AllNewsPage> {
 
                         const SizedBox(height: 8),
 
+                        // Date/Time
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: ThemeConstants.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              TimeFormatter.getFormattedTime(post.createdAt),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: ThemeConstants.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
                         // Footer with voting and badges (voting disabled)
                         Row(
                           children: [
@@ -683,12 +815,17 @@ class _AllNewsPageState extends State<AllNewsPage> {
     return url;
   }
 
-  // Enhanced image handling for various path formats
+  // Enhanced image handling for various path formats with video support
   Widget _buildPostImage(Post post, {BoxFit fit = BoxFit.cover}) {
     final imageUrl = _getFixedImageUrl(_getPostImageUrl(post));
 
     if (imageUrl.isEmpty) {
       return _buildImagePlaceholder();
+    }
+
+    // Check if it's a video file
+    if (_isVideoFile(imageUrl)) {
+      return _buildVideoThumbnail(imageUrl, fit: fit);
     }
 
     if (_isFilePath(imageUrl)) {
@@ -724,6 +861,312 @@ class _AllNewsPageState extends State<AllNewsPage> {
           size: 40,
           color: ThemeConstants.grey.withOpacity(0.5),
         ),
+      ),
+    );
+  }
+
+  // Check if a URL/path points to a video file
+  bool _isVideoFile(String url) {
+    final String lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm') ||
+        lowerUrl.contains('.m4v') ||
+        lowerUrl.contains('.3gp');
+  }
+
+  // Extract thumbnail URL from video URL or post data - Direct server approach
+  String? _extractThumbnailUrl(String videoUrl) {
+    // This method constructs the thumbnail URL using the server's base URL + path pattern
+    try {
+      // Extract the relative path from the video URL
+      String relativePath = '';
+
+      if (videoUrl.contains('attachments/video/')) {
+        // Extract path after domain (e.g., /media/attachments/video/filename.mp4)
+        int pathIndex = videoUrl.indexOf('attachments/video/');
+        relativePath = videoUrl.substring(pathIndex);
+
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll(
+            'attachments/video/', 'media/attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+
+        // Construct full URL using ApiUrls.baseUrl without extra /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        print('🎥 Constructed server thumbnail URL: $thumbnailUrl');
+        return thumbnailUrl;
+      } else if (videoUrl.contains('attachments/image/') &&
+          videoUrl.endsWith('.mp4')) {
+        // Handle videos that were incorrectly placed in image directory
+        int pathIndex = videoUrl.indexOf('attachments/image/');
+        relativePath = videoUrl.substring(pathIndex);
+
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll(
+            'attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+
+        // Construct full URL using ApiUrls.baseUrl without extra /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        print(
+            '🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
+        return thumbnailUrl;
+      }
+    } catch (e) {
+      print('🎥 Error extracting thumbnail URL: $e');
+    }
+    return null;
+  }
+
+  // Build video thumbnail with play overlay - Server-first approach
+  Widget _buildVideoThumbnail(String videoUrl, {BoxFit fit = BoxFit.cover}) {
+    // Try to get server-generated thumbnail first
+    String? thumbnailUrl = _extractThumbnailUrl(videoUrl);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Server thumbnail first, then client-side generation as fallback
+          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+            Image.network(
+              thumbnailUrl,
+              fit: fit,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return _buildVideoLoading();
+              },
+              errorBuilder: (context, error, stackTrace) {
+                print(
+                    '🎥 Server thumbnail failed, trying client generation: $error, URL: $thumbnailUrl');
+                // Fallback to client-side thumbnail generation
+                return FutureBuilder<Widget>(
+                  future: _buildVideoThumbnailWidget(videoUrl, fit),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return snapshot.data!;
+                    } else if (snapshot.hasError) {
+                      print(
+                          '🎥 Client thumbnail also failed: ${snapshot.error}');
+                      return _buildVideoPattern();
+                    } else {
+                      return _buildVideoLoading();
+                    }
+                  },
+                );
+              },
+            )
+          else
+            // No server thumbnail available, try client-side generation
+            FutureBuilder<Widget>(
+              future: _buildVideoThumbnailWidget(videoUrl, fit),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return snapshot.data!;
+                } else if (snapshot.hasError) {
+                  print(
+                      '🎥 Video thumbnail generation failed: ${snapshot.error}');
+                  return _buildVideoPattern();
+                } else {
+                  return _buildVideoLoading();
+                }
+              },
+            ),
+
+          // Play button overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+
+          // Video indicator badge
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.videocam,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                  SizedBox(width: 3),
+                  Text(
+                    'VIDEO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build video thumbnail widget with multiple fallback strategies
+  Future<Widget> _buildVideoThumbnailWidget(String videoUrl, BoxFit fit) async {
+    try {
+      // Strategy 1: Try video_thumbnail package
+      final thumbnailData = await _generateVideoThumbnail(videoUrl);
+      if (thumbnailData != null && thumbnailData.isNotEmpty) {
+        print('🎥 Successfully generated video thumbnail');
+        return Image.memory(
+          thumbnailData,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            print('🎥 Error displaying thumbnail: $error');
+            return _buildVideoPattern();
+          },
+        );
+      }
+    } catch (e) {
+      print('🎥 Video thumbnail generation failed: $e');
+    }
+
+    // Strategy 2: Return a nice video pattern fallback
+    return _buildVideoPattern();
+  }
+
+  // Generate video thumbnail with improved error handling
+  Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
+    try {
+      String processedVideoUrl = _getFixedImageUrl(videoUrl);
+      print('🎥 Processing video URL: $processedVideoUrl');
+
+      // Multiple attempts with different parameters
+      List<Map<String, dynamic>> attempts = [
+        {'timeMs': 1000, 'quality': 75},
+        {'timeMs': 2000, 'quality': 85},
+        {'timeMs': 500, 'quality': 65},
+        {'timeMs': 0, 'quality': 75}, // Try at the very beginning
+      ];
+
+      for (var attempt in attempts) {
+        try {
+          print(
+              '🎥 Attempting thumbnail generation with timeMs: ${attempt['timeMs']}, quality: ${attempt['quality']}');
+
+          final uint8list = await VideoThumbnail.thumbnailData(
+            video: processedVideoUrl,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 400,
+            maxHeight: 300,
+            timeMs: attempt['timeMs'],
+            quality: attempt['quality'],
+          );
+
+          if (uint8list != null && uint8list.isNotEmpty) {
+            print(
+                '🎥 Success! Generated thumbnail with ${uint8list.length} bytes');
+            return uint8list;
+          }
+        } catch (e) {
+          print('🎥 Attempt failed: $e');
+          continue;
+        }
+      }
+
+      print('🎥 All thumbnail generation attempts failed');
+      return null;
+    } catch (e) {
+      print('🎥 Critical error in thumbnail generation: $e');
+      return null;
+    }
+  }
+
+  // Create a nice video pattern background
+  Widget _buildVideoPattern() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.0,
+          colors: [
+            Colors.grey[700]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.movie_creation_outlined,
+              size: 32,
+              color: Colors.white.withOpacity(0.7),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Video Preview',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Fallback widget for video thumbnail loading
+  Widget _buildVideoLoading() {
+    return Container(
+      color: Colors.grey[300],
+      child: const Center(
+        child: CircularProgressIndicator(),
       ),
     );
   }

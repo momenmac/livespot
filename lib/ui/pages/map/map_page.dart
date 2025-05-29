@@ -23,6 +23,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/services/auth/token_manager.dart'; // Import TokenManager
 import 'package:flutter_application_2/services/api/account/api_urls.dart'; // Import ApiUrls
+import 'package:flutter_application_2/services/utils/url_utils.dart'; // Import UrlUtils
 import 'dart:math';
 
 class MapPage extends StatefulWidget {
@@ -63,6 +64,36 @@ class _MapPageState extends State<MapPage> {
 
   // Debounce timer for location fetching
   Timer? _fetchDebounceTimer;
+
+  // Request counter to track and ignore old API responses
+  int _currentRequestId = 0;
+
+  // Helper method to process image URLs for bubble speech
+  String _processImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+
+    // Always keep Firebase Storage URLs as they are
+    if (url.contains('firebasestorage.googleapis.com') ||
+        url.contains('storage.googleapis.com')) {
+      return url;
+    }
+
+    // Handle any localhost or IP-based URLs
+    if (url.contains('localhost') ||
+        url.contains('127.0.0.1') ||
+        url.contains('192.168.')) {
+      // Extract path from URL
+      Uri uri = Uri.parse(url);
+      String path = uri.path;
+      // Ensure no leading slash for concatenation
+      path = path.startsWith('/') ? path.substring(1) : path;
+
+      return '${ApiUrls.baseUrl}/$path';
+    }
+
+    // For relative paths or already fixed URLs
+    return UrlUtils.fixUrl(url);
+  }
 
   @override
   void initState() {
@@ -164,9 +195,43 @@ class _MapPageState extends State<MapPage> {
     super.dispose();
   }
 
+  // Method specifically for reload button - clears cache and stops ongoing requests
+  Future<void> _reloadMapLocations() async {
+    print(
+        '🔄 Reload button pressed - Clearing cache and stopping current requests');
+
+    // Cancel any ongoing debounced fetch
+    _fetchDebounceTimer?.cancel();
+
+    // Clear cache to force fresh data
+    _locationsCache = null;
+    _lastCacheDateParam = null;
+    _lastCacheCategories = null;
+
+    // Clear error state
+    _error = null;
+
+    // Clear existing locations and markers to prevent old data from showing
+    setState(() {
+      _mapLocations = [];
+      _mapMarkers.clear();
+      _isLoadingLocations = true;
+    });
+
+    print('🧹 Cache cleared, markers removed, loading fresh data...');
+
+    // Fetch fresh data immediately (no debounce for reload)
+    await _fetchMapLocations();
+  }
+
   // Method to fetch location data from the API
   Future<void> _fetchMapLocations() async {
     if (!mounted) return;
+
+    // Increment request counter and capture current request ID
+    _currentRequestId++;
+    final currentRequestId = _currentRequestId;
+    print('🔄 Starting API request #$currentRequestId');
 
     final DateTime selectedDate = _controller.selectedDate;
 
@@ -312,6 +377,13 @@ class _MapPageState extends State<MapPage> {
       print('Posts API response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
+        // Check if this is still the latest request
+        if (currentRequestId != _currentRequestId) {
+          print(
+              '🚫 Ignoring response from request #$currentRequestId (current: #$_currentRequestId)');
+          return;
+        }
+
         final data = jsonDecode(response.body);
         print('✅ Successful response data: $data');
 
@@ -335,10 +407,12 @@ class _MapPageState extends State<MapPage> {
           });
 
           // Display first page results immediately
-          setState(() {
-            _mapLocations = currentResults;
-            _addMarkersToMap(); // Add markers for first page immediately
-          });
+          if (currentRequestId == _currentRequestId && mounted) {
+            setState(() {
+              _mapLocations = currentResults;
+              _addMarkersToMap(); // Add markers for first page immediately
+            });
+          }
 
           // If there's a next page, fetch remaining pages progressively
           if (nextPageUrl != null && mounted) {
@@ -619,9 +693,14 @@ class _MapPageState extends State<MapPage> {
       }
     }
 
-    // Check if thumbnailUrl is a relative URL and make it absolute if needed
-    if (thumbnailUrl != null && thumbnailUrl.startsWith('/')) {
-      thumbnailUrl = '${ApiUrls.baseUrl}$thumbnailUrl';
+    // Process thumbnailUrl with comprehensive URL handling
+    if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+      thumbnailUrl = _processImageUrl(thumbnailUrl);
+    }
+
+    // Process mediaUrls with comprehensive URL handling
+    if (mediaUrls.isNotEmpty) {
+      mediaUrls = mediaUrls.map((url) => _processImageUrl(url)).toList();
     }
 
     // Fix for honesty rate - handle different possible structures and formats
@@ -1618,7 +1697,7 @@ class _MapPageState extends State<MapPage> {
                     heroTag: 'refresh_button',
                     elevation: 0,
                     backgroundColor: ThemeConstants.green,
-                    onPressed: _fetchMapLocations,
+                    onPressed: _reloadMapLocations,
                     child: const Icon(
                       Icons.refresh,
                       size: 26,

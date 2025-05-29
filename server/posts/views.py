@@ -42,7 +42,14 @@ class PostViewSet(viewsets.ModelViewSet):
         return context
     
     def perform_create(self, serializer):
-        serializer.save()
+        print(f"🔍 PostViewSet.perform_create: Raw request data = {self.request.data}")
+        post = serializer.save()
+        print(f"🔍 PostViewSet.perform_create: Created post ID {post.id}, category: {post.category}")
+        if post.related_post:
+            print(f"🔍 PostViewSet.perform_create: Post linked to main post ID {post.related_post.id}")
+        else:
+            print(f"🔍 PostViewSet.perform_create: Post created as main post (no related post)")
+        return post
     
     def get_queryset(self):
         """
@@ -126,14 +133,58 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # Filter out anonymous posts for public viewing
-        posts = self.get_queryset().filter(author_id=user_id, is_anonymous=False)
+        # Get ALL posts by user (including both main posts and related posts)
+        # Don't use self.get_queryset() here as it filters out related posts
+        posts = Post.objects.filter(author_id=user_id, is_anonymous=False).order_by('-created_at')
+        
+        # Date filtering - same implementation as main posts endpoint
+        date_str = request.query_params.get('date')
+        if date_str:
+            try:
+                # Parse the date string
+                filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                
+                # Create datetime objects for the start and end of the day
+                start_datetime = datetime.combine(filter_date, datetime.min.time())
+                end_datetime = datetime.combine(filter_date, datetime.max.time())
+                
+                # Apply timezone awareness if using timezone-aware datetimes in Django
+                if timezone.is_aware(posts.first().created_at if posts.exists() else timezone.now()):
+                    start_datetime = timezone.make_aware(start_datetime)
+                    end_datetime = timezone.make_aware(end_datetime)
+                
+                # Filter posts by date range
+                posts = posts.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+                
+                # Debug output to help diagnose issues
+                print(f"User {user_id} posts date filtering: {date_str} -> {start_datetime} to {end_datetime}")
+                print(f"Found {posts.count()} posts for user {user_id} on this date")
+            except ValueError:
+                print(f"Invalid date format: {date_str}")
+                return Response(
+                    {"error": "Invalid date format. Use YYYY-MM-DD"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Annotate with related posts count (sons count for fathers)
+        from django.db.models import Case, When, IntegerField
+        posts = posts.annotate(
+            _related_posts_count=Case(
+                When(related_post__isnull=True, then=Count('related_posts')),
+                default=0,
+                output_field=IntegerField()
+            )
+        )
+        
+        # Use optimized serializer for user posts that excludes is_saved field
+        from .serializers import UserPostSerializer
+        
         page = self.paginate_queryset(posts)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            serializer = UserPostSerializer(page, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
             
-        serializer = self.get_serializer(posts, many=True)
+        serializer = UserPostSerializer(posts, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])

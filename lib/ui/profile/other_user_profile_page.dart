@@ -18,6 +18,8 @@ import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/utils/time_formatter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'dart:typed_data';
 
 class OtherUserProfilePage extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -440,6 +442,300 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       return ApiUrls.baseUrl + url;
     }
     return url;
+  }
+
+  // Check if a URL/path points to a video file
+  bool _isVideoFile(String url) {
+    final String lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm') ||
+        lowerUrl.contains('.m4v') ||
+        lowerUrl.contains('.3gp');
+  }
+
+  // Extract thumbnail URL from video URL - Direct server approach
+  String? _extractThumbnailUrl(String videoUrl) {
+    try {
+      String relativePath = '';
+
+      if (videoUrl.contains('attachments/video/')) {
+        int pathIndex = videoUrl.indexOf('attachments/video/');
+        relativePath = videoUrl.substring(pathIndex);
+        relativePath = relativePath.replaceAll(
+            'attachments/video/', 'media/attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        return thumbnailUrl;
+      } else if (videoUrl.contains('attachments/image/') &&
+          videoUrl.endsWith('.mp4')) {
+        int pathIndex = videoUrl.indexOf('attachments/image/');
+        relativePath = videoUrl.substring(pathIndex);
+        relativePath = relativePath.replaceAll(
+            'attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        return thumbnailUrl;
+      }
+    } catch (e) {
+      print('🎥 Error extracting thumbnail URL: $e');
+    }
+    return null;
+  }
+
+  // Build video thumbnail with play overlay
+  Widget _buildVideoThumbnail(String videoUrl, {BoxFit fit = BoxFit.cover}) {
+    String? thumbnailUrl = _extractThumbnailUrl(videoUrl);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+            Image.network(
+              thumbnailUrl,
+              fit: fit,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return _buildVideoLoading();
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return FutureBuilder<Widget>(
+                  future: _buildVideoThumbnailWidget(videoUrl, fit),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return snapshot.data!;
+                    } else if (snapshot.hasError) {
+                      return _buildVideoPattern();
+                    } else {
+                      return _buildVideoLoading();
+                    }
+                  },
+                );
+              },
+            )
+          else
+            FutureBuilder<Widget>(
+              future: _buildVideoThumbnailWidget(videoUrl, fit),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return snapshot.data!;
+                } else if (snapshot.hasError) {
+                  return _buildVideoPattern();
+                } else {
+                  return _buildVideoLoading();
+                }
+              },
+            ),
+
+          // Play button overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 36,
+              ),
+            ),
+          ),
+
+          // Video indicator badge
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.videocam,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'VIDEO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build video thumbnail widget with client-side generation fallback
+  Future<Widget> _buildVideoThumbnailWidget(String videoUrl, BoxFit fit) async {
+    try {
+      final thumbnailData = await _generateVideoThumbnail(videoUrl);
+      if (thumbnailData != null && thumbnailData.isNotEmpty) {
+        return Image.memory(
+          thumbnailData,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildVideoPattern();
+          },
+        );
+      }
+    } catch (e) {
+      print('🎥 Video thumbnail generation failed: $e');
+    }
+    return _buildVideoPattern();
+  }
+
+  // Generate video thumbnail with multiple attempts
+  Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
+    try {
+      String processedVideoUrl = _getFixedImageUrl(videoUrl);
+
+      List<Map<String, dynamic>> attempts = [
+        {'timeMs': 1000, 'quality': 75},
+        {'timeMs': 2000, 'quality': 85},
+        {'timeMs': 500, 'quality': 65},
+        {'timeMs': 0, 'quality': 75},
+      ];
+
+      for (var attempt in attempts) {
+        try {
+          final uint8list = await VideoThumbnail.thumbnailData(
+            video: processedVideoUrl,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 400,
+            maxHeight: 300,
+            timeMs: attempt['timeMs'],
+            quality: attempt['quality'],
+          );
+
+          if (uint8list != null && uint8list.isNotEmpty) {
+            return uint8list;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Create video pattern background
+  Widget _buildVideoPattern() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.0,
+          colors: [
+            Colors.grey[700]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.movie_creation_outlined,
+              size: 64,
+              color: Colors.white.withOpacity(0.7),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Video Preview',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Loading widget for video thumbnails
+  Widget _buildVideoLoading() {
+    return Container(
+      color: Colors.grey[300],
+      child: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  // Build media widget that handles both images and videos
+  Widget _buildMediaWidget(String mediaUrl, {BoxFit fit = BoxFit.cover}) {
+    final String fixedMediaUrl = _getFixedImageUrl(mediaUrl);
+
+    if (_isVideoFile(fixedMediaUrl)) {
+      return _buildVideoThumbnail(fixedMediaUrl, fit: fit);
+    } else {
+      return Image.network(
+        fixedMediaUrl,
+        fit: fit,
+        errorBuilder: (context, url, error) => Container(
+          color: Colors.grey.shade200,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.image_not_supported,
+                    size: 40, color: Colors.grey),
+                const SizedBox(height: 8),
+                Text('Media not available',
+                    style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -1168,27 +1464,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
                       children: [
                         AspectRatio(
                           aspectRatio: 16 / 9,
-                          child: Image.network(
-                            _getFixedImageUrl(post.mediaUrls.isNotEmpty
-                                ? post.mediaUrls.first
-                                : ''),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, url, error) => Container(
-                              color: Colors.grey.shade200,
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.image_not_supported,
-                                        size: 40, color: Colors.grey),
-                                    const SizedBox(height: 8),
-                                    Text('Image not available',
-                                        style: TextStyle(color: subtitleColor)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
+                          child: _buildMediaWidget(post.mediaUrls.isNotEmpty
+                              ? post.mediaUrls.first
+                              : ''),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(8.0),
