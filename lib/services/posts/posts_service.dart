@@ -178,6 +178,7 @@ class PostsService {
     List<String> tags = const [],
     int? threadId,
     bool isAnonymous = false, // Added isAnonymous parameter
+    String? eventStatus, // Added eventStatus parameter
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/posts/');
@@ -189,13 +190,16 @@ class PostsService {
         'location': {
           'latitude': latitude,
           'longitude': longitude,
-          if (address != null) 'address': Uri.encodeFull(address),
+          if (address != null)
+            'address': address, // Remove Uri.encodeFull to fix encoding issue
         },
         'category': category,
         'media_urls': mediaUrls,
         'tags': tags,
         'is_anonymous': isAnonymous, // Add to request payload
         if (threadId != null) 'thread': threadId,
+        if (eventStatus != null)
+          'event_status': eventStatus, // Add event status to request payload
       };
 
       final response = await http.post(

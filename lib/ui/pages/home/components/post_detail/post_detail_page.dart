@@ -105,7 +105,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     _initializeMap();
     // Add related posts loading
     _loadRelatedPosts();
-    _initializeVideoPlayer();
+    // Note: Video player initialization removed to prevent errors with thumbnails
   }
 
   void _initializePostData() async {
@@ -629,27 +629,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
         !path.contains('://');
   }
 
-  // Initialize video player for the main media
-  void _initializeVideoPlayer() async {
-    final String mediaUrl = _getImageUrl();
-    if (_isVideoFile(mediaUrl)) {
-      try {
-        if (_isFilePath(mediaUrl)) {
-          _videoController = VideoPlayerController.file(File(mediaUrl));
-        } else {
-          _videoController = VideoPlayerController.network(mediaUrl);
-        }
-
-        await _videoController!.initialize();
-        setState(() {
-          // Video initialized successfully
-        });
-      } catch (e) {
-        debugPrint('Error initializing video: $e');
-      }
-    }
-  }
-
   // Widget to display either network image, file image, or video
   Widget _buildMediaWidget(String mediaUrl,
       {BoxFit fit = BoxFit.cover, bool isClickable = true}) {
@@ -659,7 +638,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
     if (_isVideoFile(fixedMediaUrl)) {
       // Video widget
-      mediaWidget = _buildVideoThumbnail(fixedMediaUrl, fit);
+      mediaWidget = _buildVideoThumbnail(fixedMediaUrl, fit: fit);
     } else {
       // Image widget
       if (_isFilePath(fixedMediaUrl)) {
@@ -693,58 +672,272 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return mediaWidget;
   }
 
-  // Build video thumbnail with play button overlay
-  Widget _buildVideoThumbnail(String videoUrl, BoxFit fit) {
-    return FutureBuilder<Uint8List?>(
-      future: _generateVideoThumbnail(videoUrl),
-      builder: (context, snapshot) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Video thumbnail or fallback
-            if (snapshot.hasData && snapshot.data != null)
-              Image.memory(
-                snapshot.data!,
-                fit: fit,
-                errorBuilder: (context, error, stackTrace) => _buildVideoFallback(),
-              )
-            else if (snapshot.connectionState == ConnectionState.waiting)
-              _buildVideoLoading()
-            else
-              _buildVideoFallback(),
-            
-            // Play button overlay
-            Container(
+  // Extract thumbnail URL from video URL or post data - Direct server approach
+  String? _extractThumbnailUrl(String videoUrl) {
+    // This method constructs the thumbnail URL using the server's base URL + path pattern
+    try {
+      // Extract the relative path from the video URL
+      String relativePath = '';
+      
+      if (videoUrl.contains('attachments/video/')) {
+        // Extract path after domain (e.g., /media/attachments/video/filename.mp4)
+        int pathIndex = videoUrl.indexOf('attachments/video/');
+        relativePath = videoUrl.substring(pathIndex);
+        
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll('attachments/video/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        
+        // Construct full URL using ApiUrls.baseUrl, always including /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/media/$relativePath';
+        print('🎥 Constructed server thumbnail URL: $thumbnailUrl');
+        return thumbnailUrl;
+        
+      } else if (videoUrl.contains('attachments/image/') && videoUrl.endsWith('.mp4')) {
+        // Handle videos that were incorrectly placed in image directory
+        int pathIndex = videoUrl.indexOf('attachments/image/');
+        relativePath = videoUrl.substring(pathIndex);
+        
+        // Convert to thumbnail path
+        relativePath = relativePath.replaceAll('attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
+        
+        // Construct full URL using ApiUrls.baseUrl without extra /media/
+        String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
+        print('🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
+        return thumbnailUrl;
+      }
+    } catch (e) {
+      print('🎥 Error extracting thumbnail URL: $e');
+    }
+    return null;
+  }
+
+  // Build video thumbnail with play overlay - Server-first approach
+  Widget _buildVideoThumbnail(String videoUrl, {BoxFit fit = BoxFit.cover}) {
+    // Try to get server-generated thumbnail first
+    String? thumbnailUrl = _extractThumbnailUrl(videoUrl);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Server thumbnail first, then client-side generation as fallback
+          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+            Image.network(
+              thumbnailUrl,
+              fit: fit,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return _buildVideoLoading();
+              },
+              errorBuilder: (context, error, stackTrace) {
+                print(
+                    '🎥 Server thumbnail failed, trying client generation: $error');
+                // Fallback to client-side thumbnail generation
+                return FutureBuilder<Widget>(
+                  future: _buildVideoThumbnailWidget(videoUrl, fit),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return snapshot.data!;
+                    } else if (snapshot.hasError) {
+                      print(
+                          '🎥 Client thumbnail also failed: ${snapshot.error}');
+                      return _buildVideoPattern();
+                    } else {
+                      return _buildVideoLoading();
+                    }
+                  },
+                );
+              },
+            )
+          else
+            // No server thumbnail available, try client-side generation
+            FutureBuilder<Widget>(
+              future: _buildVideoThumbnailWidget(videoUrl, fit),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return snapshot.data!;
+                } else if (snapshot.hasError) {
+                  print(
+                      '🎥 Video thumbnail generation failed: ${snapshot.error}');
+                  return _buildVideoPattern();
+                } else {
+                  return _buildVideoLoading();
+                }
+              },
+            ),
+
+          // Play button overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withOpacity(0.8),
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
               child: const Icon(
                 Icons.play_arrow,
                 color: Colors.white,
-                size: 48,
+                size: 36,
               ),
             ),
-          ],
-        );
-      },
+          ),
+
+          // Video indicator badge
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.videocam,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'VIDEO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // Generate video thumbnail
+  // Build video thumbnail widget with multiple fallback strategies
+  Future<Widget> _buildVideoThumbnailWidget(String videoUrl, BoxFit fit) async {
+    try {
+      // Strategy 1: Try video_thumbnail package
+      final thumbnailData = await _generateVideoThumbnail(videoUrl);
+      if (thumbnailData != null && thumbnailData.isNotEmpty) {
+        print('🎥 Successfully generated video thumbnail');
+        return Image.memory(
+          thumbnailData,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            print('🎥 Error displaying thumbnail: $error');
+            return _buildVideoPattern();
+          },
+        );
+      }
+    } catch (e) {
+      print('🎥 Video thumbnail generation failed: $e');
+    }
+
+    // Strategy 2: Return a nice video pattern fallback
+    return _buildVideoPattern();
+  }
+
+  // Generate video thumbnail with improved error handling - Only for local files
   Future<Uint8List?> _generateVideoThumbnail(String videoUrl) async {
     try {
-      final uint8list = await VideoThumbnail.thumbnailData(
-        video: videoUrl,
-        imageFormat: ImageFormat.JPEG,
-        maxWidth: 400, // specify the width of the thumbnail
-        quality: 75,
-      );
-      return uint8list;
+      String processedVideoUrl = _getFixedImageUrl(videoUrl);
+      print('🎥 Processing video URL: $processedVideoUrl');
+
+      // Only try client-side generation for local files to avoid server errors
+      if (_isFilePath(processedVideoUrl)) {
+        print('🎥 Attempting local file thumbnail generation');
+        
+        final uint8list = await VideoThumbnail.thumbnailData(
+          video: processedVideoUrl,
+          imageFormat: ImageFormat.JPEG,
+          maxWidth: 400,
+          maxHeight: 300,
+          timeMs: 1000,
+          quality: 75,
+        );
+
+        if (uint8list != null && uint8list.isNotEmpty) {
+          print('🎥 Success! Generated local thumbnail with ${uint8list.length} bytes');
+          return uint8list;
+        }
+      } else {
+        print('🎥 Skipping client-side generation for network video to avoid server errors');
+      }
+
+      return null;
     } catch (e) {
-      print('Error generating video thumbnail: $e');
+      print('🎥 Video thumbnail generation error: $e');
       return null;
     }
+  }
+
+  // Create a nice video pattern background
+  Widget _buildVideoPattern() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.0,
+          colors: [
+            Colors.grey[700]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.movie_creation_outlined,
+              size: 64,
+              color: Colors.white.withOpacity(0.7),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Video Preview',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // Fallback widget for video thumbnail loading
@@ -753,20 +946,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
       color: Colors.grey[300],
       child: const Center(
         child: CircularProgressIndicator(),
-      ),
-    );
-  }
-
-  // Fallback widget for video thumbnail error
-  Widget _buildVideoFallback() {
-    return Container(
-      color: Colors.grey[300],
-      child: const Center(
-        child: Icon(
-          Icons.video_file,
-          size: 48,
-          color: Colors.grey,
-        ),
       ),
     );
   }

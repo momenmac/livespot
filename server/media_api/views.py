@@ -338,6 +338,14 @@ def upload_media(request):
                             response_data = serializer.data
                             logger.info(f"Successfully fixed file extension: {response_data.get('firebase_url', response_data.get('url'))}")
                             
+                            # Generate thumbnail for videos
+                            if media_file.content_type == 'video':
+                                FileProcessor.process_video_with_thumbnail(media_file)
+                else:
+                    # Generate thumbnail for regular video uploads that don't need fixing
+                    if detected_content_type == 'video' or content_type == 'video':
+                        FileProcessor.process_video_with_thumbnail(media_file)
+                            
         except Exception as e:
             logger.warning(f"File post-processing failed (continuing anyway): {e}")
         
@@ -610,5 +618,42 @@ def list_user_media(request):
         logger.error(f"Error listing media files: {e}")
         return Response(
             {'error': f'Could not retrieve media files: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+def get_thumbnail(request, video_filename):
+    """Serve video thumbnail directly from server"""
+    try:
+        # Extract the base name without extension
+        video_name_without_ext = os.path.splitext(video_filename)[0]
+        thumbnail_filename = f"{video_name_without_ext}_thumb.jpg"
+        
+        # Construct thumbnail path
+        thumbnail_path = os.path.join(
+            settings.MEDIA_ROOT, 
+            'attachments', 
+            'thumbnails', 
+            thumbnail_filename
+        )
+        
+        # Check if thumbnail exists
+        if not os.path.exists(thumbnail_path):
+            return Response(
+                {'error': 'Thumbnail not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Serve the thumbnail file
+        with open(thumbnail_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='image/jpeg')
+            response['Content-Disposition'] = f'inline; filename="{thumbnail_filename}"'
+            return response
+            
+    except Exception as e:
+        logger.error(f"Error serving thumbnail: {e}")
+        return Response(
+            {'error': f'Could not serve thumbnail: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

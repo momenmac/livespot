@@ -12,12 +12,14 @@ import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 enum CameraMode { photo, video }
 
 class UnifiedCameraPage extends StatefulWidget {
   final bool isAddingMedia;
-  
+
   const UnifiedCameraPage({
     super.key,
     this.isAddingMedia = false,
@@ -185,27 +187,378 @@ class _UnifiedCameraPageState extends State<UnifiedCameraPage>
     }
   }
 
+  Future<String?> _fallbackGeocoding(Position position) async {
+    // First try: LocationIQ
+    try {
+      debugPrint('🌍 Trying fallback geocoding with LocationIQ');
+
+      final url = Uri.parse('https://us1.locationiq.com/v1/reverse.php?'
+          'key=pk.7532956e7e0b25b745e6e6d2e6f58c37&'
+          'lat=${position.latitude}&'
+          'lon=${position.longitude}&'
+          'format=json&'
+          'addressdetails=1');
+
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        debugPrint('🌍 LocationIQ response received');
+
+        final addressData = data['address'] as Map<String, dynamic>?;
+        if (addressData != null) {
+          final components = <String>[];
+
+          if (addressData['house_number'] != null &&
+              addressData['road'] != null) {
+            components
+                .add('${addressData['house_number']} ${addressData['road']}');
+          } else if (addressData['road'] != null) {
+            components.add(addressData['road']);
+          }
+
+          String? locality = addressData['city'] ??
+              addressData['town'] ??
+              addressData['village'] ??
+              addressData['suburb'];
+          if (locality != null) {
+            components.add(locality);
+          }
+
+          // Add country for international clarity
+          if (addressData['country'] != null) {
+            components.add(addressData['country']);
+          }
+
+          if (components.isNotEmpty) {
+            final cleanAddress = components.join(', ');
+            // Ensure proper UTF-8 encoding
+            try {
+              final decodedAddress = Uri.decodeComponent(cleanAddress);
+              debugPrint('🎯 LocationIQ clean address: $decodedAddress');
+              return decodedAddress;
+            } catch (e) {
+              // If decoding fails, return as-is
+              debugPrint(
+                  '🎯 LocationIQ clean address (no decode needed): $cleanAddress');
+              return cleanAddress;
+            }
+          }
+        }
+
+        // Fallback to display_name from LocationIQ
+        if (data['display_name'] != null) {
+          String fullAddress = data['display_name'];
+          try {
+            final decodedAddress = Uri.decodeComponent(fullAddress);
+            debugPrint('🎯 LocationIQ display name: $decodedAddress');
+            return decodedAddress;
+          } catch (e) {
+            debugPrint(
+                '🎯 LocationIQ display name (no decode needed): $fullAddress');
+            return fullAddress;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('💥 LocationIQ geocoding error: $e');
+    }
+
+    // Second try: BigDataCloud
+    try {
+      debugPrint('🌍 Trying BigDataCloud as second fallback');
+
+      final url =
+          Uri.parse('https://api.bigdatacloud.net/data/reverse-geocode-client?'
+              'latitude=${position.latitude}&'
+              'longitude=${position.longitude}&'
+              'localityLanguage=en');
+
+      final response = await http.get(url).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        debugPrint('🌍 BigDataCloud response received');
+
+        final components = <String>[];
+
+        if (data['locality'] != null &&
+            data['locality'].toString().isNotEmpty) {
+          String locality = data['locality'].toString();
+          // Only clean up the "State of" suffix but keep full locality name
+          locality = locality.replaceAll(RegExp(r',\s*State of$'), '');
+          components.add(locality.trim());
+        }
+
+        if (data['city'] != null && data['city'].toString().isNotEmpty) {
+          String city = data['city'].toString();
+          if (components.isEmpty || !components.first.contains(city)) {
+            city = city.replaceAll(RegExp(r',\s*State of$'), '');
+            components.add(city.trim());
+          }
+        }
+
+        if (data['countryName'] != null) {
+          String country = data['countryName'].toString();
+          // Clean up country name
+          country = country.replaceAll(RegExp(r',\s*State of$'), '');
+          country = country.replaceAll('Palestine, State of', 'Palestine');
+          components.add(country.trim());
+        }
+
+        if (components.isNotEmpty) {
+          final address = components.join(', ');
+          // Ensure proper UTF-8 encoding
+          try {
+            final decodedAddress = Uri.decodeComponent(address);
+            debugPrint('🎯 BigDataCloud cleaned address: $decodedAddress');
+            return decodedAddress;
+          } catch (e) {
+            // If decoding fails, return as-is
+            debugPrint(
+                '🎯 BigDataCloud cleaned address (no decode needed): $address');
+            return address;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('💥 BigDataCloud geocoding error: $e');
+    }
+
+    // Third try: OpenStreetMap Nominatim (free, no API key needed) - WITH SHORTENING
+    try {
+      debugPrint('🌍 Trying OpenStreetMap Nominatim as third fallback');
+
+      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?'
+          'lat=${position.latitude}&'
+          'lon=${position.longitude}&'
+          'format=json&'
+          'addressdetails=1&'
+          'zoom=18&'
+          'accept-language=ar,en');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'FlutterApp/1.0',
+          'Accept-Charset': 'utf-8',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        debugPrint('🌍 OpenStreetMap response received');
+
+        // Try to build address from components first
+        final addressData = data['address'] as Map<String, dynamic>?;
+        if (addressData != null) {
+          final components = <String>[];
+
+          // Add street info
+          if (addressData['house_number'] != null &&
+              addressData['road'] != null) {
+            components
+                .add('${addressData['house_number']} ${addressData['road']}');
+          } else if (addressData['road'] != null) {
+            components.add(addressData['road']);
+          }
+
+          // Add locality
+          String? locality = addressData['city'] ??
+              addressData['town'] ??
+              addressData['village'] ??
+              addressData['suburb'] ??
+              addressData['neighbourhood'];
+          if (locality != null) {
+            components.add(locality);
+          }
+
+          if (components.isNotEmpty) {
+            final shortAddress = components
+                .take(2)
+                .join(', '); // Only for OSM: limit to 2 components
+            // Ensure proper UTF-8 decoding
+            try {
+              final decodedAddress = Uri.decodeComponent(shortAddress);
+              debugPrint(
+                  '🎯 OpenStreetMap component address (shortened): $decodedAddress');
+              return decodedAddress;
+            } catch (e) {
+              // If decoding fails, return as-is
+              debugPrint(
+                  '🎯 OpenStreetMap component address (shortened, no decode needed): $shortAddress');
+              return shortAddress;
+            }
+          }
+        }
+
+        // Fallback to display_name but shorten it significantly (OSM ONLY)
+        if (data['display_name'] != null) {
+          String fullAddress = data['display_name'];
+          // Take only first 2 meaningful parts and clean them (OSM ONLY)
+          List<String> parts = fullAddress
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .take(2) // OSM ONLY: limit to 2 parts
+              .toList();
+
+          if (parts.isNotEmpty) {
+            String shortAddress = parts.join(', ');
+            // Clean up common long endings (OSM ONLY)
+            shortAddress = shortAddress.replaceAll(
+                RegExp(r',\s*\d{5}.*$'), ''); // Remove postal codes and after
+            shortAddress = shortAddress.replaceAll(RegExp(r',\s*Palestine.*$'),
+                ', Palestine'); // Shorten Palestine references
+
+            // Ensure proper UTF-8 decoding
+            try {
+              final decodedAddress = Uri.decodeComponent(shortAddress);
+              debugPrint('🎯 OpenStreetMap shortened address: $decodedAddress');
+              return decodedAddress;
+            } catch (e) {
+              // If decoding fails, return as-is
+              debugPrint(
+                  '🎯 OpenStreetMap shortened address (no decode needed): $shortAddress');
+              return shortAddress;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('💥 OpenStreetMap geocoding error: $e');
+    }
+
+    return null;
+  }
+
+  Future<void> _diagnoseGoogleGeocodingIssue() async {
+    try {
+      debugPrint('🔍 Diagnosing Google geocoding service...');
+
+      // Check if Google Play Services is available
+      try {
+        final testPosition = Position(
+          latitude: 37.7749,
+          longitude: -122.4194,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        );
+
+        await placemarkFromCoordinates(
+            testPosition.latitude, testPosition.longitude);
+        debugPrint('✅ Google geocoding service is working');
+      } catch (e) {
+        debugPrint('❌ Google geocoding service issue: $e');
+        if (e.toString().contains('NETWORK_ERROR')) {
+          debugPrint('💡 Issue: Network connectivity problem');
+        } else if (e.toString().contains('SERVICE_NOT_AVAILABLE')) {
+          debugPrint(
+              '💡 Issue: Google Play Services not available or outdated');
+        } else if (e.toString().contains('QUOTA_EXCEEDED')) {
+          debugPrint('💡 Issue: API quota exceeded');
+        } else if (e.toString().contains('INVALID_REQUEST')) {
+          debugPrint('💡 Issue: Invalid request parameters');
+        } else {
+          debugPrint('💡 Issue: Unknown geocoding error');
+        }
+      }
+    } catch (e) {
+      debugPrint('💥 Error during diagnosis: $e');
+    }
+  }
+
   Future<void> _getAddressFromLatLng(Position position) async {
     try {
+      debugPrint(
+          '🔍 Getting address for coordinates: ${position.latitude}, ${position.longitude}');
+
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
+      debugPrint('📍 Geocoding API returned ${placemarks.length} placemarks');
+
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
+
+        // Create a clean address from Google's data (NO SHORTENING)
+        final addressComponents = <String>[];
+
+        // Add street address
+        if (place.street != null && place.street!.isNotEmpty) {
+          addressComponents.add(place.street!);
+        } else if (place.thoroughfare != null &&
+            place.thoroughfare!.isNotEmpty) {
+          if (place.subThoroughfare != null &&
+              place.subThoroughfare!.isNotEmpty) {
+            addressComponents
+                .add('${place.subThoroughfare} ${place.thoroughfare}');
+          } else {
+            addressComponents.add(place.thoroughfare!);
+          }
+        }
+
+        // Add locality
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          addressComponents.add(place.locality!);
+        } else if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+          addressComponents.add(place.subLocality!);
+        }
+
+        // Add country for clarity
+        if (place.country != null && place.country!.isNotEmpty) {
+          addressComponents.add(place.country!);
+        }
+
+        final finalAddress = addressComponents.isNotEmpty
+            ? addressComponents.join(', ')
+            : 'Unknown location';
+
+        debugPrint('🎯 Google geocoding address: "$finalAddress"');
+
         setState(() {
-          _currentAddress = [
-            place.street,
-            place.locality,
-            place.administrativeArea,
-            place.postalCode,
-            place.country,
-          ].where((e) => e != null && e.isNotEmpty).join(', ');
+          _currentAddress = finalAddress;
         });
+      } else {
+        debugPrint('❌ No placemarks found, trying fallback...');
+        await _tryFallbackGeocoding(position);
       }
     } catch (e) {
-      debugPrint('Error getting address: $e');
+      debugPrint('💥 Google geocoding error: $e');
+
+      // Run diagnosis
+      await _diagnoseGoogleGeocodingIssue();
+
+      // Try fallback
+      await _tryFallbackGeocoding(position);
+    }
+  }
+
+  Future<void> _tryFallbackGeocoding(Position position) async {
+    debugPrint('🔄 Trying fallback geocoding services...');
+    final fallbackAddress = await _fallbackGeocoding(position);
+
+    if (fallbackAddress != null && fallbackAddress.isNotEmpty) {
+      setState(() {
+        _currentAddress = fallbackAddress;
+      });
+      debugPrint('🎯 Using fallback address: $fallbackAddress');
+    } else {
+      // Use coordinates as last resort
+      setState(() {
+        _currentAddress =
+            '📍 ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+      });
+      debugPrint(
+          '🎯 All geocoding failed, using coordinates: $_currentAddress');
     }
   }
 

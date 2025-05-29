@@ -11,4 +11,5 @@ urlpatterns = [
     path('get/<uuid:file_id>/', views.get_media, name='get_media'),
     path('delete/<uuid:file_id>/', views.delete_media, name='delete_media'),
     path('list/', views.list_user_media, name='list_user_media'),
+    path('thumbnail/<str:video_filename>/', views.get_thumbnail, name='get_thumbnail'),
 ]

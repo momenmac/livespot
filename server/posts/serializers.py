@@ -18,6 +18,7 @@ class PostSerializer(serializers.ModelSerializer):
     is_saved = serializers.SerializerMethodField(read_only=True)
     related_posts_count = serializers.SerializerMethodField(read_only=True)
     # Event status fields
+    event_status = serializers.CharField(write_only=True, required=False)
     is_happening = serializers.SerializerMethodField(read_only=True)
     is_ended = serializers.SerializerMethodField(read_only=True)
     ended_votes_count = serializers.SerializerMethodField(read_only=True)
@@ -32,9 +33,9 @@ class PostSerializer(serializers.ModelSerializer):
             'upvotes', 'downvotes', 'honesty_score', 'status',
             'is_verified_location', 'taken_within_app',
             'tags', 'user_vote', 'is_anonymous', 'is_saved',
-            'related_post', 'related_posts_count', 'is_happening', 
-            'is_ended', 'ended_votes_count', 'happening_votes_count',
-            'user_status_vote'
+            'related_post', 'related_posts_count', 'event_status',
+            'is_happening', 'is_ended', 'ended_votes_count', 
+            'happening_votes_count', 'user_status_vote'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 
                            'downvotes', 'honesty_score', 'user_vote', 
@@ -43,9 +44,41 @@ class PostSerializer(serializers.ModelSerializer):
                            'user_status_vote']
         
     def create(self, validated_data):
+        print(f"🔍 PostSerializer.create received validated_data: {validated_data}")
+        
         # Extract location data and create PostCoordinates object
         location_data = validated_data.pop('location')
+        
+        # Handle URL-encoded address by decoding it
+        if location_data.get('address'):
+            try:
+                import urllib.parse
+                location_data['address'] = urllib.parse.unquote(location_data['address'])
+            except Exception as e:
+                print(f"Error decoding address: {e}")
+        
         location = PostCoordinates.objects.create(**location_data)
+        
+        # Handle event_status mapping to status field
+        event_status = validated_data.pop('event_status', None)
+        print(f"🔍 PostSerializer.create: event_status = {event_status} (type: {type(event_status)})")
+        
+        if event_status:
+            # Map frontend event_status to backend status field
+            if event_status == 'ended':
+                validated_data['status'] = 'ended'
+                print(f"🔍 PostSerializer.create: Setting status to 'ended'")
+            elif event_status == 'happening':
+                validated_data['status'] = 'happening'
+                print(f"🔍 PostSerializer.create: Setting status to 'happening'")
+            else:
+                # Default to happening if invalid status
+                validated_data['status'] = 'happening'
+                print(f"🔍 PostSerializer.create: Invalid event_status '{event_status}', defaulting to 'happening'")
+        else:
+            print(f"🔍 PostSerializer.create: No event_status provided, status field will be default")
+        
+        print(f"🔍 PostSerializer.create: Final validated_data before creating post: {validated_data}")
         
         # Create the post with the author from the request context
         author = self.context['request'].user
@@ -55,11 +88,21 @@ class PostSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
+        print(f"🔍 PostSerializer.create: Created post with ID {post.id}, status = '{post.status}'")
+        
         # Check for similar posts and link if needed
+        # Note: find_similar_post enforces strict validation:
+        # - Same category required
+        # - Within 24 hours required  
+        # - Within 100 meters required
+        # - Similar content required
         similar_post = self.find_similar_post(post)
         if similar_post:
+            print(f"🔍 PostSerializer.create: Linking post {post.id} to similar post {similar_post.id}")
             post.related_post = similar_post
             post.save()
+        else:
+            print(f"🔍 PostSerializer.create: No similar posts found - post {post.id} will be a main post")
             
         return post
     
@@ -74,7 +117,7 @@ class PostSerializer(serializers.ModelSerializer):
         # Define what "nearby" means in kilometers (100 meters)
         MAX_DISTANCE_KM = 0.1  # 100 meters
         
-        # Get posts within the last 24 hours
+        # Get posts within the last 24 hours only
         recent_time = timezone.now() - timedelta(hours=24)
         
         # Simple content similarity check - match on some keywords
@@ -89,26 +132,37 @@ class PostSerializer(serializers.ModelSerializer):
         for word in important_words:
             content_filters |= Q(title__icontains=word) | Q(content__icontains=word)
         
-        # Find posts with similar content - ensure date filtering works
+        # Find posts with similar content - ensure strict filtering
         similar_posts = Post.objects.filter(
             related_post__isnull=True,  # Only consider main posts
+            category=post.category,  # Must have the same category
+            created_at__gte=recent_time,  # Must be within 24 hours
         ).exclude(id=post.id)
         
         # Apply content filter only if we have words to match
         if important_words:
             similar_posts = similar_posts.filter(content_filters)
         
-        # Apply date filter separately to ensure it works
-        similar_posts = similar_posts.filter(created_at__gte=recent_time)
+        print(f"🔍 COMBINATION DEBUG - Looking for similar posts to combine with post: {post.title}")
+        print(f"🔍 COMBINATION DEBUG - Post category: {post.category}, created_at: {post.created_at}")
+        print(f"🔍 COMBINATION DEBUG - Recent time threshold: {recent_time}")
+        print(f"🔍 COMBINATION DEBUG - Found {similar_posts.count()} candidate posts after category and date filtering")
         
         # Filter for nearby posts using Haversine formula
         for similar_post in similar_posts:
-            if self.calculate_distance(
+            distance = self.calculate_distance(
                 post.location.latitude, post.location.longitude,
                 similar_post.location.latitude, similar_post.location.longitude
-            ) <= MAX_DISTANCE_KM:
+            )
+            
+            print(f"🔍 COMBINATION DEBUG - Checking post '{similar_post.title}' (category: {similar_post.category}, created: {similar_post.created_at})")
+            print(f"🔍 COMBINATION DEBUG - Distance: {distance:.3f} km (max allowed: {MAX_DISTANCE_KM} km)")
+            
+            if distance <= MAX_DISTANCE_KM:
+                print(f"✅ COMBINATION DEBUG - Found matching post to combine with: '{similar_post.title}'")
                 return similar_post
                 
+        print(f"❌ COMBINATION DEBUG - No suitable posts found for combination")
         return None
     
     def calculate_distance(self, lat1, lon1, lat2, lon2):
@@ -262,3 +316,16 @@ class PostVoteSerializer(serializers.ModelSerializer):
                 
             post.save()
             return vote
+
+class UserPostSerializer(PostSerializer):
+    """
+    Optimized serializer for user_posts endpoint that excludes is_saved field
+    to prevent unnecessary database queries when fetching user's own posts
+    """
+    class Meta(PostSerializer.Meta):
+        fields = [field for field in PostSerializer.Meta.fields if field != 'is_saved']
+        read_only_fields = [field for field in PostSerializer.Meta.read_only_fields if field != 'is_saved']
+    
+    def get_is_saved(self, obj):
+        # Override to skip is_saved calculation for performance
+        return False

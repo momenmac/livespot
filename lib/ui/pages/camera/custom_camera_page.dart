@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/ui/pages/camera/media_preview_page.dart';
@@ -165,25 +166,81 @@ class _CustomCameraPageState extends State<CustomCameraPage>
 
   Future<void> _getAddressFromLatLng(Position position) async {
     try {
+      debugPrint(
+          '🔍 Getting address for coordinates: ${position.latitude}, ${position.longitude}');
+
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
+      debugPrint('📍 Geocoding API returned ${placemarks.length} placemarks');
+
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
+
+        // Debug print all available placemark data
+        debugPrint('🏠 Raw placemark data:');
+        debugPrint('  - Name: ${place.name}');
+        debugPrint('  - Street: ${place.street}');
+        debugPrint('  - Thoroughfare: ${place.thoroughfare}');
+        debugPrint('  - SubThoroughfare: ${place.subThoroughfare}');
+        debugPrint('  - Locality: ${place.locality}');
+        debugPrint('  - SubLocality: ${place.subLocality}');
+        debugPrint('  - AdministrativeArea: ${place.administrativeArea}');
+        debugPrint('  - SubAdministrativeArea: ${place.subAdministrativeArea}');
+        debugPrint('  - PostalCode: ${place.postalCode}');
+        debugPrint('  - Country: ${place.country}');
+        debugPrint('  - IsoCountryCode: ${place.isoCountryCode}');
+
+        // Create address components list for debugging
+        final addressComponents = [
+          place.street,
+          place.locality,
+          place.administrativeArea,
+          place.postalCode,
+          place.country,
+        ];
+
+        debugPrint(
+            '📝 Address components before filtering: $addressComponents');
+
+        final filteredComponents =
+            addressComponents.where((e) => e != null && e.isNotEmpty).toList();
+
+        debugPrint('✅ Filtered address components: $filteredComponents');
+
+        final finalAddress = filteredComponents.join(', ');
+        debugPrint('🎯 Final formatted address: "$finalAddress"');
+
         setState(() {
-          _currentAddress = [
-            place.street,
-            place.locality,
-            place.administrativeArea,
-            place.postalCode,
-            place.country,
-          ].where((e) => e != null && e.isNotEmpty).join(', ');
+          _currentAddress = finalAddress;
         });
+      } else {
+        debugPrint('❌ No placemarks found for the given coordinates');
+        // Set fallback address using coordinates
+        setState(() {
+          _currentAddress =
+              'Lat: ${position.latitude.toStringAsFixed(4)}, Lng: ${position.longitude.toStringAsFixed(4)}';
+        });
+        debugPrint('🎯 Using fallback coordinate address: $_currentAddress');
       }
     } catch (e) {
-      debugPrint('Error getting address: $e');
+      debugPrint('💥 Error getting address: $e');
+      debugPrint('💥 Error type: ${e.runtimeType}');
+      if (e is PlatformException) {
+        debugPrint('💥 Platform exception code: ${e.code}');
+        debugPrint('💥 Platform exception message: ${e.message}');
+        debugPrint('💥 Platform exception details: ${e.details}');
+      }
+
+      // Set fallback address using coordinates when geocoding fails
+      setState(() {
+        _currentAddress =
+            'Lat: ${position.latitude.toStringAsFixed(4)}, Lng: ${position.longitude.toStringAsFixed(4)}';
+      });
+      debugPrint(
+          '🎯 Using fallback coordinate address due to error: $_currentAddress');
     }
   }
 

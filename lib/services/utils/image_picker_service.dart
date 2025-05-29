@@ -93,6 +93,61 @@ class ImagePickerService {
     }
   }
 
+  /// Pick media (image or video) from gallery with unified interface
+  Future<XFile?> pickMediaFromGallery({
+    required String mediaType, // 'image' or 'video'
+    BuildContext? context,
+    int imageQuality = 80,
+    double? maxWidth = 1200,
+    double? maxHeight = 1200,
+    Duration? maxVideoDuration = const Duration(minutes: 10),
+  }) async {
+    // Check for gallery permission on Android and iOS
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      final status = await Permission.photos.request();
+      if (!status.isGranted) {
+        if (context != null && context.mounted) {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: 'Gallery permission is required to select media',
+          );
+        }
+        return null;
+      }
+    }
+
+    try {
+      XFile? selectedFile;
+
+      if (mediaType.toLowerCase() == 'image') {
+        selectedFile = await _picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: imageQuality,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        );
+      } else if (mediaType.toLowerCase() == 'video') {
+        selectedFile = await _picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: maxVideoDuration,
+        );
+      } else {
+        throw ArgumentError('Invalid media type. Use "image" or "video".');
+      }
+
+      return selectedFile;
+    } catch (e) {
+      if (context != null && context.mounted) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: 'Error selecting $mediaType: $e',
+        );
+      }
+      debugPrint('Error picking $mediaType: $e');
+      return null;
+    }
+  }
+
   /// Show a modal bottom sheet to choose between camera and gallery
   Future<XFile?> showImageSourceOptions(BuildContext context) async {
     final ImageSource? source = await showModalBottomSheet<ImageSource>(
@@ -131,10 +186,68 @@ class ImagePickerService {
       case ImageSource.gallery:
         imageFile = await pickImageFromGallery(context: context);
         break;
-      default:
-        break;
     }
 
     return imageFile;
+  }
+
+  /// Show unified media picker with options for images and videos
+  Future<XFile?> showUnifiedMediaPicker(BuildContext context) async {
+    final Map<String, dynamic>? result =
+        await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext bc) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Media Type',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.blue),
+                title: const Text('Photos'),
+                subtitle: const Text('Select images from gallery'),
+                onTap: () => Navigator.pop(context, {'type': 'image'}),
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_library, color: Colors.purple),
+                title: const Text('Videos'),
+                subtitle: const Text('Select videos from gallery'),
+                onTap: () => Navigator.pop(context, {'type': 'video'}),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null || result['type'] == null) return null;
+
+    return await pickMediaFromGallery(
+      mediaType: result['type'],
+      context: context,
+    );
   }
 }

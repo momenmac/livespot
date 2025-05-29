@@ -32,7 +32,7 @@ class TikTokStyleReelsPage extends StatefulWidget {
 }
 
 class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
-  late PageController _pageController;
+  PageController? _pageController; // Make nullable
   List<String> _mediaUrls = [];
   List<Post> _threadPosts = [];
   Map<String, Post> _mediaToPostMap = {};
@@ -47,20 +47,45 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
     super.initState();
     _loadThreadPosts();
     _currentPage = widget.initialIndex;
+
+    // Don't initialize PageController here, wait until we know how many items we have
+
+    // Enable immersive mode for better viewing experience
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+  }
+
+  void _initializePageController() {
+    // Only initialize PageController for multiple media items in thread mode
+    if (_mediaUrls.length <= 1) {
+      debugPrint(
+          '📱 Not enough media items (${_mediaUrls.length}) for PageController');
+      _pageController = null;
+      _currentPage = 0;
+      return;
+    }
+
+    // Ensure current page is within bounds
+    if (widget.initialIndex >= _mediaUrls.length) {
+      _currentPage = 0;
+    } else {
+      _currentPage = widget.initialIndex;
+    }
+
+    // Initialize PageController for thread mode with multiple media
     _pageController = PageController(
       initialPage: _currentPage,
       viewportFraction: 1.0,
       keepPage: true,
     );
 
-    // Enable immersive mode for better viewing experience
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    debugPrint(
+        '📱 PageController initialized for thread mode: ${_mediaUrls.length} items, starting at page $_currentPage');
   }
 
   // Make sure we properly dispose all page controllers
   @override
   void dispose() {
-    _pageController.dispose();
+    _pageController?.dispose();
     // Clean up any other resources
     // Restore system UI when leaving the page
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -79,10 +104,22 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
       List<Post> allThreadPosts =
           await postsProvider.getRelatedPosts(widget.post.id);
 
-      // Add the current post if it's not already in the list
-      bool currentPostInList =
-          allThreadPosts.any((p) => p.id == widget.post.id);
-      if (!currentPostInList) {
+      // Filter out the current post to see if we have any actual related posts
+      List<Post> actualRelatedPosts =
+          allThreadPosts.where((p) => p.id != widget.post.id).toList();
+
+      debugPrint(
+          '📱 Found ${allThreadPosts.length} total posts, ${actualRelatedPosts.length} are actually related posts (excluding current)');
+
+      // If no related posts or API returned empty, use single post mode
+      if (actualRelatedPosts.isEmpty) {
+        debugPrint('📱 No related posts found, using single post mode');
+        _initSinglePostMedia();
+        return;
+      }
+
+      // Add the current post back to the list
+      if (!allThreadPosts.any((p) => p.id == widget.post.id)) {
         allThreadPosts.insert(0, widget.post);
       }
 
@@ -92,6 +129,7 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
       // Extract all media URLs from all posts in the thread
       List<String> allMediaUrls = [];
       Map<String, Post> tempMediaToPostMap = {};
+      Set<String> seenUrls = {}; // Track seen URLs to prevent duplicates
 
       for (Post post in allThreadPosts) {
         List<String> postMediaUrls = [];
@@ -109,11 +147,25 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
             .where((url) => url.isNotEmpty)
             .toList();
 
-        // Map each media URL to its corresponding post
+        // Remove duplicates within this post's media
+        postMediaUrls = postMediaUrls.toSet().toList();
+
+        // Map each media URL to its corresponding post (only if not seen before)
         for (String mediaUrl in postMediaUrls) {
-          tempMediaToPostMap[mediaUrl] = post;
-          allMediaUrls.add(mediaUrl);
+          if (!seenUrls.contains(mediaUrl)) {
+            tempMediaToPostMap[mediaUrl] = post;
+            allMediaUrls.add(mediaUrl);
+            seenUrls.add(mediaUrl);
+          }
         }
+      }
+
+      // If we ended up with insufficient unique media, fall back to single post mode
+      if (allMediaUrls.length <= 1) {
+        debugPrint(
+            '📱 Found ${allMediaUrls.length} unique media items, using single post mode');
+        _initSinglePostMedia();
+        return;
       }
 
       setState(() {
@@ -123,38 +175,22 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
         _isLoading = false;
       });
 
-      // Update current page if needed
-      if (widget.initialIndex < _mediaUrls.length) {
-        _currentPage = widget.initialIndex;
-        if (_pageController.hasClients) {
-          _pageController.animateToPage(
-            _currentPage,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        }
-      }
+      // Initialize PageController after we know the media count
+      _initializePageController();
+
+      debugPrint(
+          '📱 Thread mode: ${allThreadPosts.length} posts, ${allMediaUrls.length} unique media items');
     } catch (e) {
-      debugPrint('Error loading thread posts: $e');
-
-      // Fallback to single post media
+      debugPrint('❌ Error loading thread posts: $e');
+      // Always fall back to single post media on error
       _initSinglePostMedia();
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: 'Could not load full thread. Showing current post only.',
-        );
-      }
     }
   }
 
   void _initSinglePostMedia() {
-    // Fallback method for single post (original logic)
+    debugPrint('📱 Initializing single post media mode');
+
+    // Get media from the current post only
     List<String> mediaUrls = [];
 
     if (widget.post.mediaUrls.isEmpty && widget.post.imageUrl.isNotEmpty) {
@@ -169,6 +205,12 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
     // Remove any empty URLs
     mediaUrls.removeWhere((url) => url.isEmpty);
 
+    // Remove duplicate URLs to prevent showing the same media multiple times
+    mediaUrls = mediaUrls.toSet().toList();
+
+    debugPrint('📱 Single post mode: ${mediaUrls.length} unique media URLs');
+    debugPrint('📱 Media URLs: $mediaUrls');
+
     // Create mapping for single post
     Map<String, Post> singlePostMap = {};
     for (String url in mediaUrls) {
@@ -179,16 +221,88 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
       _mediaUrls = mediaUrls;
       _threadPosts = [widget.post];
       _mediaToPostMap = singlePostMap;
+      _isLoading = false; // Always set loading to false
     });
+
+    // For single post mode, we don't need PageController regardless of media count
+    // This prevents any scrolling behavior that could cause duplication
+    _pageController = null;
+    _currentPage = 0;
+    debugPrint(
+        '📱 Single post mode: PageController disabled to prevent scrolling');
 
     if (_mediaUrls.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ResponsiveSnackBar.showInfo(
-          context: context,
-          message: 'No media found for this post',
-        );
+        if (mounted) {
+          ResponsiveSnackBar.showInfo(
+            context: context,
+            message: 'No media found for this post',
+          );
+        }
       });
     }
+  }
+
+  /// Handles reload button press - clears all state and reloads data from scratch
+  Future<void> _handleReload() async {
+    debugPrint('🔄 Reload button pressed - clearing all state and reloading');
+
+    // Show loading indicator immediately
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Clear all existing state
+      _clearAllState();
+
+      // Show user feedback
+      if (mounted) {
+        ResponsiveSnackBar.showInfo(
+          context: context,
+          message: 'Reloading data...',
+        );
+      }
+
+      // Small delay to show loading state
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Reload the thread posts from scratch
+      await _loadThreadPosts();
+
+      // Show success feedback
+      if (mounted) {
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: 'Data reloaded successfully',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error during reload: $e');
+      if (mounted) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: 'Failed to reload data: $e',
+        );
+      }
+    }
+  }
+
+  /// Clears all state variables to reset the page
+  void _clearAllState() {
+    debugPrint('🧹 Clearing all state variables');
+
+    // Dispose existing PageController if it exists
+    _pageController?.dispose();
+    _pageController = null;
+
+    // Clear all data structures
+    _mediaUrls.clear();
+    _threadPosts.clear();
+    _mediaToPostMap.clear();
+    _currentPage = 0;
+
+    debugPrint('🧹 All state cleared');
   }
 
   String _getFixedMediaUrl(String? url) {
@@ -292,93 +406,140 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                     style: TextStyle(color: Colors.white),
                   ),
                 )
-              : Stack(
-                  children: [
-                    // Vertical PageView for TikTok-style scrolling
-                    PageView.builder(
-                      scrollDirection: Axis.vertical,
-                      controller: _pageController,
-                      itemCount: _mediaUrls.length,
-                      onPageChanged: _onPageChanged,
-                      physics: const ClampingScrollPhysics(),
-                      pageSnapping: true,
-                      allowImplicitScrolling: false,
-                      itemBuilder: (context, index) {
-                        final mediaUrl = _mediaUrls[index];
-                        return _buildReelItem(mediaUrl, index);
-                      },
-                    ),
+              : _mediaUrls.length == 1
+                  // For single media item, show directly without PageView to prevent scrolling
+                  ? Stack(
+                      children: [
+                        _buildReelItem(_mediaUrls[0], 0),
 
-                    // Right side interaction buttons
-                    Positioned(
-                      right: 16,
-                      bottom: 100,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildUpvoteButton(),
-                          _buildDownvoteButton(),
-                          _buildInteractionButton(
-                            icon: Icons.comment,
-                            label:
-                                '$threadPostsCount', // Show related posts count
-                            onTap: () => _navigateToPostDetail(),
-                          ),
-                          _buildHonestyButton(),
-                          _buildInteractionButton(
-                            icon: Icons.share,
-                            label: 'Share',
-                            onTap: () => _handleShare(),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Post navigation indicator (for multiple posts) - vertical on the right side
-                    if (_threadPosts.length > 1)
-                      Positioned(
-                        right: 10.0,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 6.0, horizontal: 2.0),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(
-                                _threadPosts.length,
-                                (index) {
-                                  // Determine if this post is currently shown
-                                  final currentPost = _getCurrentPost();
-                                  final postAtIndex = _threadPosts[index];
-                                  final isCurrentPost =
-                                      currentPost.id == postAtIndex.id;
-
-                                  return Container(
-                                    width: 5.0,
-                                    height: isCurrentPost ? 20.0 : 5.0,
-                                    margin: const EdgeInsets.symmetric(
-                                        vertical: 3.0),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(5),
-                                      color: isCurrentPost
-                                          ? ThemeConstants.primaryColor
-                                          : Colors.white.withOpacity(0.5),
-                                    ),
-                                  );
-                                },
+                        // Right side interaction buttons for single media
+                        Positioned(
+                          right: 16,
+                          bottom: 100,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildUpvoteButton(),
+                              _buildDownvoteButton(),
+                              _buildInteractionButton(
+                                icon: Icons.comment,
+                                label: '$threadPostsCount',
+                                onTap: () => _navigateToPostDetail(),
                               ),
-                            ),
+                              _buildHonestyButton(),
+                              _buildInteractionButton(
+                                icon: Icons.share,
+                                label: 'Share',
+                                onTap: () => _handleShare(),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                  ],
-                ),
+                      ],
+                    )
+                  // For multiple media items, use PageView
+                  : _pageController == null
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                          ),
+                        )
+                      : Stack(
+                          children: [
+                            // Vertical PageView for TikTok-style scrolling
+                            PageView.builder(
+                              scrollDirection: Axis.vertical,
+                              controller: _pageController!,
+                              itemCount: _mediaUrls.length,
+                              onPageChanged: _onPageChanged,
+                              physics: _mediaUrls.length > 1
+                                  ? const ClampingScrollPhysics()
+                                  : const NeverScrollableScrollPhysics(), // Disable scrolling for single item
+                              pageSnapping: true,
+                              allowImplicitScrolling: false,
+                              itemBuilder: (context, index) {
+                                // Ensure we don't build beyond our actual media count
+                                if (index >= _mediaUrls.length) {
+                                  return Container(); // Return empty container for invalid indices
+                                }
+                                final mediaUrl = _mediaUrls[index];
+                                return _buildReelItem(mediaUrl, index);
+                              },
+                            ),
+
+                            // Right side interaction buttons
+                            Positioned(
+                              right: 16,
+                              bottom: 100,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildUpvoteButton(),
+                                  _buildDownvoteButton(),
+                                  _buildInteractionButton(
+                                    icon: Icons.comment,
+                                    label:
+                                        '$threadPostsCount', // Show related posts count
+                                    onTap: () => _navigateToPostDetail(),
+                                  ),
+                                  _buildHonestyButton(),
+                                  _buildInteractionButton(
+                                    icon: Icons.share,
+                                    label: 'Share',
+                                    onTap: () => _handleShare(),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Post navigation indicator (for multiple posts) - vertical on the right side
+                            if (_threadPosts.length > 1)
+                              Positioned(
+                                right: 10.0,
+                                top: 0,
+                                bottom: 0,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 6.0, horizontal: 2.0),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: List.generate(
+                                        _threadPosts.length,
+                                        (index) {
+                                          // Determine if this post is currently shown
+                                          final currentPost = _getCurrentPost();
+                                          final postAtIndex =
+                                              _threadPosts[index];
+                                          final isCurrentPost =
+                                              currentPost.id == postAtIndex.id;
+
+                                          return Container(
+                                            width: 5.0,
+                                            height: isCurrentPost ? 20.0 : 5.0,
+                                            margin: const EdgeInsets.symmetric(
+                                                vertical: 3.0),
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(5),
+                                              color: isCurrentPost
+                                                  ? ThemeConstants.primaryColor
+                                                  : Colors.white
+                                                      .withOpacity(0.5),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
     );
   }
 
@@ -397,8 +558,15 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
       postMediaUrls = [_getFixedMediaUrl(currentPost.imageUrl)];
     }
 
-    // Create a horizontal page controller for this post's media
-    final PageController horizontalPageController = PageController();
+    // Remove duplicates
+    postMediaUrls = postMediaUrls.toSet().toList();
+
+    // Check if this post actually has multiple media items
+    final bool hasMultipleMedia = postMediaUrls.length > 1;
+
+    // Only create a horizontal controller if needed
+    final PageController? horizontalPageController =
+        hasMultipleMedia ? PageController() : null;
 
     return GestureDetector(
       // Allow vertical scrolling to pass through to PageView
@@ -415,11 +583,13 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
               children: [
                 // Media content with horizontal swipe
                 Expanded(
-                  child: postMediaUrls.length > 1
+                  child: hasMultipleMedia
                       ? PageView.builder(
                           scrollDirection: Axis.horizontal,
                           controller: horizontalPageController,
                           itemCount: postMediaUrls.length,
+                          physics:
+                              const ClampingScrollPhysics(), // Enable scrolling only when needed
                           onPageChanged: (mediaIndex) {
                             // Update current media index when swiped
                             setItemState(() {
@@ -436,11 +606,14 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                                 : _buildImageWidget(postMediaUrl);
                           },
                         )
-                      : _isVideoFile(mediaUrl)
-                          ? _VideoPlayer(
-                              videoUrl: mediaUrl,
-                              autoPlay: index == _currentPage)
-                          : _buildImageWidget(mediaUrl),
+                      : Container(
+                          // For single media, wrap in Container to prevent scrolling
+                          child: _isVideoFile(mediaUrl)
+                              ? _VideoPlayer(
+                                  videoUrl: mediaUrl,
+                                  autoPlay: index == _currentPage)
+                              : _buildImageWidget(mediaUrl),
+                        ),
                 ),
               ],
             );
@@ -557,7 +730,8 @@ class _TikTokStyleReelsPageState extends State<TikTokStyleReelsPage> {
                   const SizedBox(height: 16),
 
                   // Horizontal media pagination indicator for multiple media within a post
-                  if (postMediaUrls.length > 1)
+                  if (postMediaUrls.length > 1 &&
+                      horizontalPageController != null)
                     StatefulBuilder(builder: (context, setDotsState) {
                       horizontalPageController.addListener(() {
                         if (horizontalPageController.page!.round() !=

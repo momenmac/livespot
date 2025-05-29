@@ -21,8 +21,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final _tagController = TextEditingController();
-  final List<String> _selectedTags = [];
   final List<XFile> _pickedImages = [];
   String _selectedCategory = 'general';
   bool _isLoading = false;
@@ -30,6 +28,23 @@ class _CreatePostPageState extends State<CreatePostPage> {
   String? _currentAddress;
   Position? _currentPosition;
   bool _isAnonymous = false; // Add this field to track anonymous posts
+
+  // Event status options (matching backend PostStatus model)
+  String? _eventStatus;
+  final List<Map<String, dynamic>> _eventStatusOptions = [
+    {
+      'value': 'happening',
+      'label': 'This is currently happening',
+      'icon': Icons.play_circle_fill,
+      'color': Colors.green
+    },
+    {
+      'value': 'ended',
+      'label': 'This has ended',
+      'icon': Icons.stop_circle,
+      'color': Colors.red
+    },
+  ];
 
   final List<Map<String, dynamic>> _categories = [
     {'value': 'general', 'label': 'General', 'icon': Icons.article},
@@ -54,7 +69,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
-    _tagController.dispose();
     super.dispose();
   }
 
@@ -154,22 +168,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     });
   }
 
-  void _addTag() {
-    final tag = _tagController.text.trim();
-    if (tag.isNotEmpty && !_selectedTags.contains(tag)) {
-      setState(() {
-        _selectedTags.add(tag);
-        _tagController.clear();
-      });
-    }
-  }
-
-  void _removeTag(String tag) {
-    setState(() {
-      _selectedTags.remove(tag);
-    });
-  }
-
   Future<void> _submitPost() async {
     if (_formKey.currentState!.validate()) {
       try {
@@ -238,6 +236,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             category: _selectedCategory,
             isAnonymous: _isAnonymous, // Add isAnonymous parameter
             mediaUrls: mediaUrls,
+            eventStatus: _eventStatus, // Pass the event status to the backend
             // Remove tags parameter as it's not needed
           );
 
@@ -374,6 +373,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
                     const SizedBox(height: 16),
 
+                    // Event status section
+                    _buildEventStatusSection(),
+
+                    const SizedBox(height: 16),
+
                     // Media picker
                     _buildMediaPicker(),
                   ],
@@ -493,67 +497,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Widget _buildTagsInput() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Tags',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _tagController,
-                decoration: const InputDecoration(
-                  hintText: 'Add a tag',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.tag),
-                  contentPadding:
-                      EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                ),
-                onSubmitted: (_) => _addTag(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _addTag,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeConstants.primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-        if (_selectedTags.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _selectedTags.map((tag) {
-              return Chip(
-                label: Text(tag),
-                deleteIcon: const Icon(Icons.close, size: 16),
-                onDeleted: () => _removeTag(tag),
-                backgroundColor: ThemeConstants.primaryColorLight,
-                labelStyle: TextStyle(color: ThemeConstants.primaryColor),
-              );
-            }).toList(),
-          ),
-        ],
-      ],
-    );
-  }
-
   Widget _buildMediaPicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,6 +590,81 @@ class _CreatePostPageState extends State<CreatePostPage> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildEventStatusSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Event Status (Optional)',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ..._eventStatusOptions.map((option) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _eventStatus =
+                      _eventStatus == option['value'] ? null : option['value'];
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _eventStatus == option['value']
+                      ? option['color'].withOpacity(0.1)
+                      : (Theme.of(context).brightness == Brightness.dark
+                          ? ThemeConstants.darkCardColor
+                          : Colors.grey[50]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _eventStatus == option['value']
+                        ? option['color']
+                        : Colors.grey[300]!,
+                    width: _eventStatus == option['value'] ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      option['icon'],
+                      color: _eventStatus == option['value']
+                          ? option['color']
+                          : Colors.grey[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        option['label'],
+                        style: TextStyle(
+                          color: _eventStatus == option['value']
+                              ? option['color']
+                              : (Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black),
+                          fontWeight: _eventStatus == option['value']
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ],
     );
   }
