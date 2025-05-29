@@ -10,6 +10,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_application_2/services/config/firebase_options.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
@@ -18,8 +19,6 @@ import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
-import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -601,7 +600,7 @@ class _MyAppState extends State<MyApp> {
             theme:
                 TAppTheme.lightTheme, // <-- Use your custom light theme here!
             darkTheme: TAppTheme.darkTheme,
-            navigatorKey: NotificationsController.navigatorKey,
+            navigatorKey: NavigationService().navigatorKey, // FIXED: use NavigationService
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],

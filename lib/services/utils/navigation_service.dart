@@ -63,13 +63,20 @@ class NavigationService {
   // Push a new route onto the navigation stack
   Future<dynamic> navigateTo(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Navigating to: $routeName");
-    return navigatorKey.currentState!
-        .pushNamed(routeName, arguments: arguments);
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot navigate to $routeName');
+      return Future.value(null);
+    }
+    return navigatorKey.currentState!.pushNamed(routeName, arguments: arguments);
   }
 
   // Replace the current route with a new one
   Future<dynamic> replaceTo(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing with: $routeName");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceTo $routeName');
+      return Future.value(null);
+    }
     return navigatorKey.currentState!.pushReplacementNamed(
       routeName,
       arguments: arguments,
@@ -79,6 +86,10 @@ class NavigationService {
   // Replace the entire stack with a single new route
   Future<dynamic> replaceAllWith(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing all routes with $routeName");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceAllWith $routeName');
+      return Future.value(null);
+    }
     return navigatorKey.currentState!.pushNamedAndRemoveUntil(
       routeName,
       (_) => false, // Remove all previous routes
@@ -89,6 +100,10 @@ class NavigationService {
   // Navigate to a route, removing all routes until home
   Future<dynamic> replaceUntilHome(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing until home with: $routeName");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceUntilHome $routeName');
+      return Future.value(null);
+    }
     return navigatorKey.currentState!.pushNamedAndRemoveUntil(
       routeName,
       (route) => route.settings.name == '/home', // Keep routes until home
@@ -99,6 +114,10 @@ class NavigationService {
   // Reset navigation stack to initial route
   void reset() {
     debugPrint("[NavigationService] Resetting navigation stack");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot reset navigation stack');
+      return;
+    }
     navigatorKey.currentState!.popUntil((route) => route.isFirst);
     _currentRoute = '/';
     _currentModalRoute = null;
@@ -109,6 +128,10 @@ class NavigationService {
   // Pop the current route
   void goBack() {
     debugPrint("[NavigationService] Going back");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot goBack');
+      return;
+    }
     if (navigatorKey.currentState!.canPop()) {
       navigatorKey.currentState!.pop();
     }
@@ -117,6 +140,10 @@ class NavigationService {
   // Pop until a specific route
   void popUntil(String routeName) {
     debugPrint("[NavigationService] Popping until $routeName");
+    if (navigatorKey.currentState == null) {
+      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot popUntil $routeName');
+      return;
+    }
     navigatorKey.currentState!.popUntil(ModalRoute.withName(routeName));
   }
 }

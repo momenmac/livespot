@@ -11,8 +11,8 @@ import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/ui/pages/messages/recommended_rooms_section.dart';
 // Add this import for ApiUrls
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
-// Add this import for CachedNetworkImage
-import 'package:cached_network_image/cached_network_image.dart';
+// Add this import for SafeNetworkImage
+import 'package:flutter_application_2/ui/widgets/safe_network_image.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 // Add this import for ChatDetailPage
@@ -484,8 +484,15 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
               if (id == currentUserId) return null;
               final name = user['name'] ?? '';
               String avatarUrl = user['avatarUrl'] ?? '';
-              if (avatarUrl.isNotEmpty && !avatarUrl.startsWith('http')) {
-                avatarUrl = '$baseUrl$avatarUrl';
+              // Fix avatar URL for localhost and relative paths
+              if (avatarUrl.isNotEmpty) {
+                if (avatarUrl.startsWith('http://localhost:8000') ||
+                    avatarUrl.startsWith('http://127.0.0.1:8000')) {
+                  avatarUrl = avatarUrl.replaceFirst(
+                      RegExp(r'http://(localhost|127\.0\.0\.1):8000'), baseUrl);
+                } else if (!avatarUrl.startsWith('http')) {
+                  avatarUrl = '$baseUrl$avatarUrl';
+                }
               }
               final email = user['email'] ?? '';
               return UserWithEmail(
@@ -818,15 +825,10 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
                             itemBuilder: (context, index) {
                               final user = filteredUsers[index];
                               return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: ThemeConstants.primaryColor,
-                                  foregroundImage: user.avatarUrl.isNotEmpty
-                                      ? CachedNetworkImageProvider(
-                                          user.avatarUrl)
-                                      : null,
-                                  child: user.avatarUrl.isEmpty
-                                      ? Text(user.name[0])
-                                      : null,
+                                leading: SafeNetworkImage(
+                                  imageUrl: user.avatarUrl,
+                                  size: 40,
+                                  fallbackText: user.name,
                                 ),
                                 title: Text(user.name),
                                 subtitle: Text(user.email),
