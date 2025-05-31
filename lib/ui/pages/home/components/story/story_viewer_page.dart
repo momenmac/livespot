@@ -41,7 +41,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   bool _isPaused = false;
 
   // Video player controllers
-  Map<int, VideoPlayerController?> _videoControllers = {};
+  final Map<int, VideoPlayerController?> _videoControllers = {};
   bool _isVideoInitializing = false;
 
   // Story display duration in seconds
@@ -1466,7 +1466,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       final thumbnailData = await _generateVideoThumbnail(videoUrl);
       if (thumbnailData != null && thumbnailData.isNotEmpty) {
         debugPrint('🎥 Story: Successfully generated video thumbnail');
-        return Container(
+        return SizedBox(
           width: double.infinity,
           height: double.infinity,
           child: Image.memory(
@@ -1546,7 +1546,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
 
     // Check if it's a file path or network URL
     if (_isFilePath(mediaUrl)) {
-      return Container(
+      return SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: Image.file(
@@ -1562,7 +1562,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       );
     } else {
       String processedUrl = _getFixedStoryImageUrl(mediaUrl);
-      return Container(
+      return SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: Image.network(

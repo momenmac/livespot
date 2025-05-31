@@ -15,6 +15,7 @@ import 'package:flutter_application_2/ui/pages/map/map_page.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_page.dart';
 import 'package:flutter_application_2/ui/pages/posts/create_post_page.dart';
 import 'package:flutter_application_2/ui/pages/posts/admin_create_post_page.dart';
+import 'package:flutter_application_2/ui/pages/notification/notification_test_page.dart';
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();
@@ -41,6 +42,7 @@ class AppRoutes {
   static const String chatDetail = '/chat-detail';
   static const String createPost = '/create-post';
   static const String adminCreatePost = '/admin-create-post';
+  static const String notificationTest = '/notification-test';
 
   // Route map with builders that accept arguments
   static final routes = <String, Widget Function(dynamic args)>{
@@ -79,5 +81,6 @@ class AppRoutes {
           relatedToPostId: args?['relatedToPostId'],
         ),
     adminCreatePost: (args) => const AdminCreatePostPage(),
+    notificationTest: (args) => const NotificationTestPage(),
   };
 }

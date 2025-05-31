@@ -6,6 +6,8 @@ void main() {
 }
 
 class NotificationTestApp extends StatelessWidget {
+  const NotificationTestApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -17,6 +19,8 @@ class NotificationTestApp extends StatelessWidget {
 }
 
 class NotificationTestPage extends StatelessWidget {
+  const NotificationTestPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

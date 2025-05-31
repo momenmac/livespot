@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -19,6 +20,9 @@ import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
+import 'package:flutter_application_2/services/firebase_messaging_service.dart';
+import 'package:flutter_application_2/services/action_confirmation_service.dart';
+import 'package:flutter_application_2/services/notifications/notification_handler.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -198,7 +202,6 @@ Future<void> main() async {
 
   // Check if running on iOS simulator
   _isIosSimulator = await checkIfIosSimulator();
-
   // Initial Firebase initialization attempt
   try {
     if (Firebase.apps.isEmpty) {
@@ -206,10 +209,45 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       print('✅ Firebase initialized successfully');
-      _isFirebaseInitialized = true;
+      _isFirebaseInitialized =
+          true; // Initialize Firebase Messaging after Firebase core initialization
+      if (!kIsWeb) {
+        try {
+          await FirebaseMessagingService.initialize();
+          print(
+              '✅ Firebase Messaging initialized successfully'); // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          NotificationHandler.initialize(NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed: $e');
+        }
+      }
     } else {
       print('✅ Firebase already initialized');
-      _isFirebaseInitialized = true;
+      _isFirebaseInitialized =
+          true; // Initialize Firebase Messaging for existing Firebase instance
+      if (!kIsWeb) {
+        try {
+          await FirebaseMessagingService.initialize();
+          print('✅ Firebase Messaging initialized successfully');
+
+          // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          NotificationHandler.initialize(NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed: $e');
+        }
+      }
     }
   } catch (e) {
     if (_isIosSimulator) {
@@ -236,7 +274,12 @@ Future<void> main() async {
   // Initialize location cache service
   final locationCacheService = LocationCacheService();
   await locationCacheService.initialize();
-
+  final fcmToken = await FirebaseMessaging.instance.getToken();
+  if (fcmToken != null) {
+    print('🔑 FCM Token: $fcmToken');
+  } else {
+    print('❌ Failed to retrieve FCM token');
+  }
   runApp(
     MultiProvider(
       providers: [
@@ -267,6 +310,17 @@ Future<void> main() async {
       child: MyApp(accountProvider: accountProvider),
     ),
   );
+
+  // Set up notification tap handler
+  if (!kIsWeb && _isFirebaseInitialized) {
+    FirebaseMessagingService.setOnNotificationTap((title, body, data) {
+      print('🔔 Notification tapped: $title - $body');
+      // Handle notification tap - navigate to appropriate screen based on data
+      if (data.containsKey('route')) {
+        NavigationService().navigateTo(data['route']);
+      }
+    });
+  }
 
   // Final Firebase status update with special handling for iOS simulator
   Timer(const Duration(milliseconds: 1500), () async {
@@ -600,7 +654,8 @@ class _MyAppState extends State<MyApp> {
             theme:
                 TAppTheme.lightTheme, // <-- Use your custom light theme here!
             darkTheme: TAppTheme.darkTheme,
-            navigatorKey: NavigationService().navigatorKey, // FIXED: use NavigationService
+            navigatorKey: NavigationService()
+                .navigatorKey, // FIXED: use NavigationService
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],

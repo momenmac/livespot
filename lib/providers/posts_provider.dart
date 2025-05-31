@@ -26,8 +26,8 @@ class PostsProvider with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> get userStories => _userStories;
 
   // Cache for user posts by date to prevent excessive API calls
-  Map<String, List<Post>> _userPostsByDateCache = {};
-  Map<String, Future<List<Post>>> _ongoingUserPostRequests = {};
+  final Map<String, List<Post>> _userPostsByDateCache = {};
+  final Map<String, Future<List<Post>>> _ongoingUserPostRequests = {};
 
   // Getters
   List<Post> get posts => _posts;

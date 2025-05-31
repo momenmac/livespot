@@ -231,29 +231,11 @@ class NotificationsController extends ChangeNotifier {
     print('✅✅✅ SUCCESS: Navigator context found!');
     print('✅ Context type: ${navigatorKey.currentContext.runtimeType}');
     print('✅ Context hashCode: ${navigatorKey.currentContext.hashCode}');
+
     try {
       print('🎨 Getting overlay state...');
-      // Get overlay state directly from the navigator state
-      final NavigatorState? navigatorState = navigatorKey.currentState;
-      print('📊 Navigator state: ${navigatorState.toString()}');
-
-      if (navigatorState == null) {
-        print('❌❌❌ CRITICAL: Navigator state is NULL!');
-        print('❌ Cannot show notification - navigator not ready');
-        return;
-      }
-
-      // Get the overlay from the navigator state
-      final OverlayState? overlayState = navigatorState.overlay;
-      print('🎯 Overlay state from navigator: ${overlayState.toString()}');
-
-      if (overlayState == null) {
-        print('❌❌❌ CRITICAL: Overlay state is NULL!');
-        print('❌ Cannot show notification - overlay not available');
-        return;
-      }
-
-      print('✅✅✅ SUCCESS: Overlay state obtained successfully!');
+      OverlayState overlayState = Overlay.of(navigatorKey.currentContext!);
+      print('✅ Overlay state obtained: ${overlayState.toString()}');
 
       OverlayEntry? entry;
       print('🏗️ Creating overlay entry...');

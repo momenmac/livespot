@@ -31,7 +31,7 @@ SECRET_KEY = "django-insecure-h=_g7*7--tj2kxm^o^5lskc&e(&l=4ca_pkr04k!dh+nyi*)co
 DEBUG = True
 
 # Update ALLOWED_HOSTS to include the Android emulator's special IP
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.47', '192.168.1.x']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.0.3', '192.168.1.x', '10.0.0.3', '10.0.0.x']
 
 # Base URL for serving uploaded media files - needed for web file upload
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "accounts",
     'media_api',  # Add our new media app
     'posts',  # Add our new posts app
+    'notifications',  # Add notifications app
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -256,4 +257,26 @@ CORS_ALLOW_HEADERS = [
 # JWT tokens are sent in headers, not cookies, so CSRF isn't needed
 
 # Simplify ALLOWED_HOSTS - keeping this part
-ALLOWED_HOSTS = ['*']  # In production, define specific hosts
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.0.3', '192.168.1.x', '10.0.0.3']  # Added your IP for mobile testing
+
+# Firebase Admin SDK Configuration
+import firebase_admin
+from firebase_admin import credentials
+
+# Initialize Firebase Admin SDK
+if not firebase_admin._apps:
+    firebase_service_account_path = os.path.join(BASE_DIR, 'livespot-b1eb4-firebase-adminsdk-fbsvc-f5e95b9818.json')
+    if os.path.exists(firebase_service_account_path):
+        cred = credentials.Certificate(firebase_service_account_path)
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase Admin SDK initialized successfully")
+    else:
+        print("⚠️ Firebase service account file not found. Push notifications will not work.")
+
+# Notification System Settings
+NOTIFICATION_SETTINGS = {
+    'BATCH_SIZE': 100,  # Number of notifications to process at once
+    'MAX_RETRIES': 3,   # Maximum retry attempts for failed notifications
+    'RETRY_DELAY': 300,  # Delay in seconds between retries
+    'CLEANUP_DAYS': 30,  # Days to keep notification history
+}

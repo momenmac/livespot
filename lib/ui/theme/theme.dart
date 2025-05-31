@@ -38,7 +38,12 @@ class TAppTheme {
     bottomAppBarTheme: TNavigationTheme.navigationBarTheme,
     iconTheme: TNavigationTheme.navigationBarItemThemeLight,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonLight,
-    cardTheme: TNotificationTheme.notificationCardThemeLight,
+    cardTheme: CardThemeData(
+      elevation: TNotificationTheme.notificationCardThemeLight.elevation,
+      color: TNotificationTheme.notificationCardThemeLight.color,
+      margin: TNotificationTheme.notificationCardThemeLight.margin,
+      shape: TNotificationTheme.notificationCardThemeLight.shape,
+    ),
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.lightBackgroundColor,
       headerBackgroundColor: ThemeConstants.primaryColor,
@@ -84,12 +89,16 @@ class TAppTheme {
     elevatedButtonTheme: TElevatedButtonTheme.darkElevatedButtonTheme,
     appBarTheme: TAppBarTheme.darkAppBarTheme,
     bottomSheetTheme: TBottomSheetTheme.darkBottomSheetTheme,
-    inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
+    cardTheme: CardThemeData(
+      elevation: TNotificationTheme.notificationCardThemeDark.elevation,
+      color: TNotificationTheme.notificationCardThemeDark.color,
+      margin: TNotificationTheme.notificationCardThemeDark.margin,
+      shape: TNotificationTheme.notificationCardThemeDark.shape,
+    ),
     textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
     bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
     iconTheme: TNavigationTheme.navigationBarItemThemeDark,
     floatingActionButtonTheme: TNavigationTheme.floatingActionButtonDarke,
-    cardTheme: TNotificationTheme.notificationCardThemeDark,
     datePickerTheme: DatePickerThemeData(
       backgroundColor: ThemeConstants.darkBackgroundColor,
       headerBackgroundColor: ThemeConstants.primaryColor,

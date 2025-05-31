@@ -664,7 +664,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
