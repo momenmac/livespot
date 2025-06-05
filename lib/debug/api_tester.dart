@@ -7,7 +7,7 @@ void main() => app.main();
 class ApiTester {
   static Future<void> testRegisterEndpoint() async {
     const baseUrls = [
-      'http://10.0.0.3:8000',
+      'http://10.0.0.3:8000', //change ip when for access
       'http://localhost:8000',
       'http://127.0.0.1:8000'
     ];
