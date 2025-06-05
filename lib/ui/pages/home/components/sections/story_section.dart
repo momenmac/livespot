@@ -37,8 +37,8 @@ class _StorySectionState extends State<StorySection> {
   bool _dataLoaded = false;
 
   // Add caching for user posts to prevent excessive API calls
-  Map<String, Future<List<dynamic>>> _userPostsCache = {};
-  Map<String, List<dynamic>> _userPostsData = {};
+  final Map<String, Future<List<dynamic>>> _userPostsCache = {};
+  final Map<String, List<dynamic>> _userPostsData = {};
 
   @override
   void initState() {

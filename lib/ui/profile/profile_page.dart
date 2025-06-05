@@ -25,7 +25,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
-import 'dart:typed_data';
 
 // Helper to fix image URLs that use localhost, 127.0.0.1, or are relative
 String _getFixedImageUrl(String? url) {

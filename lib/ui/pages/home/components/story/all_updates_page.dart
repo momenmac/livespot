@@ -697,7 +697,7 @@ class _AllUpdatesPageState extends State<AllUpdatesPage> {
         dateTime = DateTime.parse(dateString);
       } else if (dateString.contains('-')) {
         // Try parsing as date only
-        dateTime = DateTime.parse(dateString + 'T00:00:00Z');
+        dateTime = DateTime.parse('${dateString}T00:00:00Z');
       } else {
         // Fallback for other formats
         dateTime = DateTime.parse(dateString);

@@ -186,14 +186,21 @@ class PostSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user and request.user.is_authenticated:
             user = request.user
-            try:
-                vote = PostVote.objects.get(user=user, post=instance)
-                representation['user_vote'] = 1 if vote.is_upvote else -1
-                # Also set on the instance for internal use
-                setattr(instance, '_user_vote', 1 if vote.is_upvote else -1)
-            except PostVote.DoesNotExist:
-                representation['user_vote'] = 0
-                setattr(instance, '_user_vote', 0)
+            
+            # Use cached votes if available (added in get_queryset)
+            if hasattr(request, '_cached_user_votes'):
+                user_vote = request._cached_user_votes.get(instance.id, 0)
+                representation['user_vote'] = user_vote
+                setattr(instance, '_user_vote', user_vote)
+            else:
+                try:
+                    vote = PostVote.objects.get(user=user, post=instance)
+                    representation['user_vote'] = 1 if vote.is_upvote else -1
+                    # Also set on the instance for internal use
+                    setattr(instance, '_user_vote', 1 if vote.is_upvote else -1)
+                except PostVote.DoesNotExist:
+                    representation['user_vote'] = 0
+                    setattr(instance, '_user_vote', 0)
         else:
             representation['user_vote'] = 0
             setattr(instance, '_user_vote', 0)
@@ -204,20 +211,24 @@ class PostSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             user = request.user
-            from accounts.models import UserProfile
-            try:
-                profile = UserProfile.objects.get(user=user)
-                # Check if the profile has saved_posts attribute and if this post is in it
-                if hasattr(profile, 'saved_posts'):
-                    is_saved = profile.saved_posts.filter(id=obj.id).exists()
-                    # Debug logging to track is_saved calculation
-                    print(f"🔖 PostSerializer.get_is_saved: Post {obj.id} for user {user.id} -> {is_saved}")
-                    return is_saved
-            except UserProfile.DoesNotExist:
-                print(f"⚠️ PostSerializer.get_is_saved: UserProfile not found for user {user.id}")
-                pass
-        else:
-            print(f"⚠️ PostSerializer.get_is_saved: No authenticated user in request context")
+            
+            # Get the cached saved post IDs from the context if they exist
+            if not hasattr(request, '_cached_saved_post_ids'):
+                from accounts.models import UserProfile
+                try:
+                    profile = UserProfile.objects.get(user=user)
+                    if hasattr(profile, 'saved_posts'):
+                        # Fetch all saved post IDs at once and store them in a set for O(1) lookup
+                        request._cached_saved_post_ids = set(profile.saved_posts.values_list('id', flat=True))
+                    else:
+                        request._cached_saved_post_ids = set()
+                except UserProfile.DoesNotExist:
+                    request._cached_saved_post_ids = set()
+            
+            # Use the cached set for fast lookup
+            is_saved = obj.id in request._cached_saved_post_ids
+            return is_saved
+            
         return False
     
     def get_is_happening(self, obj):
@@ -230,21 +241,42 @@ class PostSerializer(serializers.ModelSerializer):
     
     def get_ended_votes_count(self, obj):
         """Get count of users who voted that this event has ended"""
+        # Use cached value if it exists on the instance to avoid DB query
+        if hasattr(obj, '_ended_votes_count'):
+            return obj._ended_votes_count
         return obj.get_ended_votes_count()
     
     def get_happening_votes_count(self, obj):
         """Get count of users who voted that this event is still happening"""
+        # Use cached value if it exists on the instance to avoid DB query
+        if hasattr(obj, '_happening_votes_count'):
+            return obj._happening_votes_count
         return obj.get_happening_votes_count()
     
     def get_user_status_vote(self, obj):
         """Get the current user's vote on whether this event has ended"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
+            # Check if we have cached status votes
+            if hasattr(request, '_cached_status_votes'):
+                # Return cached status vote if available
+                if obj.id in request._cached_status_votes:
+                    return request._cached_status_votes[obj.id]
+            else:
+                # Create the cache if it doesn't exist
+                request._cached_status_votes = {}
+                
+            # If not in cache, query the database
             from .models import EventStatusVote
             try:
                 vote = EventStatusVote.objects.get(user=request.user, post=obj)
-                return 'ended' if vote.voted_ended else 'happening'  # Return string values
+                status_vote = 'ended' if vote.voted_ended else 'happening'
+                # Cache the result for future use
+                request._cached_status_votes[obj.id] = status_vote
+                return status_vote
             except EventStatusVote.DoesNotExist:
+                # Cache the null result as well
+                request._cached_status_votes[obj.id] = None
                 return None  # User hasn't voted on status
         return None
 

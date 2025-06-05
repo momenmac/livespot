@@ -10,7 +10,7 @@ class NotificationPopup extends StatelessWidget {
   final Color textColor;
 
   const NotificationPopup({
-    Key? key,
+    super.key,
     required this.title,
     required this.message,
     this.icon,
@@ -18,7 +18,7 @@ class NotificationPopup extends StatelessWidget {
     this.onDismiss,
     this.backgroundColor = Colors.white,
     this.textColor = Colors.black87,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
