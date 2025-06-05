@@ -3,6 +3,7 @@ import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart'; // Add this import
 import 'package:flutter_application_2/services/auth/token_manager.dart'; // Add TokenManager import
+import 'package:shared_preferences/shared_preferences.dart'; // Add SharedPreferences import
 import '../../../models/account.dart';
 import '../../../models/jwt_token.dart';
 import 'auth_service.dart';
@@ -24,6 +25,25 @@ class AccountProvider extends ChangeNotifier {
 
   // Flag to track if we're currently processing a navigation related state change
   bool _inAuthStateTransition = false;
+
+  // Callback functions for clearing caches from other providers
+  // These will be set by the main app to avoid circular dependencies
+  Future<void> Function()? _clearUserProfileCaches;
+  Future<void> Function()? _clearPostsCaches;
+  Future<void> Function()? _clearLocationCaches;
+
+  // Methods to set cache clearing callbacks
+  void setClearUserProfileCachesCallback(Future<void> Function() callback) {
+    _clearUserProfileCaches = callback;
+  }
+
+  void setClearPostsCachesCallback(Future<void> Function() callback) {
+    _clearPostsCaches = callback;
+  }
+
+  void setClearLocationCachesCallback(Future<void> Function() callback) {
+    _clearLocationCaches = callback;
+  }
 
   // Getters
   bool get isLoading =>
@@ -215,6 +235,10 @@ class AccountProvider extends ChangeNotifier {
       // Clear session manager state
       await _sessionManager.clearSession();
       developer.log('SessionManager cleared', name: 'LogoutTrace');
+
+      // Clear all application-level caches
+      await _clearAllApplicationCaches();
+      developer.log('All application caches cleared', name: 'LogoutTrace');
     } catch (e, stackTrace) {
       developer.log('Error during logout: $e',
           name: 'LogoutTrace', error: e, stackTrace: stackTrace);
@@ -236,6 +260,87 @@ class AccountProvider extends ChangeNotifier {
     developer.log('AccountProvider: _debouncedNotify() called.',
         name: 'AccountProvider');
     developer.log('--- Logout End (AccountProvider) ---', name: 'LogoutTrace');
+  }
+
+  // Clear all application caches during logout
+  Future<void> _clearAllApplicationCaches() async {
+    developer.log('--- Clear All Application Caches Start ---',
+        name: 'LogoutTrace');
+
+    try {
+      // Clear UserProfileProvider caches
+      if (_clearUserProfileCaches != null) {
+        developer.log('Clearing UserProfileProvider caches...',
+            name: 'LogoutTrace');
+        await _clearUserProfileCaches!();
+        developer.log('UserProfileProvider caches cleared',
+            name: 'LogoutTrace');
+      }
+
+      // Clear PostsProvider caches
+      if (_clearPostsCaches != null) {
+        developer.log('Clearing PostsProvider caches...', name: 'LogoutTrace');
+        await _clearPostsCaches!();
+        developer.log('PostsProvider caches cleared', name: 'LogoutTrace');
+      }
+
+      // Clear LocationCacheService
+      if (_clearLocationCaches != null) {
+        developer.log('Clearing LocationCacheService...', name: 'LogoutTrace');
+        await _clearLocationCaches!();
+        developer.log('LocationCacheService cleared', name: 'LogoutTrace');
+      }
+
+      // Clear additional SharedPreferences entries
+      await _clearAdditionalSharedPreferences();
+      developer.log('Additional SharedPreferences cleared',
+          name: 'LogoutTrace');
+    } catch (e, stackTrace) {
+      developer.log('Error clearing application caches: $e',
+          name: 'LogoutTrace', error: e, stackTrace: stackTrace);
+    }
+
+    developer.log('--- Clear All Application Caches End ---',
+        name: 'LogoutTrace');
+  }
+
+  // Clear additional SharedPreferences entries during logout
+  Future<void> _clearAdditionalSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+
+      // Clear news search caches
+      for (final key in keys) {
+        if (key.contains('news_search') ||
+            key.contains('recent_searches') ||
+            key.contains('search_history')) {
+          await prefs.remove(key);
+          developer.log('Removed SharedPreferences key: $key',
+              name: 'LogoutTrace');
+        }
+      }
+
+      // Clear location data caches
+      await prefs.remove('user_latitude');
+      await prefs.remove('user_longitude');
+      await prefs.remove('location_timestamp');
+      developer.log('Location cache data removed from SharedPreferences',
+          name: 'LogoutTrace');
+
+      // Clear any other app-specific cache entries
+      for (final key in keys) {
+        if (key.startsWith('cache_') ||
+            key.contains('_cache_') ||
+            key.contains('cached_')) {
+          await prefs.remove(key);
+          developer.log('Removed cache key: $key', name: 'LogoutTrace');
+        }
+      }
+    } catch (e) {
+      developer.log('Error clearing additional SharedPreferences: $e',
+          name: 'LogoutTrace', error: e);
+    }
   }
 
   // Record activity

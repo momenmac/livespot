@@ -8,7 +8,6 @@ import 'sections/live_streams_section.dart';
 import 'sections/external_news_section.dart';
 import 'sections/story_section.dart';
 import 'widgets/search_bar_widget.dart';
-import 'widgets/date_picker_widget.dart';
 // Add authentication related imports
 import 'package:provider/provider.dart'; // Make sure to add provider dependency if not already added
 import 'package:flutter_application_2/services/auth/auth_service.dart'; // Create or update this import path as needed
@@ -194,18 +193,26 @@ class _HomeContentState extends State<HomeContent> {
           ),
           IconButton(
             icon: const Icon(Icons.calendar_today),
-            onPressed: () {
-              showModalBottomSheet(
+            onPressed: () async {
+              final DateTime? picked = await showDatePicker(
                 context: context,
-                builder: (BuildContext context) {
-                  return DatePickerWidget(
-                    onDateSelected: _onDateSelected,
-                    selectedDate: _selectedDate,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2000),
+                lastDate: DateTime.now(),
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: Theme.of(context).colorScheme.copyWith(
+                            primary: ThemeConstants.primaryColor,
+                          ),
+                    ),
+                    child: child!,
                   );
                 },
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
               );
+              if (picked != null && picked != _selectedDate) {
+                _onDateSelected(picked);
+              }
             },
           ),
           // Add refresh token button

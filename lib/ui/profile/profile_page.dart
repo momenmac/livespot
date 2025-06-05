@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
+import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/ui/pages/home/components/widgets/date_picker_widget.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
@@ -13,7 +14,8 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
+import 'package:flutter_application_2/ui/widgets/safe_snackbar.dart';
+import 'package:flutter_application_2/ui/widgets/safe_hero.dart';
 import 'package:flutter_application_2/models/user_profile.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
@@ -1408,10 +1410,10 @@ class _ProfilePageState extends State<ProfilePage>
   // Handle logout process
   Future<void> _handleLogout() async {
     try {
-      // Show loading indicator
-      ResponsiveSnackBar.showInfo(
-        context: context,
-        message: "Logging out...",
+      // Show loading indicator using SafeSnackBar
+      SafeSnackBar.showInfo(
+        context,
+        "Logging out...",
         duration: const Duration(seconds: 1),
       );
 
@@ -1435,21 +1437,56 @@ class _ProfilePageState extends State<ProfilePage>
             name: 'ProfilePage');
       }
 
-      // Show success message
+      // Hide any existing SnackBar before showing success message
       if (mounted) {
-        ResponsiveSnackBar.showSuccess(
-          context: context,
-          message: "Logged out successfully",
-          duration: const Duration(seconds: 1),
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        // Wait a moment to ensure the previous SnackBar is cleared
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Show success message using SafeSnackBar
+        SafeSnackBar.showSuccess(
+          context,
+          "Logged out successfully",
+          duration: const Duration(milliseconds: 600),
         );
+
+        // Wait for the success message to be shown briefly, then navigate
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          developer.log(
+              'ProfilePage: Explicitly navigating to initial screen after logout',
+              name: 'ProfilePage');
+
+          // Clear any remaining SnackBars before navigation to prevent Hero tag conflicts
+          ScaffoldMessenger.of(context).clearSnackBars();
+
+          // Reset Hero tag registry to prevent conflicts
+          HeroTagRegistry.reset();
+
+          // Small delay to ensure SnackBars are cleared
+          await Future.delayed(const Duration(milliseconds: 50));
+
+          // Use Navigator to go to the initial screen, clearing the entire stack
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.initial,
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       developer.log('Error during logout: $e', name: 'ProfilePage', error: e);
 
       if (mounted) {
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: "Error logging out. Please try again.",
+        // Clear any existing SnackBars before showing error
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        SafeSnackBar.showError(
+          context,
+          "Error logging out. Please try again.",
           duration: const Duration(seconds: 2),
         );
       }
@@ -1500,9 +1537,9 @@ class _ProfilePageState extends State<ProfilePage>
             } catch (e) {
               developer.log('Error picking image: $e', name: 'ProfilePage');
               if (mounted) {
-                ResponsiveSnackBar.showError(
-                  context: context,
-                  message: "Failed to select image. Please try again.",
+                SafeSnackBar.showError(
+                  context,
+                  "Failed to select image. Please try again.",
                 );
               }
             }
@@ -1527,9 +1564,9 @@ class _ProfilePageState extends State<ProfilePage>
 
                 if (!success) {
                   if (mounted) {
-                    ResponsiveSnackBar.showError(
-                      context: context,
-                      message: "Failed to upload profile image",
+                    SafeSnackBar.showError(
+                      context,
+                      "Failed to upload profile image",
                     );
                   }
                   return;
@@ -1545,9 +1582,9 @@ class _ProfilePageState extends State<ProfilePage>
 
               if (!success) {
                 if (mounted) {
-                  ResponsiveSnackBar.showError(
-                    context: context,
-                    message: "Failed to update profile information",
+                  SafeSnackBar.showError(
+                    context,
+                    "Failed to update profile information",
                   );
                 }
                 return;
@@ -1566,9 +1603,9 @@ class _ProfilePageState extends State<ProfilePage>
                 // 3. Call that method here
 
                 // For now, we'll show a success message without updating the name
-                ResponsiveSnackBar.showInfo(
-                  context: context,
-                  message: "Name update functionality is in development",
+                SafeSnackBar.showInfo(
+                  context,
+                  "Name update functionality is in development",
                   duration: const Duration(seconds: 2),
                 );
               }
@@ -1576,9 +1613,9 @@ class _ProfilePageState extends State<ProfilePage>
               // Close modal and show success message
               if (mounted) {
                 Navigator.pop(context);
-                ResponsiveSnackBar.showSuccess(
-                  context: context,
-                  message: "Profile updated successfully",
+                SafeSnackBar.showSuccess(
+                  context,
+                  "Profile updated successfully",
                 );
 
                 // Refresh the profile data
@@ -1587,9 +1624,9 @@ class _ProfilePageState extends State<ProfilePage>
             } catch (e) {
               developer.log('Error updating profile: $e', name: 'ProfilePage');
               if (mounted) {
-                ResponsiveSnackBar.showError(
-                  context: context,
-                  message: "Error updating profile: ${e.toString()}",
+                SafeSnackBar.showError(
+                  context,
+                  "Error updating profile: ${e.toString()}",
                 );
               }
             }
