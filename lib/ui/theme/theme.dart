@@ -95,6 +95,7 @@ class TAppTheme {
       margin: TNotificationTheme.notificationCardThemeDark.margin,
       shape: TNotificationTheme.notificationCardThemeDark.shape,
     ),
+    inputDecorationTheme: TTextFormFieldTheme.darkTextFormFieldTheme,
     textButtonTheme: TTextButtonTheme.darkTextButtonTheme,
     bottomAppBarTheme: TNavigationTheme.navigationBarThemeDark,
     iconTheme: TNavigationTheme.navigationBarItemThemeDark,

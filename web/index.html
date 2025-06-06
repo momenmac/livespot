@@ -41,10 +41,11 @@
     />
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.7.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.7.0/firebase-messaging-compat.js"></script>
     <!-- Add other Firebase services that you want to use -->
 
     <script>
@@ -182,11 +183,9 @@
       />
     </picture>
 
-    <script src="flutter_bootstrap.js" async=""></script>
-
     <script>
       // Your web app's Firebase configuration
-      const firebaseConfig = {
+      window.firebaseConfig = {
         apiKey: "AIzaSyBX9NWqWe-gn51e-Hh69617rBUXK9Q38Bs",
         authDomain: "livespot-b1eb4.firebaseapp.com",
         projectId: "livespot-b1eb4",
@@ -195,16 +194,15 @@
         appId: "1:813529293309:web:46f5d27446a52292583994",
         measurementId: "G-TR331VFEQ6",
       };
-      // Initialize Firebase
-      firebase.initializeApp(firebaseConfig);
 
-      // Replace the deprecated serviceWorkerVersion variable usage on line 74
-      // OLD: serviceWorkerVersion = null;
-      // Use the Flutter template token instead:
-      window.flutterConfiguration = {
-        serviceWorkerVersion: "{{flutter_service_worker_version}}",
-      };
+      // Initialize Firebase after the scripts are loaded
+      window.addEventListener("load", function () {
+        if (window.firebase) {
+          firebase.initializeApp(window.firebaseConfig);
+          console.log("✅ Firebase initialized from index.html");
+        }
+      });
     </script>
-    <script src="main.dart.js" type="application/javascript"></script>
+    <script src="flutter_bootstrap.js" async></script>
   </body>
 </html>

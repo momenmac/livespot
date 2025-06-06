@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/providers/theme_provider.dart';
+import 'package:flutter_application_2/ui/profile/settings/notification_settings_page.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   final Function(ThemeMode value) onThemeChanged;
@@ -20,7 +21,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   ThemeMode _currentThemeMode = ThemeMode.system;
 
   // Notification settings
-  bool _pushNotificationsEnabled = true;
   bool _emailNotificationsEnabled = true;
 
   // Privacy settings
@@ -88,15 +88,17 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
           // Notification settings
           _buildSectionHeader('Notifications'),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_outlined),
-            title: const Text('Push Notifications'),
-            subtitle: const Text('Receive notifications on your device'),
-            value: _pushNotificationsEnabled,
-            onChanged: (value) {
-              setState(() {
-                _pushNotificationsEnabled = value;
-              });
+          _buildSettingItem(
+            icon: Icons.notifications_outlined,
+            title: 'Notification Settings',
+            subtitle: 'Manage push notifications and preferences',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationSettingsPage(),
+                ),
+              );
             },
           ),
           SwitchListTile(

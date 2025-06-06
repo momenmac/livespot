@@ -221,7 +221,8 @@ Future<void> main() async {
           print('✅ ActionConfirmationService initialized successfully');
 
           // Initialize NotificationHandler with NavigationService's navigator key
-          NotificationHandler.initialize(NavigationService().navigatorKey);
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
           print('✅ NotificationHandler initialized successfully');
         } catch (e) {
           print('⚠️ Firebase Messaging initialization failed: $e');
@@ -242,7 +243,8 @@ Future<void> main() async {
           print('✅ ActionConfirmationService initialized successfully');
 
           // Initialize NotificationHandler with NavigationService's navigator key
-          NotificationHandler.initialize(NavigationService().navigatorKey);
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
           print('✅ NotificationHandler initialized successfully');
         } catch (e) {
           print('⚠️ Firebase Messaging initialization failed: $e');
@@ -300,11 +302,16 @@ Future<void> main() async {
     locationCacheService.dispose();
   });
 
-  final fcmToken = await FirebaseMessaging.instance.getToken();
-  if (fcmToken != null) {
-    print('🔑 FCM Token: $fcmToken');
+  // Get FCM token only on non-web platforms
+  if (!kIsWeb) {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken != null) {
+      print('🔑 FCM Token: $fcmToken');
+    } else {
+      print('❌ Failed to retrieve FCM token');
+    }
   } else {
-    print('❌ Failed to retrieve FCM token');
+    print('🌐 Skipping FCM token retrieval on web platform');
   }
   runApp(
     MultiProvider(
@@ -673,8 +680,6 @@ class _MyAppState extends State<MyApp> {
             theme:
                 TAppTheme.lightTheme, // <-- Use your custom light theme here!
             darkTheme: TAppTheme.darkTheme,
-            navigatorKey: NavigationService()
-                .navigatorKey, // FIXED: use NavigationService
             navigatorKey: NavigationService()
                 .navigatorKey, // FIXED: use NavigationService
             initialRoute: AppRoutes.initial,
