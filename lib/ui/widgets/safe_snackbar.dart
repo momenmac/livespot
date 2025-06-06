@@ -90,21 +90,18 @@ class SafeSnackBar {
     // Hide any existing SnackBar
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-    // Show new SnackBar with unique hero tag
+    // Show new SnackBar with unique key to avoid Hero tag conflicts
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         key: ValueKey(uniqueKey),
-        content: Hero(
-          tag: 'snackbar-$uniqueKey',
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: Colors.white),
-                const SizedBox(width: 8),
-              ],
-              Expanded(child: Text(message)),
+        content: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
             ],
-          ),
+            Expanded(child: Text(message)),
+          ],
         ),
         duration: duration ?? const Duration(seconds: 3),
         action: action ??

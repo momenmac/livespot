@@ -19,20 +19,11 @@ class DatePickerWidget extends StatefulWidget {
 
 class _DatePickerWidgetState extends State<DatePickerWidget> {
   late DateTime _currentDate;
-  late List<DateTime> _dateRange;
 
   @override
   void initState() {
     super.initState();
     _currentDate = widget.selectedDate;
-    _generateDateRange();
-  }
-
-  void _generateDateRange() {
-    // Generate dates for the last 30 days
-    _dateRange = List.generate(30, (index) {
-      return DateTime.now().subtract(Duration(days: 29 - index));
-    });
   }
 
   @override
@@ -129,18 +120,72 @@ class _DatePickerWidgetState extends State<DatePickerWidget> {
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
               child: Column(
                 children: [
-                  // Month header
+                  // Month header with navigation
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          DateFormat('MMMM yyyy').format(_currentDate),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _currentDate = DateTime(
+                                _currentDate.year,
+                                _currentDate.month - 1,
+                                1,
+                              );
+                            });
+                          },
+                          icon: Icon(
+                            Icons.arrow_back_ios,
+                            size: 18,
+                            color: headerTextColor,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () async {
+                            // Show year picker dialog
+                            final year = await showDialog<int>(
+                              context: context,
+                              builder: (context) => _YearPickerDialog(
+                                currentYear: _currentDate.year,
+                                isDarkMode: isDarkMode,
+                              ),
+                            );
+                            if (year != null) {
+                              setState(() {
+                                _currentDate =
+                                    DateTime(year, _currentDate.month, 1);
+                              });
+                            }
+                          },
+                          child: Text(
+                            DateFormat('MMMM yyyy').format(_currentDate),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: headerTextColor,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            final nextMonth = DateTime(
+                              _currentDate.year,
+                              _currentDate.month + 1,
+                              1,
+                            );
+                            // Don't allow navigating to future months
+                            if (!nextMonth.isAfter(DateTime.now())) {
+                              setState(() {
+                                _currentDate = nextMonth;
+                              });
+                            }
+                          },
+                          icon: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 18,
                             color: headerTextColor,
                           ),
                         ),
@@ -283,6 +328,98 @@ class _DatePickerWidgetState extends State<DatePickerWidget> {
           SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],
       ),
+    );
+  }
+}
+
+// Year picker dialog
+class _YearPickerDialog extends StatelessWidget {
+  final int currentYear;
+  final bool isDarkMode;
+
+  const _YearPickerDialog({
+    required this.currentYear,
+    required this.isDarkMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final startYear = 2000;
+    final endYear = DateTime.now().year;
+
+    return AlertDialog(
+      title: Text(
+        'Select Year',
+        style: TextStyle(
+          color: isDarkMode ? Colors.white : Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: isDarkMode ? theme.cardColor : Colors.white,
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 300,
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            childAspectRatio: 2,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+          ),
+          itemCount: endYear - startYear + 1,
+          itemBuilder: (context, index) {
+            final year = endYear - index;
+            final isSelected = year == currentYear;
+
+            return GestureDetector(
+              onTap: () {
+                Navigator.of(context).pop(year);
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? ThemeConstants.primaryColor
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isSelected
+                        ? ThemeConstants.primaryColor
+                        : (isDarkMode
+                            ? Colors.grey.shade600
+                            : Colors.grey.shade300),
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    year.toString(),
+                    style: TextStyle(
+                      color: isSelected
+                          ? Colors.white
+                          : (isDarkMode ? Colors.white : Colors.black),
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

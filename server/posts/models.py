@@ -147,8 +147,14 @@ class Post(models.Model):
     
     def should_mark_as_ended(self, threshold=3):
         """Check if event should be marked as ended based on user votes"""
-        ended_votes = self.get_ended_votes_count()
-        total_votes = self.status_votes.count()
+        # If we have the cached vote counts, use them
+        if hasattr(self, '_ended_votes_count') and hasattr(self, '_happening_votes_count'):
+            ended_votes = self._ended_votes_count
+            total_votes = self._ended_votes_count + self._happening_votes_count
+        else:
+            # Otherwise, query the database
+            ended_votes = self.get_ended_votes_count()
+            total_votes = self.status_votes.count()
         
         # If we have at least threshold votes and majority says ended
         if total_votes >= threshold:

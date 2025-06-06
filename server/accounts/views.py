@@ -1004,29 +1004,71 @@ class UserProfileUpdateView(views.APIView):
         """Update current user's profile"""
         try:
             profile = request.user.profile
-            serializer = UserProfileUpdateSerializer(profile, data=request.data, partial=True)
+            user_account = request.user
             
-            if serializer.is_valid():
-                # Check username uniqueness if it's being changed
-                if 'username' in serializer.validated_data:
-                    new_username = serializer.validated_data['username']
-                    if new_username != profile.username and UserProfile.objects.filter(username=new_username).exists():
-                        return Response(
-                            {'success': False, 'error': 'Username is already taken'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+            # Separate the data for profile and account updates
+            profile_data = {}
+            account_data = {}
+            
+            # Parse the name field if present
+            if 'name' in request.data:
+                name = request.data['name'].strip()
+                if name:
+                    # Split name into first and last name
+                    name_parts = name.split(' ', 1)
+                    account_data['first_name'] = name_parts[0]
+                    account_data['last_name'] = name_parts[1] if len(name_parts) > 1 else ''
+                else:
+                    account_data['first_name'] = ''
+                    account_data['last_name'] = ''
+            
+            # Add other profile fields
+            for field in ['username', 'bio', 'location', 'website', 'interests']:
+                if field in request.data:
+                    profile_data[field] = request.data[field]
+            
+            # Update user account (name fields) if there's account data
+            if account_data:
+                for key, value in account_data.items():
+                    setattr(user_account, key, value)
+                user_account.save()
+                logger.info(f"Updated account for user {user_account.id}: {account_data}")
+            
+            # Update profile if there's profile data
+            if profile_data:
+                serializer = UserProfileUpdateSerializer(profile, data=profile_data, partial=True)
                 
-                serializer.save()
-                return Response({'success': True, 'data': UserProfileSerializer(profile).data})
-            else:
-                return Response(
-                    {'success': False, 'error': serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                if serializer.is_valid():
+                    # Check username uniqueness if it's being changed
+                    if 'username' in serializer.validated_data:
+                        new_username = serializer.validated_data['username']
+                        if new_username != profile.username and UserProfile.objects.filter(username=new_username).exists():
+                            return Response(
+                                {'success': False, 'error': 'Username is already taken'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    
+                    serializer.save()
+                    logger.info(f"Updated profile for user {user_account.id}: {profile_data}")
+                else:
+                    return Response(
+                        {'success': False, 'error': serializer.errors},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Return the updated profile data
+            return Response({'success': True, 'data': UserProfileSerializer(profile).data})
+            
         except UserProfile.DoesNotExist:
             return Response(
                 {'success': False, 'error': 'Profile not found'}, 
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error updating profile for user {request.user.id}: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'An error occurred while updating profile'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

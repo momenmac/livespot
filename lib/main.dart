@@ -267,6 +267,9 @@ Future<void> main() async {
   ]);
 
   final firebaseStatusNotifier = FirebaseStatusNotifier();
+  // Set initial Firebase status immediately
+  firebaseStatusNotifier.setInitialized(_isFirebaseInitialized);
+
   HeroTagRegistry.reset();
 
   final accountProvider = AccountProvider()..initialize();
@@ -274,6 +277,29 @@ Future<void> main() async {
   // Initialize location cache service
   final locationCacheService = LocationCacheService();
   await locationCacheService.initialize();
+
+  final userProfileProvider =
+      UserProfileProvider(accountProvider: accountProvider);
+  final postsService = PostsService();
+  final locationService = LocationService();
+  final postsProvider = PostsProvider(
+    postsService: postsService,
+    locationService: locationService,
+  );
+
+  // Wire up cache clearing callbacks to avoid circular dependencies
+  accountProvider.setClearUserProfileCachesCallback(() async {
+    await userProfileProvider.clearAllCaches();
+  });
+
+  accountProvider.setClearPostsCachesCallback(() async {
+    postsProvider.clearUserPostsByDateCache();
+  });
+
+  accountProvider.setClearLocationCachesCallback(() async {
+    locationCacheService.dispose();
+  });
+
   final fcmToken = await FirebaseMessaging.instance.getToken();
   if (fcmToken != null) {
     print('🔑 FCM Token: $fcmToken');
@@ -287,25 +313,13 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: firebaseStatusNotifier),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<AuthService>(create: (_) => AuthService()),
-        ChangeNotifierProvider<UserProfileProvider>(
-            create: (_) =>
-                UserProfileProvider(accountProvider: accountProvider)),
+        ChangeNotifierProvider.value(value: userProfileProvider),
         Provider<GoogleSignIn>.value(value: googleSignIn),
-        Provider<LocationService>(
-          create: (_) => LocationService(),
-        ),
+        Provider<LocationService>.value(value: locationService),
         // Add location cache service
         Provider<LocationCacheService>.value(value: locationCacheService),
-        Provider<PostsService>(
-          create: (context) => PostsService(),
-        ),
-        ChangeNotifierProvider<PostsProvider>(
-          create: (context) => PostsProvider(
-            postsService: Provider.of<PostsService>(context, listen: false),
-            locationService:
-                Provider.of<LocationService>(context, listen: false),
-          ),
-        ),
+        Provider<PostsService>.value(value: postsService),
+        ChangeNotifierProvider.value(value: postsProvider),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
@@ -454,16 +468,21 @@ class _MyAppState extends State<MyApp> {
         '🔄 Auth state changed: isAuthenticated=$isAuthenticated, isLoading=$isLoading, isEmailVerified=$isEmailVerified, initialCheckComplete=$_initialAuthCheckComplete',
         name: 'AuthListener');
 
-    // --- NEW: Warn if backend is unreachable but Google sign-in is cached ---
+    // --- Check if backend is unreachable but Google sign-in is cached ---
     if (!isAuthenticated && !isLoading) {
       print(
           '⚠️ [AuthState] Not authenticated. If you see "Already signed in with Google" after clicking login, it means GoogleSignIn is still cached locally, but backend session is not valid or server is unreachable.');
       try {
         final googleSignIn = GoogleSignIn();
-        await googleSignIn.signOut();
-        await googleSignIn.disconnect(); // <-- Add this line
-        print(
-            '🔑 Signed out and disconnected from GoogleSignIn due to backend validation failure.');
+        if (await googleSignIn.isSignedIn()) {
+          await googleSignIn.signOut();
+          // Only call disconnect if still signed in after signOut
+          if (await googleSignIn.isSignedIn()) {
+            await googleSignIn.disconnect();
+          }
+          print(
+              '🔑 Signed out (and disconnected if needed) from GoogleSignIn due to backend validation failure.');
+        }
       } catch (e) {
         print('⚠️ Failed to sign out/disconnect from GoogleSignIn: $e');
       }
@@ -648,7 +667,7 @@ class _MyAppState extends State<MyApp> {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            title: 'Optimized Flutter App',
+            title: 'LiveSpot',
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode,
             theme:
@@ -656,12 +675,13 @@ class _MyAppState extends State<MyApp> {
             darkTheme: TAppTheme.darkTheme,
             navigatorKey: NavigationService()
                 .navigatorKey, // FIXED: use NavigationService
+            navigatorKey: NavigationService()
+                .navigatorKey, // FIXED: use NavigationService
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],
             builder: (context, child) {
-              if (!firebaseStatus.isInitialized &&
-                  !(kIsWeb || (!kIsWeb && Platform.isIOS))) {
+              if (!firebaseStatus.isInitialized) {
                 print(
                     '⚠️ App running with limited functionality (Firebase unavailable)');
               }
@@ -706,7 +726,7 @@ class FirebaseHelper {
     }
   }
 
-  static bool get isSkippedPlatform => kIsWeb || (!kIsWeb && Platform.isIOS);
+  static bool get isSkippedPlatform => kIsWeb || Platform.isIOS;
 
   static String getStatusMessage() {
     if (isSkippedPlatform) {

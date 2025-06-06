@@ -434,7 +434,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withAlpha(51), // 0.2 * 255 = 51
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -465,8 +465,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.2),
-                    Colors.black.withOpacity(0.7),
+                    Colors.black.withAlpha(51), // 0.2 * 255 = 51
+                    Colors.black.withAlpha(179), // 0.7 * 255 = 179
                   ],
                   stops: const [0.5, 0.75, 0.95],
                 ),
@@ -485,7 +485,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withAlpha(51), // 0.2 * 255 = 51
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -596,7 +596,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withAlpha(51), // 0.2 * 255 = 51
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -633,7 +633,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black
+                                    .withAlpha(51), // 0.2 * 255 = 51
                                 blurRadius: 2,
                                 offset: const Offset(0, 1),
                               ),
@@ -678,7 +679,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withAlpha(51), // 0.2 * 255 = 51
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),

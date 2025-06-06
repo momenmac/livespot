@@ -536,6 +536,7 @@ class _AdminFloatingActionButtonState extends State<AdminFloatingActionButton>
             width: 65,
             height: 65,
             child: FloatingActionButton(
+              heroTag: "adminMainFAB",
               onPressed: _toggle,
               tooltip: 'Admin Menu',
               shape: const CircleBorder(),

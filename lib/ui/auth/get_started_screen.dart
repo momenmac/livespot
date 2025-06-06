@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
-import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
 import 'package:flutter_application_2/services/api/account/auth_service.dart';
 import 'package:flutter_application_2/ui/auth/signup/create_account_screen.dart';
@@ -114,8 +113,11 @@ class _GetStartedScreenState extends State<GetStartedScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Center(
-                          child: Icon(Icons.flutter_dash,
-                              size: 100, color: ThemeConstants.primaryColor)),
+                          child: Image.asset(
+                        'assets/icons/Logo2.png',
+                        width: 200,
+                        height: 200,
+                      )),
                       SizedBox(
                           height:
                               orientation == Orientation.portrait ? 20 : 10),

@@ -7,12 +7,13 @@ import 'sections/news_feed_section.dart';
 import 'sections/live_streams_section.dart';
 import 'sections/external_news_section.dart';
 import 'sections/story_section.dart';
-import 'widgets/search_bar_widget.dart';
-import 'widgets/date_picker_widget.dart';
+import 'comprehensive_search_page.dart';
 // Add authentication related imports
 import 'package:provider/provider.dart'; // Make sure to add provider dependency if not already added
 import 'package:flutter_application_2/services/auth/auth_service.dart'; // Create or update this import path as needed
 import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:flutter_application_2/providers/user_profile_provider.dart';
 
 class HomeContent extends StatefulWidget {
   final VoidCallback? onMapToggle;
@@ -186,26 +187,39 @@ class _HomeContentState extends State<HomeContent> {
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              showSearch(
-                context: context,
-                delegate: SearchBarWidget(),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ComprehensiveSearchPage(
+                    postsProvider: Provider.of<PostsProvider>(context, listen: false),
+                    userProfileProvider: Provider.of<UserProfileProvider>(context, listen: false),
+                  ),
+                ),
               );
             },
           ),
           IconButton(
             icon: const Icon(Icons.calendar_today),
-            onPressed: () {
-              showModalBottomSheet(
+            onPressed: () async {
+              final DateTime? picked = await showDatePicker(
                 context: context,
-                builder: (BuildContext context) {
-                  return DatePickerWidget(
-                    onDateSelected: _onDateSelected,
-                    selectedDate: _selectedDate,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2000),
+                lastDate: DateTime.now(),
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: Theme.of(context).colorScheme.copyWith(
+                            primary: ThemeConstants.primaryColor,
+                          ),
+                    ),
+                    child: child!,
                   );
                 },
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
               );
+              if (picked != null && picked != _selectedDate) {
+                _onDateSelected(picked);
+              }
             },
           ),
           // Add refresh token button

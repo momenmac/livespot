@@ -563,20 +563,24 @@ class UserProfileProvider extends ChangeNotifier {
 
       if (response['success'] == true && response.containsKey('data')) {
         var data = response['data'];
-        
+
         // Check if data is nested another level deep
-        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
-          developer.log('Detected nested data structure in followers response', name: 'UserProfileProvider');
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
+          developer.log('Detected nested data structure in followers response',
+              name: 'UserProfileProvider');
           data = data['data'];
         }
-        
+
         // Extract followers from the proper location in the response
         final List<dynamic> followersData;
         if (data is Map && data.containsKey('followers')) {
           followersData = data['followers'] as List;
         } else {
           followersData = [];
-          developer.log('No followers found in response', name: 'UserProfileProvider');
+          developer.log('No followers found in response',
+              name: 'UserProfileProvider');
         }
 
         final followers = followersData.map((data) {
@@ -623,20 +627,24 @@ class UserProfileProvider extends ChangeNotifier {
 
       if (response['success'] == true && response.containsKey('data')) {
         var data = response['data'];
-        
+
         // Check if data is nested another level deep
-        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
-          developer.log('Detected nested data structure in following response', name: 'UserProfileProvider');
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
+          developer.log('Detected nested data structure in following response',
+              name: 'UserProfileProvider');
           data = data['data'];
         }
-        
+
         // Extract following from the proper location in the response
         final List<dynamic> followingData;
         if (data is Map && data.containsKey('following')) {
           followingData = data['following'] as List;
         } else {
           followingData = [];
-          developer.log('No following users found in response', name: 'UserProfileProvider');
+          developer.log('No following users found in response',
+              name: 'UserProfileProvider');
         }
 
         final following = followingData.map((data) {
@@ -671,37 +679,45 @@ class UserProfileProvider extends ChangeNotifier {
     if (token == null) return [];
 
     try {
-      developer.log('Searching for users with query: "$query"', name: 'UserProfileProvider');
-      
+      developer.log('Searching for users with query: "$query"',
+          name: 'UserProfileProvider');
+
       // Construct the full URL for debugging
-      final endpoint = '/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset';
+      final endpoint =
+          '/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset';
       developer.log('Search endpoint: $endpoint', name: 'UserProfileProvider');
-      
+
       final response = await ApiClient.get(
         endpoint,
         token: token.accessToken,
       );
 
-      developer.log('Search users raw response: $response', name: 'UserProfileProvider');
+      developer.log('Search users raw response: $response',
+          name: 'UserProfileProvider');
 
       if (response['success'] == true && response['data'] != null) {
         // Handle the nested response structure
         var data = response['data'];
-        
+
         // Check if data is nested another level deep
-        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
-          developer.log('Detected nested data structure in search response', name: 'UserProfileProvider');
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
+          developer.log('Detected nested data structure in search response',
+              name: 'UserProfileProvider');
           data = data['data'];
         }
-        
+
         // Check if 'users' key exists
         if (!data.containsKey('users')) {
-          developer.log('No "users" key in response data: $data', name: 'UserProfileProvider');
+          developer.log('No "users" key in response data: $data',
+              name: 'UserProfileProvider');
           return [];
         }
-        
+
         final List<dynamic> usersData = data['users'] as List;
-        developer.log('Found ${usersData.length} users', name: 'UserProfileProvider');
+        developer.log('Found ${usersData.length} users',
+            name: 'UserProfileProvider');
 
         return usersData.map((userData) {
           // Convert each user data into a format that can be used by the UI
@@ -710,7 +726,9 @@ class UserProfileProvider extends ChangeNotifier {
           return {
             'id': account['id'],
             'email': account['email'],
-            'name': '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim(),
+            'name':
+                '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'
+                    .trim(),
             'profileImage': account['profile_picture'],
             'username': userData['username'],
             'bio': userData['bio'] ?? '',
@@ -726,15 +744,19 @@ class UserProfileProvider extends ChangeNotifier {
             'honesty': userData['honesty_score'] ?? 0,
             'joinDate': userData['join_date'] ?? '',
             'activityStatus': userData['activity_status'] ?? 'offline',
-            'interests': userData['interests'] is List ? List<String>.from(userData['interests']) : [],
+            'interests': userData['interests'] is List
+                ? List<String>.from(userData['interests'])
+                : [],
           };
         }).toList();
       } else {
-        developer.log('Search failed or returned no data: $response', name: 'UserProfileProvider');
+        developer.log('Search failed or returned no data: $response',
+            name: 'UserProfileProvider');
       }
       return [];
     } catch (e) {
-      developer.log('Error searching users: $e', name: 'UserProfileProvider', error: e);
+      developer.log('Error searching users: $e',
+          name: 'UserProfileProvider', error: e);
       return [];
     }
   }
@@ -754,7 +776,8 @@ class UserProfileProvider extends ChangeNotifier {
         token: token.accessToken,
       );
 
-      developer.log('Follow user response: $response', name: 'UserProfileProvider');
+      developer.log('Follow user response: $response',
+          name: 'UserProfileProvider');
 
       if (response['success'] == true) {
         // Force refresh profile data after following a user
@@ -788,7 +811,8 @@ class UserProfileProvider extends ChangeNotifier {
         token: token.accessToken,
       );
 
-      developer.log('Unfollow user response: $response', name: 'UserProfileProvider');
+      developer.log('Unfollow user response: $response',
+          name: 'UserProfileProvider');
 
       if (response['success'] == true) {
         // Force refresh profile data after unfollowing a user
@@ -821,35 +845,40 @@ class UserProfileProvider extends ChangeNotifier {
 
       if (response['success'] == true && response.containsKey('data')) {
         var data = response['data'];
-        
+
         // Handle nested response structure
-        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
           data = data['data'];
         }
-        
+
         // Extract followers from the correct location
         final List<dynamic> followers;
         if (data is Map && data.containsKey('followers')) {
           followers = data['followers'] as List;
-          
+
           // Check if current user's ID is in the followers list
           final currentUserId = _currentUserProfile!.account.id;
           for (var follower in followers) {
-            if (follower is Map && 
-                follower.containsKey('account') && 
+            if (follower is Map &&
+                follower.containsKey('account') &&
                 follower['account'] is Map &&
                 follower['account']['id'] == currentUserId) {
-              developer.log('User $userId follow status check: true', name: 'OtherUserProfilePage');
+              developer.log('User $userId follow status check: true',
+                  name: 'OtherUserProfilePage');
               return true;
             }
           }
         }
       }
-      
-      developer.log('User $userId follow status check: false', name: 'OtherUserProfilePage');
+
+      developer.log('User $userId follow status check: false',
+          name: 'OtherUserProfilePage');
       return false;
     } catch (e) {
-      developer.log('Error checking follow status: $e', name: 'UserProfileProvider');
+      developer.log('Error checking follow status: $e',
+          name: 'UserProfileProvider');
       return false;
     }
   }
@@ -860,36 +889,41 @@ class UserProfileProvider extends ChangeNotifier {
     if (token == null) return null;
 
     try {
-      developer.log('Fetching profile for user ID: $userId', name: 'UserProfileProvider');
-      
+      developer.log('Fetching profile for user ID: $userId',
+          name: 'UserProfileProvider');
+
       // Use a specific endpoint that returns the complete user profile with all fields
       final response = await ApiClient.get(
         '/accounts/users/$userId/profile/',
         token: token.accessToken,
       );
 
-      developer.log('Fetch user profile response: $response', name: 'UserProfileProvider');
+      developer.log('Fetch user profile response: $response',
+          name: 'UserProfileProvider');
 
       if (response['success'] == true && response.containsKey('data')) {
         var data = response['data'];
-        
+
         // Handle nested response structure
-        if (data is Map && data.containsKey('success') && data.containsKey('data')) {
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
           data = data['data'];
         }
-        
+
         if (data is Map && data.containsKey('user')) {
           data = data['user'];
         }
 
         // Extract user account data
         final Map<String, dynamic> account = data['account'] ?? {};
-        
+
         // Create a standardized format that matches what OtherUserProfilePage expects
         return {
           'id': account['id'],
           'email': account['email'],
-          'name': '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim(),
+          'name': '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'
+              .trim(),
           'profileImage': account['profile_picture'],
           'username': data['username'] ?? '',
           'bio': data['bio'] ?? '',
@@ -900,17 +934,22 @@ class UserProfileProvider extends ChangeNotifier {
           'following': data['following_count'] ?? 0,
           'posts': data['posts_count'] ?? 0,
           'saved': data['saved_posts_count'] ?? 0,
-          'upvoted': data['upvoted_posts_count'] ?? 0, 
+          'upvoted': data['upvoted_posts_count'] ?? 0,
           'comments': data['comments_count'] ?? 0,
           'honesty': data['honesty_score'] ?? 0,
-          'joinDate': data['join_date'] ?? account['created_at']?.toString().split('T')[0] ?? '',
+          'joinDate': data['join_date'] ??
+              account['created_at']?.toString().split('T')[0] ??
+              '',
           'activityStatus': data['activity_status'] ?? 'offline',
-          'interests': data['interests'] is List ? List<String>.from(data['interests']) : [],
+          'interests': data['interests'] is List
+              ? List<String>.from(data['interests'])
+              : [],
         };
       }
       return null;
     } catch (e) {
-      developer.log('Error fetching user profile: $e', name: 'UserProfileProvider');
+      developer.log('Error fetching user profile: $e',
+          name: 'UserProfileProvider');
       return null;
     }
   }
@@ -923,10 +962,10 @@ class UserProfileProvider extends ChangeNotifier {
     try {
       developer.log('Fetching fresh profile for user ID: $userId',
           name: 'UserProfileProvider');
-      
+
       // Add cache-busting parameter to ensure fresh data
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Use the user profile endpoint with nocache parameter
       final response = await ApiClient.get(
         '/accounts/users/$userId/profile/?nocache=$timestamp',
@@ -935,14 +974,14 @@ class UserProfileProvider extends ChangeNotifier {
 
       if (response['success'] == true && response.containsKey('data')) {
         var profileData = response['data'];
-        
+
         // Handle nested response structure
-        if (profileData is Map && 
-            profileData.containsKey('success') && 
+        if (profileData is Map &&
+            profileData.containsKey('success') &&
             profileData.containsKey('data')) {
           profileData = profileData['data'];
         }
-        
+
         // If we have a 'user' wrapper, extract the user data
         if (profileData is Map && profileData.containsKey('user')) {
           profileData = profileData['user'];
@@ -950,20 +989,21 @@ class UserProfileProvider extends ChangeNotifier {
 
         // Create a UserProfile object from the data
         final userProfile = UserProfile.fromJson(profileData);
-        
+
         // Update the cache with fresh data
         _profileCache[userId] = userProfile;
-        
+
         // Log success for debugging
         developer.log('Successfully fetched fresh profile for user ID: $userId',
             name: 'UserProfileProvider');
-            
+
         // Notify listeners if this is the current user's profile
-        if (_currentUserProfile != null && _currentUserProfile!.account.id == userId) {
+        if (_currentUserProfile != null &&
+            _currentUserProfile!.account.id == userId) {
           _currentUserProfile = userProfile;
           notifyListeners();
         }
-            
+
         return userProfile;
       } else {
         // If we failed to get fresh data but have cached data, return that as fallback
@@ -972,24 +1012,114 @@ class UserProfileProvider extends ChangeNotifier {
               name: 'UserProfileProvider');
           return _profileCache[userId];
         }
-        
-        developer.log('Failed to fetch profile for user ID: $userId: ${response['error'] ?? "Unknown error"}',
+
+        developer.log(
+            'Failed to fetch profile for user ID: $userId: ${response['error'] ?? "Unknown error"}',
             name: 'UserProfileProvider');
         return null;
       }
     } catch (e) {
       developer.log('Error fetching user profile by ID: $e',
           name: 'UserProfileProvider', error: e);
-          
+
       // On error, return cached data if available as fallback
       if (_profileCache.containsKey(userId)) {
-        developer.log('Using cached profile for user ID: $userId as fallback after error',
+        developer.log(
+            'Using cached profile for user ID: $userId as fallback after error',
             name: 'UserProfileProvider');
         return _profileCache[userId];
       }
-      
+
       return null;
     }
+  }
+
+  // Clear all profile caches during logout
+  Future<void> clearAllCaches() async {
+    developer.log('UserProfileProvider: Clearing all caches during logout',
+        name: 'UserProfileProvider');
+
+    try {
+      // Clear in-memory caches
+      _currentUserProfile = null;
+      _profileCache.clear();
+
+      // Clear SharedPreferences profile data
+      await _clearProfileSharedPreferences();
+
+      // Clear profile search caches
+      await _clearProfileSearchCaches();
+
+      developer.log('UserProfileProvider: All caches cleared successfully',
+          name: 'UserProfileProvider');
+    } catch (e) {
+      developer.log('UserProfileProvider: Error clearing caches: $e',
+          name: 'UserProfileProvider', error: e);
+    }
+  }
+
+  // Clear profile-related SharedPreferences data
+  Future<void> _clearProfileSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear current user profile cache
+      await prefs.remove('current_user_profile');
+
+      // Clear any other profile-related cached data
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith('profile_') ||
+            key.startsWith('user_profile_') ||
+            key.contains('_profile_')) {
+          await prefs.remove(key);
+        }
+      }
+
+      developer.log(
+          'UserProfileProvider: SharedPreferences profile data cleared',
+          name: 'UserProfileProvider');
+    } catch (e) {
+      developer.log('UserProfileProvider: Error clearing SharedPreferences: $e',
+          name: 'UserProfileProvider', error: e);
+    }
+  }
+
+  // Clear profile search related caches
+  Future<void> _clearProfileSearchCaches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear recent profile searches
+      await prefs.remove('recent_profile_searches');
+
+      // Clear any other search-related cached data
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.contains('search') && key.contains('profile')) {
+          await prefs.remove(key);
+        }
+      }
+
+      developer.log('UserProfileProvider: Profile search caches cleared',
+          name: 'UserProfileProvider');
+    } catch (e) {
+      developer.log('UserProfileProvider: Error clearing search caches: $e',
+          name: 'UserProfileProvider', error: e);
+    }
+  }
+
+  // Clear cached user data (simplified method for external use)
+  void clearUserData() {
+    developer.log('UserProfileProvider: Clearing user data',
+        name: 'UserProfileProvider');
+
+    _currentUserProfile = null;
+    _profileCache.clear();
+    _error = null;
+    _isLoading = false;
+
+    notifyListeners();
   }
 
   // Cleanup
