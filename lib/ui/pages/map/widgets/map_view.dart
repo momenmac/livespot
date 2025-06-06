@@ -70,7 +70,7 @@ class MapWidget extends StatelessWidget {
           userAgentPackageName: 'flutter_application_2',
           keepBuffer: 5,
           additionalOptions: const {
-            'User-Agent': 'Flutter Application 2/1.0',
+            'User-Agent': 'Flutter Application 6/1.0',
           },
         ),
         // Custom markers from the map page

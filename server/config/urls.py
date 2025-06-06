@@ -22,9 +22,10 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('accounts/', include('accounts.urls')),
-    path('media-api/', include('media_api.urls')),  # Add our new media API endpoints
-    path('api/', include('posts.urls')),  # Add our posts API endpoints
+    path('api/accounts/', include('accounts.urls')),  # Accounts API endpoints
+    path('media-api/', include('media_api.urls')),  # Media API endpoints
+    path('api/', include('posts.urls')),  # Posts API endpoints
+    path('api/notifications/', include('notifications.urls')),  # Notifications API endpoints
 ]
 
 # Serve media files in development

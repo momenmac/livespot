@@ -707,7 +707,7 @@ class _StorySectionState extends State<StorySection> {
   void _handleAddStoryTap(dynamic userProfile) {
     // Check if user is admin
     final bool isAdmin = userProfile?.account?.isAdmin ?? false;
-    
+
     if (isAdmin) {
       // Navigate to admin create post page
       Navigator.push(

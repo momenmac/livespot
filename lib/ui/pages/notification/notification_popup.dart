@@ -129,4 +129,51 @@ class NotificationPopup extends StatelessWidget {
       ),
     );
   }
+
+  /// Static method to show notification popup
+  static void show({
+    required BuildContext context,
+    required String title,
+    required String message,
+    IconData? icon,
+    Map<String, dynamic>? data,
+    VoidCallback? onTap,
+    VoidCallback? onDismiss,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    try {
+      OverlayState overlayState = Overlay.of(context);
+      OverlayEntry? entry;
+
+      entry = OverlayEntry(
+        builder: (context) {
+          return NotificationPopup(
+            title: title,
+            message: message,
+            icon: icon,
+            backgroundColor: Theme.of(context).cardColor,
+            textColor:
+                Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87,
+            onTap: () {
+              entry?.remove();
+              onTap?.call();
+            },
+            onDismiss: () {
+              entry?.remove();
+              onDismiss?.call();
+            },
+          );
+        },
+      );
+
+      overlayState.insert(entry);
+
+      // Auto dismiss after specified duration
+      Future.delayed(duration, () {
+        entry?.remove();
+      });
+    } catch (e) {
+      debugPrint('Error showing notification popup: $e');
+    }
+  }
 }

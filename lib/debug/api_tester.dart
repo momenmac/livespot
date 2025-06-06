@@ -7,18 +7,19 @@ void main() => app.main();
 class ApiTester {
   static Future<void> testRegisterEndpoint() async {
     const baseUrls = [
-      'http://192.168.1.12:8000',
+      'http://192.168.1.8:8000',
+      'http://10.0.0.3:8000', //change ip when for access
       'http://localhost:8000',
       'http://127.0.0.1:8000'
     ];
 
     for (final baseUrl in baseUrls) {
       try {
-        print('🧪 Testing API at: $baseUrl/accounts/register/');
+        print('🧪 Testing API at: $baseUrl/api/accounts/register/');
 
         final response = await http
             .post(
-              Uri.parse('$baseUrl/accounts/register/'),
+              Uri.parse('$baseUrl/api/accounts/register/'),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({
                 'email': 'test@example.com',

@@ -9,6 +9,7 @@ import 'package:flutter_application_2/ui/profile/settings/account_settings_page.
 import 'package:flutter_application_2/ui/profile/profile_search_page.dart';
 import 'package:flutter_application_2/ui/profile/suggested_people_section.dart';
 import 'package:flutter_application_2/ui/profile/settings/privacy_settings_page.dart';
+import 'package:flutter_application_2/ui/profile/settings/notification_settings_page.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -1358,6 +1359,20 @@ class _ProfilePageState extends State<ProfilePage>
                     context,
                     MaterialPageRoute(
                       builder: (context) => const PrivacySettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: Text('Notification Settings',
+                    style: TextStyle(color: textColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationSettingsPage(),
                     ),
                   );
                 },

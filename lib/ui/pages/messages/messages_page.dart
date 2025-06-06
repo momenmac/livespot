@@ -461,7 +461,7 @@ class _SearchableContactsDialogState extends State<_SearchableContactsDialog> {
 
     try {
       final baseUrl = ApiUrls.baseUrl;
-      final url = Uri.parse('$baseUrl/accounts/all-users/');
+      final url = Uri.parse('$baseUrl/api/accounts/all-users/');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {

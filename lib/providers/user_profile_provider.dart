@@ -108,7 +108,7 @@ class UserProfileProvider extends ChangeNotifier {
       // Always fetch fresh data from the server when forceRefresh is true
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final response = await ApiClient.get(
-          '/accounts/profile/?nocache=$timestamp',
+          '/api/accounts/profile/?nocache=$timestamp',
           token: token.accessToken);
 
       developer.log('Fetching current user profile response: $response',
@@ -181,7 +181,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.post(
-        '/accounts/users/profile/update/', // Using the correct endpoint for profile updates
+        '/api/accounts/users/profile/update/', // Using the correct endpoint for profile updates
         body: data,
         token: token.accessToken,
       );
@@ -250,7 +250,7 @@ class UserProfileProvider extends ChangeNotifier {
 
       // Make API call to update user profile
       final response = await ApiClient.post(
-        '/accounts/users/profile/update/',
+        '/api/accounts/users/profile/update/',
         body: updatedData,
         token: token.accessToken,
       );
@@ -295,7 +295,7 @@ class UserProfileProvider extends ChangeNotifier {
 
           // Try a direct update with the same data after profile creation
           final directUpdateResponse = await ApiClient.post(
-            '/accounts/users/profile/update/',
+            '/api/accounts/users/profile/update/',
             body: updatedData,
             token: token.accessToken,
           );
@@ -399,7 +399,7 @@ class UserProfileProvider extends ChangeNotifier {
 
       // Create multipart request for profile image upload
       final response = await ApiClient.uploadFile(
-        '/accounts/profile-image/',
+        '/api/accounts/profile-image/',
         filePath: imagePath,
         fileField: 'profile_image',
         token: token.accessToken,
@@ -504,7 +504,7 @@ class UserProfileProvider extends ChangeNotifier {
       // Add cache-busting parameter to ensure we get fresh data
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final response = await ApiClient.get(
-          '/accounts/profile/?nocache=$timestamp',
+          '/api/accounts/profile/?nocache=$timestamp',
           token: token.accessToken);
 
       developer.log('Refreshing current user profile',
@@ -554,7 +554,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.get(
-        '/accounts/users/${_currentUserProfile!.account.id}/followers/?limit=$limit&offset=$offset',
+        '/api/accounts/users/${_currentUserProfile!.account.id}/followers/?limit=$limit&offset=$offset',
         token: token.accessToken,
       );
 
@@ -618,7 +618,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.get(
-        '/accounts/users/${_currentUserProfile!.account.id}/following/?limit=$limit&offset=$offset',
+        '/api/accounts/users/${_currentUserProfile!.account.id}/following/?limit=$limit&offset=$offset',
         token: token.accessToken,
       );
 
@@ -684,7 +684,7 @@ class UserProfileProvider extends ChangeNotifier {
 
       // Construct the full URL for debugging
       final endpoint =
-          '/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset';
+          '/api/accounts/users/search/?q=${Uri.encodeComponent(query)}&limit=$limit&offset=$offset';
       developer.log('Search endpoint: $endpoint', name: 'UserProfileProvider');
 
       final response = await ApiClient.get(
@@ -772,7 +772,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.post(
-        '/accounts/users/$userId/follow/',
+        '/api/accounts/users/$userId/follow/',
         token: token.accessToken,
       );
 
@@ -807,7 +807,7 @@ class UserProfileProvider extends ChangeNotifier {
 
     try {
       final response = await ApiClient.post(
-        '/accounts/users/$userId/unfollow/',
+        '/api/accounts/users/$userId/unfollow/',
         token: token.accessToken,
       );
 
@@ -839,7 +839,7 @@ class UserProfileProvider extends ChangeNotifier {
     try {
       // Get followers of the target user to check if current user is among them
       final response = await ApiClient.get(
-        '/accounts/users/$userId/followers/',
+        '/api/accounts/users/$userId/followers/',
         token: token.accessToken,
       );
 
@@ -894,7 +894,7 @@ class UserProfileProvider extends ChangeNotifier {
 
       // Use a specific endpoint that returns the complete user profile with all fields
       final response = await ApiClient.get(
-        '/accounts/users/$userId/profile/',
+        '/api/accounts/users/$userId/profile/',
         token: token.accessToken,
       );
 
@@ -968,7 +968,7 @@ class UserProfileProvider extends ChangeNotifier {
 
       // Use the user profile endpoint with nocache parameter
       final response = await ApiClient.get(
-        '/accounts/users/$userId/profile/?nocache=$timestamp',
+        '/api/accounts/users/$userId/profile/?nocache=$timestamp',
         token: token.accessToken,
       );
 

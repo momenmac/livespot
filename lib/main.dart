@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -17,8 +18,14 @@ import 'package:flutter_application_2/providers/theme_provider.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter_application_2/services/location/location_event_monitor.dart';
 import 'package:flutter_application_2/services/posts/posts_service.dart';
 import 'package:flutter_application_2/services/utils/route_observer.dart';
+import 'package:flutter_application_2/services/firebase_messaging_service.dart';
+import 'package:flutter_application_2/services/action_confirmation_service.dart';
+import 'package:flutter_application_2/services/notifications/notification_handler.dart';
+import 'package:flutter_application_2/services/api/notification_api_service.dart';
+import 'package:flutter_application_2/ui/pages/notification/notification_settings_controller.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -198,7 +205,6 @@ Future<void> main() async {
 
   // Check if running on iOS simulator
   _isIosSimulator = await checkIfIosSimulator();
-
   // Initial Firebase initialization attempt
   try {
     if (Firebase.apps.isEmpty) {
@@ -206,10 +212,47 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       print('✅ Firebase initialized successfully');
-      _isFirebaseInitialized = true;
+      _isFirebaseInitialized =
+          true; // Initialize Firebase Messaging after Firebase core initialization
+      if (!kIsWeb) {
+        try {
+          await FirebaseMessagingService.initialize();
+          print(
+              '✅ Firebase Messaging initialized successfully'); // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed: $e');
+        }
+      }
     } else {
       print('✅ Firebase already initialized');
-      _isFirebaseInitialized = true;
+      _isFirebaseInitialized =
+          true; // Initialize Firebase Messaging for existing Firebase instance
+      if (!kIsWeb) {
+        try {
+          await FirebaseMessagingService.initialize();
+          print('✅ Firebase Messaging initialized successfully');
+
+          // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed: $e');
+        }
+      }
     }
   } catch (e) {
     if (_isIosSimulator) {
@@ -244,6 +287,10 @@ Future<void> main() async {
       UserProfileProvider(accountProvider: accountProvider);
   final postsService = PostsService();
   final locationService = LocationService();
+
+  // Initialize location event monitor for "Still happening" feature
+  final locationEventMonitor = LocationEventMonitor();
+
   final postsProvider = PostsProvider(
     postsService: postsService,
     locationService: locationService,
@@ -262,6 +309,19 @@ Future<void> main() async {
     locationCacheService.dispose();
   });
 
+  // We'll use FirebaseMessagingService.initialize() which handles token management
+  // instead of directly getting the token here
+  if (!kIsWeb && _isFirebaseInitialized) {
+    try {
+      await FirebaseMessagingService.initialize();
+      print('✅ Firebase Messaging Service initialized successfully');
+    } catch (e) {
+      print('❌ Failed to initialize Firebase Messaging Service: $e');
+    }
+  } else {
+    print(
+        '🌐 Skipping FCM initialization on web platform or when Firebase is not initialized');
+  }
   runApp(
     MultiProvider(
       providers: [
@@ -272,14 +332,29 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: userProfileProvider),
         Provider<GoogleSignIn>.value(value: googleSignIn),
         Provider<LocationService>.value(value: locationService),
+        // Add location event monitor service
+        Provider<LocationEventMonitor>.value(value: locationEventMonitor),
         // Add location cache service
         Provider<LocationCacheService>.value(value: locationCacheService),
         Provider<PostsService>.value(value: postsService),
         ChangeNotifierProvider.value(value: postsProvider),
+        // Add notification settings controller
+        ChangeNotifierProvider(create: (_) => NotificationSettingsController()),
       ],
       child: MyApp(accountProvider: accountProvider),
     ),
   );
+
+  // Set up notification tap handler
+  if (!kIsWeb && _isFirebaseInitialized) {
+    FirebaseMessagingService.setOnNotificationTap((title, body, data) {
+      print('🔔 Notification tapped: $title - $body');
+      // Handle notification tap - navigate to appropriate screen based on data
+      if (data.containsKey('route')) {
+        NavigationService().navigateTo(data['route']);
+      }
+    });
+  }
 
   // Final Firebase status update with special handling for iOS simulator
   Timer(const Duration(milliseconds: 1500), () async {
@@ -320,6 +395,7 @@ class _MyAppState extends State<MyApp> {
   bool _initialAuthCheckComplete = false;
   bool _isNavigating = false;
   String? _lastNavigatedRoute; // Track last navigated route
+  Timer? _locationMonitoringCheckTimer;
 
   @override
   void initState() {
@@ -343,8 +419,48 @@ class _MyAppState extends State<MyApp> {
           print('✅ [Startup] Firebase is connected.');
         }
         // ---------------------------------------------------------------
+
+        // Set up periodic check for location monitoring settings
+        _setupLocationMonitoringCheck();
       }
     });
+  }
+
+  void _setupLocationMonitoringCheck() {
+    // Check location monitoring settings every 30 minutes
+    _locationMonitoringCheckTimer =
+        Timer.periodic(const Duration(minutes: 30), (_) {
+      _updateLocationMonitoringBasedOnSettings();
+    });
+
+    // Do an initial check right away
+    _updateLocationMonitoringBasedOnSettings();
+  }
+
+  Future<void> _updateLocationMonitoringBasedOnSettings() async {
+    if (!mounted || !widget.accountProvider.isAuthenticated) return;
+
+    try {
+      final locationEventMonitor =
+          Provider.of<LocationEventMonitor>(context, listen: false);
+      final settings = await NotificationApiService.getNotificationSettings();
+      final stillHappeningEnabled =
+          settings?['still_happening_notifications'] ?? true;
+
+      if (stillHappeningEnabled) {
+        if (!locationEventMonitor.isMonitoring) {
+          print('📍 Starting location event monitoring based on user settings');
+          locationEventMonitor.startMonitoring();
+        }
+      } else {
+        if (locationEventMonitor.isMonitoring) {
+          print('📍 Stopping location event monitoring based on user settings');
+          locationEventMonitor.stopMonitoring();
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error updating location monitoring: $e');
+    }
   }
 
   @override
@@ -352,6 +468,19 @@ class _MyAppState extends State<MyApp> {
     developer.log('MyApp dispose: Removing AccountProvider listener.',
         name: 'AuthListenerSetup');
     widget.accountProvider.removeListener(_onAuthStateChanged);
+
+    // Cancel timer and cleanup
+    _locationMonitoringCheckTimer?.cancel();
+    if (mounted) {
+      try {
+        final locationEventMonitor =
+            Provider.of<LocationEventMonitor>(context, listen: false);
+        locationEventMonitor.dispose();
+      } catch (e) {
+        print('⚠️ Error disposing location monitor: $e');
+      }
+    }
+
     super.dispose();
   }
 
@@ -463,6 +592,13 @@ class _MyAppState extends State<MyApp> {
         currentRoute == null ||
         currentRoute == '/';
 
+    // Start location event monitor if user is authenticated
+    if (isAuthenticated && isEmailVerified) {
+      final locationEventMonitor =
+          Provider.of<LocationEventMonitor>(context, listen: false);
+      locationEventMonitor.startMonitoring();
+    }
+
     final isAtAuthRoute = [
       AppRoutes.login,
       AppRoutes.createAccount,
@@ -489,6 +625,14 @@ class _MyAppState extends State<MyApp> {
         developer.log(
             'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
+
+        // Stop location monitoring when user logs out
+        if (context.mounted) {
+          final locationEventMonitor =
+              Provider.of<LocationEventMonitor>(context, listen: false);
+          locationEventMonitor.stopMonitoring();
+        }
+
         _navigateTo(AppRoutes.initial);
       }
     } else {
@@ -501,6 +645,14 @@ class _MyAppState extends State<MyApp> {
         developer.log(
             'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
             name: 'AuthListener');
+
+        // Stop location monitoring when user logs out
+        if (context.mounted) {
+          final locationEventMonitor =
+              Provider.of<LocationEventMonitor>(context, listen: false);
+          locationEventMonitor.stopMonitoring();
+        }
+
         _navigateTo(AppRoutes.initial);
       }
     }

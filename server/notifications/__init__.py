@@ -1,0 +1,1 @@
+# Django notification app initialization

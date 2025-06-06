@@ -207,7 +207,7 @@ class AuthService {
     required String lastName,
   }) async {
     try {
-      final url = Uri.parse('$baseUrl/accounts/register/');
+      final url = Uri.parse(ApiUrls.register);
 
       final body = jsonEncode({
         'email': email,
@@ -279,7 +279,7 @@ class AuthService {
       print('🔑 Sending Google auth data to backend for: $email');
 
       final response = await _makeAuthRequest(
-        url: Uri.parse('$baseUrl/accounts/google-login/'),
+        url: Uri.parse(ApiUrls.googleLogin),
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -448,7 +448,7 @@ class AuthService {
   Future<Map<String, dynamic>> getUserProfile(String token) async {
     try {
       final response = await _makeAuthRequest(
-        url: Uri.parse('$baseUrl/accounts/profile/'),
+        url: Uri.parse(ApiUrls.profile),
         method: 'GET',
         headers: {'Content-Type': 'application/json'},
         token: token,
@@ -525,7 +525,7 @@ class AuthService {
       if (token != null) {
         try {
           await _client.post(
-            Uri.parse('${ApiUrls.baseUrl}/accounts/logout/'),
+            Uri.parse(ApiUrls.logout),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $token',
@@ -552,7 +552,7 @@ class AuthService {
   Future<Map<String, dynamic>> verifyEmail(String token, String code) async {
     try {
       final response = await _makeAuthRequest(
-        url: Uri.parse('${ApiUrls.baseUrl}/accounts/verify-email/'),
+        url: Uri.parse(ApiUrls.verifyEmail),
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         token: token,
@@ -571,7 +571,8 @@ class AuthService {
   Future<Map<String, dynamic>> resendVerificationCode(String token) async {
     try {
       final response = await _makeAuthRequest(
-        url: Uri.parse('${ApiUrls.baseUrl}/accounts/resend-verification-code/'),
+        url: Uri.parse(
+            '${ApiUrls.baseUrl}/api/accounts/resend-verification-code/'),
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         token: token,

@@ -108,7 +108,7 @@ class MessagesController extends ChangeNotifier {
 
   Future<List<User>> _fetchAllUsers() async {
     final apiBaseUrl = ApiUrls.baseUrl;
-    final url = Uri.parse('$apiBaseUrl/accounts/all-users/');
+    final url = Uri.parse('$apiBaseUrl/api/accounts/all-users/');
     final response = await http.get(url);
     if (response.statusCode == 200) {
       final List<dynamic> userList = jsonDecode(response.body);
@@ -1668,7 +1668,7 @@ class MessagesController extends ChangeNotifier {
     if (message != null) {
       // Special handling for web platforms to ensure proper focus and selection
       messageController.text = message.content;
-      
+
       // Use a small delay to ensure the text field gets proper focus on web
       Future.delayed(const Duration(milliseconds: 50), () {
         if (!_isDisposed) {
@@ -1679,7 +1679,7 @@ class MessagesController extends ChangeNotifier {
 
           // Request focus on the field if needed
           FocusManager.instance.primaryFocus?.unfocus();
-          
+
           // Force a refresh to ensure UI updates correctly
           notifyListeners();
         }
@@ -1705,13 +1705,14 @@ class MessagesController extends ChangeNotifier {
           .doc(_selectedConversation!.id)
           .collection('messages')
           .doc(message.id);
-      
-      debugPrint("Updating message ${message.id} with new content: $newContent");
-      
+
+      debugPrint(
+          "Updating message ${message.id} with new content: $newContent");
+
       // First update our local message immediately for a responsive UI
       final index = _selectedConversation!.messages
           .indexWhere((msg) => msg.id == message.id);
-          
+
       if (index != -1) {
         // Create a new message with updated properties
         _selectedConversation!.messages[index] =
@@ -1741,7 +1742,8 @@ class MessagesController extends ChangeNotifier {
       cancelEditing();
 
       // Show a debug print to verify this code is running
-      debugPrint("✅ Message successfully updated with isEdited=true: ${message.id}");
+      debugPrint(
+          "✅ Message successfully updated with isEdited=true: ${message.id}");
     } catch (e) {
       debugPrint("❌ Error updating message: $e");
       // Make sure editing is canceled even if there was an error
@@ -1967,58 +1969,61 @@ class MessagesController extends ChangeNotifier {
   Future<Conversation?> createOrGetConversation(UserProfile userProfile) async {
     try {
       final String otherUserId = userProfile.account.id.toString();
-      
+
       // Check if current user id is valid
       if (currentUserId.isEmpty) {
         debugPrint('[createOrGetConversation] Current user ID is empty');
         return null;
       }
-      
+
       // First check if conversation already exists
       final querySnapshot = await _firestore
           .collection('conversations')
           .where('participants', arrayContains: currentUserId)
           .get();
-      
+
       // Search for existing conversation with this user
       for (final doc in querySnapshot.docs) {
         final data = doc.data();
         final List<dynamic> participants = data['participants'] ?? [];
-        
+
         // Check if this is a one-on-one conversation with the target user
-        if (participants.length == 2 && 
-            participants.contains(otherUserId) && 
+        if (participants.length == 2 &&
+            participants.contains(otherUserId) &&
             participants.contains(currentUserId)) {
-          debugPrint('[createOrGetConversation] Found existing conversation: ${doc.id}');
-          
+          debugPrint(
+              '[createOrGetConversation] Found existing conversation: ${doc.id}');
+
           // Load all users to properly populate the conversation
           final users = await _fetchAllUsers();
-          
+
           // Create and return the conversation object
           return Conversation.fromFirestore(data, users);
         }
       }
-      
+
       // No existing conversation found, create a new one
-      debugPrint('[createOrGetConversation] Creating new conversation with user: ${userProfile.username}');
-      
+      debugPrint(
+          '[createOrGetConversation] Creating new conversation with user: ${userProfile.username}');
+
       // Generate a unique ID for the conversation
-      final String conversationId = _firestore.collection('conversations').doc().id;
-      
+      final String conversationId =
+          _firestore.collection('conversations').doc().id;
+
       // Create a user object for the other participant
       final otherUser = User(
         id: otherUserId,
         name: userProfile.fullName,
         avatarUrl: userProfile.profilePictureUrl,
       );
-      
+
       // Create a user object for the current user
       final currentUser = User(
         id: currentUserId,
         name: accountProvider.currentUser?.firstName ?? 'You',
         avatarUrl: accountProvider.currentUser?.profilePictureUrl ?? '',
       );
-      
+
       // Create an initial message
       final messageId = const Uuid().v4();
       final now = DateTime.now();
@@ -2033,7 +2038,7 @@ class MessagesController extends ChangeNotifier {
         messageType: MessageType.system, // Mark as a system message
         isRead: true,
       );
-      
+
       // Create conversation document
       final conversationData = {
         'id': conversationId,
@@ -2058,13 +2063,13 @@ class MessagesController extends ChangeNotifier {
         'isArchived': false,
         'isGroup': false,
       };
-      
+
       // Create the conversation in Firestore
       await _firestore
           .collection('conversations')
           .doc(conversationId)
           .set(conversationData);
-      
+
       // Add the initial message to the conversation
       await _firestore
           .collection('conversations')
@@ -2072,7 +2077,7 @@ class MessagesController extends ChangeNotifier {
           .collection('messages')
           .doc(messageId)
           .set(message.toJson());
-      
+
       // Set read status for both participants
       await _firestore
           .collection('conversations')
@@ -2084,7 +2089,7 @@ class MessagesController extends ChangeNotifier {
         'isRead': true,
         'lastReadTimestamp': FieldValue.serverTimestamp(),
       });
-      
+
       await _firestore
           .collection('conversations')
           .doc(conversationId)
@@ -2095,7 +2100,7 @@ class MessagesController extends ChangeNotifier {
         'isRead': false,
         'lastReadTimestamp': FieldValue.serverTimestamp(),
       });
-      
+
       // Create and return the new conversation object
       final newConversation = Conversation(
         id: conversationId,
@@ -2108,12 +2113,12 @@ class MessagesController extends ChangeNotifier {
         isGroup: false,
         groupName: null,
       );
-      
+
       // Add to the conversations list
       _conversations.add(newConversation);
       _applyFilters();
       notifyListeners();
-      
+
       return newConversation;
     } catch (e) {
       debugPrint('[createOrGetConversation] Error: $e');

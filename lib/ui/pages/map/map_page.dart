@@ -78,12 +78,24 @@ class _MapPageState extends State<MapPage> {
       return url;
     }
 
+    // Convert video URLs to thumbnail URLs
+    String processedUrl = url;
+    if (url.contains('/video/') && url.endsWith('.mp4')) {
+      // Convert video path to thumbnail path
+      // Example: /video/filename.mp4 -> /thumbnails/filename_thumb.jpg
+      processedUrl = url
+          .replaceAll('/video/', '/thumbnails/')
+          .replaceAll('.mp4', '_thumb.jpg');
+
+      print('🎬 Video URL converted to thumbnail: $url -> $processedUrl');
+    }
+
     // Handle any localhost or IP-based URLs
-    if (url.contains('localhost') ||
-        url.contains('127.0.0.1') ||
-        url.contains('192.168.')) {
+    if (processedUrl.contains('localhost') ||
+        processedUrl.contains('127.0.0.1') ||
+        processedUrl.contains('192.168.')) {
       // Extract path from URL
-      Uri uri = Uri.parse(url);
+      Uri uri = Uri.parse(processedUrl);
       String path = uri.path;
       // Ensure no leading slash for concatenation
       path = path.startsWith('/') ? path.substring(1) : path;
@@ -92,7 +104,7 @@ class _MapPageState extends State<MapPage> {
     }
 
     // For relative paths or already fixed URLs
-    return UrlUtils.fixUrl(url);
+    return UrlUtils.fixUrl(processedUrl);
   }
 
   @override
@@ -698,10 +710,9 @@ class _MapPageState extends State<MapPage> {
       thumbnailUrl = _processImageUrl(thumbnailUrl);
     }
 
-    // Process mediaUrls with comprehensive URL handling
-    if (mediaUrls.isNotEmpty) {
-      mediaUrls = mediaUrls.map((url) => _processImageUrl(url)).toList();
-    }
+    // IMPORTANT: We're NOT processing mediaUrls with _processImageUrl anymore
+    // This ensures original video URLs are preserved for playback
+    // Only thumbnail images get converted for display purposes
 
     // Fix for honesty rate - handle different possible structures and formats
     double honesty = 0.0;
