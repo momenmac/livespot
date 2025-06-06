@@ -3,6 +3,7 @@ import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart'; // Add this import
 import 'package:flutter_application_2/services/auth/token_manager.dart'; // Add TokenManager import
+import 'package:flutter_application_2/services/firebase_messaging_service.dart'; // Add FirebaseMessagingService import
 import 'package:shared_preferences/shared_preferences.dart'; // Add SharedPreferences import
 import '../../../models/account.dart';
 import '../../../models/jwt_token.dart';
@@ -194,6 +195,16 @@ class AccountProvider extends ChangeNotifier {
             user: result['user'] as Account,
           );
 
+          // Re-initialize FCM token registration after successful login
+          try {
+            await FirebaseMessagingService.initialize();
+            developer.log('FCM token service re-initialized after login',
+                name: 'AccountProvider');
+          } catch (e) {
+            developer.log('Error initializing FCM token service: $e',
+                name: 'AccountProvider');
+          }
+
           // Force a notification after session is set
           _debouncedNotify();
 
@@ -228,6 +239,14 @@ class AccountProvider extends ChangeNotifier {
     _debouncedNotify(); // Notify UI that loading has started
 
     try {
+      // Deactivate FCM token before logging out
+      try {
+        await FirebaseMessagingService.deactivateCurrentToken();
+        developer.log('FCM token deactivated', name: 'LogoutTrace');
+      } catch (e) {
+        developer.log('Error deactivating FCM token: $e', name: 'LogoutTrace');
+      }
+
       // Use TokenManager's logout method which handles server logout and local cleanup
       await _tokenManager.logout();
       developer.log('TokenManager logout completed', name: 'LogoutTrace');
@@ -413,6 +432,16 @@ class AccountProvider extends ChangeNotifier {
             token: token,
             user: result['user'] as Account,
           );
+
+          // Re-initialize FCM token registration after successful registration
+          try {
+            await FirebaseMessagingService.initialize();
+            developer.log('FCM token service initialized after registration',
+                name: 'AccountProvider');
+          } catch (e) {
+            developer.log('Error initializing FCM token service: $e',
+                name: 'AccountProvider');
+          }
         }
 
         // If we have profile image, upload it after registration is successful
@@ -657,6 +686,16 @@ class AccountProvider extends ChangeNotifier {
             token: token,
             user: result['user'] as Account,
           );
+
+          // Re-initialize FCM token registration after successful Google login
+          try {
+            await FirebaseMessagingService.initialize();
+            developer.log('FCM token service re-initialized after Google login',
+                name: 'AccountProvider');
+          } catch (e) {
+            developer.log('Error initializing FCM token service: $e',
+                name: 'AccountProvider');
+          }
         }
 
         return {

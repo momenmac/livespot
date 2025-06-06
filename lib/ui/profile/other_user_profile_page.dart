@@ -55,8 +55,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     _fetchCompleteProfileData();
   }
 
+  /// Helper method to safely parse user ID from string or int
+  int _parseUserId() {
+    final dynamic id = _userData['id'];
+    if (id is int) {
+      return id;
+    } else if (id is String) {
+      return int.parse(id);
+    } else {
+      throw ArgumentError('Invalid user ID format: $id');
+    }
+  }
+
   Future<void> _fetchCompleteProfileData() async {
-    final int userId = _userData['id'] as int;
+    final int userId = _parseUserId();
     final profileProvider =
         Provider.of<UserProfileProvider>(context, listen: false);
 
@@ -132,7 +144,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       _isLoading = true;
     });
 
-    final int userId = _userData['id'] as int;
+    final int userId = _parseUserId();
     final profileProvider =
         Provider.of<UserProfileProvider>(context, listen: false);
 
@@ -166,7 +178,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
       _isLoading = true;
     });
 
-    final int userId = _userData['id'] as int;
+    final int userId = _parseUserId();
     final profileProvider =
         Provider.of<UserProfileProvider>(context, listen: false);
 
@@ -221,7 +233,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
     });
 
     try {
-      final int userId = _userData['id'] as int;
+      final int userId = _parseUserId();
       final String username = _userData['username'] ?? '';
       final String? profileImage = _userData['profileImage'];
       final String displayName = _userData['name'] ?? username;
@@ -1141,7 +1153,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   }
 
   Widget _buildPostsTab() {
-    final int userId = _userData['id'];
+    final int userId = _parseUserId();
 
     return FutureBuilder<List<Post>>(
       future: Provider.of<PostsProvider>(context, listen: false)
@@ -1200,7 +1212,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   }
 
   Widget _buildSavedTab() {
-    final int userId = _userData['id'];
+    final int userId = _parseUserId();
 
     return FutureBuilder<List<Post>>(
       future: Provider.of<PostsProvider>(context, listen: false)
@@ -1259,7 +1271,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage>
   }
 
   Widget _buildUpvotedTab() {
-    final int userId = _userData['id'];
+    final int userId = _parseUserId();
 
     return FutureBuilder<List<Post>>(
       future: Provider.of<PostsProvider>(context, listen: false)

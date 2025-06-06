@@ -4,15 +4,15 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'notifications/notification_handler.dart';
-import 'database/notification_database_service.dart';
-import 'api/notification_api_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'notifications/fcm_token_service.dart';
 
 class FirebaseMessagingService {
   static final FirebaseMessaging _firebaseMessaging =
       FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  static final FCMTokenService _fcmTokenService = FCMTokenService();
+
   static Future<void> initialize() async {
     // Request permission for notifications with more explicit approach
     NotificationSettings settings = await _firebaseMessaging.requestPermission(
@@ -42,70 +42,10 @@ class FirebaseMessagingService {
     // Initialize local notifications
     await _initializeLocalNotifications();
 
-    // Get FCM token and save to database
-    String? token = await _firebaseMessaging.getToken();
-    if (kDebugMode) {
-      print('FCM Token: $token');
-    } // Save FCM token to database if user is authenticated
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      if (token != null) {
-        try {
-          await NotificationDatabaseService.saveFCMToken(token);
-          print('✅ FCM token saved to local database');
+    // Initialize FCM token service
+    await _fcmTokenService.initialize();
 
-          // Also register with Django backend
-          final platform = Platform.isAndroid
-              ? 'android'
-              : Platform.isIOS
-                  ? 'ios'
-                  : 'web';
-          final success = await NotificationApiService.registerFCMToken(
-            token: token,
-            platform: platform,
-          );
-
-          if (success) {
-            print('✅ FCM token registered with Django backend');
-          } else {
-            print(
-                '⚠️ Failed to register FCM token with Django backend (will retry)');
-          }
-        } catch (e) {
-          print('❌ Failed to save FCM token: $e');
-        }
-      }
-    } // Listen for token refresh
-    _firebaseMessaging.onTokenRefresh.listen((newToken) async {
-      print('🔄 FCM Token refreshed: $newToken');
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        try {
-          await NotificationDatabaseService.saveFCMToken(newToken);
-          print('✅ Refreshed FCM token saved to local database');
-
-          // Also register refreshed token with Django backend
-          final platform = Platform.isAndroid
-              ? 'android'
-              : Platform.isIOS
-                  ? 'ios'
-                  : 'web';
-          final success = await NotificationApiService.registerFCMToken(
-            token: newToken,
-            platform: platform,
-          );
-
-          if (success) {
-            print('✅ Refreshed FCM token registered with Django backend');
-          } else {
-            print(
-                '⚠️ Failed to register refreshed FCM token with Django backend');
-          }
-        } catch (e) {
-          print('❌ Failed to save refreshed FCM token: $e');
-        }
-      }
-    }); // Configure foreground message handler with enhanced debugging
+    // Configure foreground message handler with enhanced debugging
     print('🔄 Setting up foreground message listener...');
     print('🔄 Firebase Messaging instance: ${_firebaseMessaging.hashCode}');
     print('🔄 Setting onMessage listener...');
@@ -235,7 +175,7 @@ class FirebaseMessagingService {
   }
 
   static Future<String?> getToken() async {
-    return await _firebaseMessaging.getToken();
+    return await _fcmTokenService.getToken();
   }
 
   static Future<void> subscribeToTopic(String topic) async {
@@ -250,6 +190,10 @@ class FirebaseMessagingService {
     if (kDebugMode) {
       print('Unsubscribed from topic: $topic');
     }
+  }
+
+  static Future<void> deactivateCurrentToken() async {
+    await _fcmTokenService.deactivateCurrentToken();
   }
 
   static Future<AuthorizationStatus> getNotificationPermissionStatus() async {

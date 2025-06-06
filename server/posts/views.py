@@ -250,10 +250,10 @@ class PostViewSet(viewsets.ModelViewSet):
         try:
             lat = float(request.query_params.get('lat', 0))
             lng = float(request.query_params.get('lng', 0))
-            radius = int(request.query_params.get('radius', 1000))  # meters
+            radius = float(request.query_params.get('radius', 1000))  # meters
         except (ValueError, TypeError):
             return Response(
-                {"error": "Invalid parameters. lat, lng must be floats, radius must be integer"}, 
+                {"error": "Invalid parameters. lat, lng must be floats, radius must be a number"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -287,10 +287,17 @@ class PostViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            paginated_response = self.get_paginated_response(serializer.data)
+            return Response({
+                'success': True,
+                'data': paginated_response.data
+            })
             
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        return Response({
+            'success': True,
+            'data': serializer.data
+        })
     
     @action(detail=False, methods=['get'])
     def search(self, request):

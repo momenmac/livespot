@@ -29,6 +29,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.decorators import api_view, permission_classes
 from django.http import JsonResponse
 
+# Import notification models for follow/unfollow notifications
+from notifications.models import NotificationQueue, FCMToken, NotificationSettings
+import uuid
+import traceback
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -1087,7 +1092,10 @@ class UserFollowView(views.APIView):
     
     def post(self, request, user_id):
         """Follow another user"""
+        print(f"🔄 DEBUG: Follow request - User {request.user.id} wants to follow User {user_id}")
+        
         if int(user_id) == request.user.id:
+            print(f"❌ DEBUG: User {request.user.id} tried to follow themselves")
             return Response(
                 {'success': False, 'error': 'Cannot follow yourself'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1096,13 +1104,94 @@ class UserFollowView(views.APIView):
         target_profile = get_object_or_404(UserProfile, user_id=user_id)
         user_profile = request.user.profile
         
+        print(f"✅ DEBUG: Found target profile: {target_profile.username} (ID: {target_profile.user.id})")
+        print(f"✅ DEBUG: Follower profile: {user_profile.username} (ID: {user_profile.user.id})")
+        
         if target_profile in user_profile.following.all():
+            print(f"⚠️ DEBUG: User {user_profile.username} is already following {target_profile.username}")
             return Response(
                 {'success': False, 'error': 'Already following this user'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Add the follow relationship
         target_profile.followers.add(user_profile)
+        print(f"✅ DEBUG: Successfully added follow relationship: {user_profile.username} -> {target_profile.username}")
+        
+        # Send follow notification
+        try:
+            print(f"🔔 DEBUG: Attempting to send follow notification to {target_profile.user.email}")
+            
+            # Check if target user has notification settings
+            notification_settings = getattr(target_profile.user, 'notification_settings', None)
+            print(f"🔔 DEBUG: Target user notification settings: {notification_settings}")
+            
+            if not notification_settings:
+                print(f"⚠️ DEBUG: No notification settings found for user {target_profile.user.email}")
+                # Create default notification settings with correct field names
+                notification_settings = NotificationSettings.objects.create(
+                    user=target_profile.user,
+                    friend_requests=True,
+                    follow_notifications=True,
+                    events=True,
+                    reminders=True,
+                    nearby_events=True,
+                    system_notifications=True
+                )
+                print(f"✅ DEBUG: Created default notification settings for user {target_profile.user.email}")
+            
+            # Now check if follow notifications are enabled and send notification if so
+            print(f"🔔 DEBUG: Follow notifications enabled: {notification_settings.follow_notifications}")
+            if notification_settings.follow_notifications:
+                # Get follower avatar URL
+                follower_avatar = ''
+                if user_profile.user.profile_picture:
+                    follower_avatar = request.build_absolute_uri(user_profile.user.profile_picture.url)
+                
+                print(f"🔔 DEBUG: Creating notification with follower avatar: {follower_avatar}")
+                
+                notification = NotificationQueue.objects.create(
+                    user=target_profile.user,
+                    notification_type='new_follower',
+                    title='New Follower',
+                    body=f'{user_profile.username} started following you',
+                    data={
+                        'type': 'new_follower',
+                        'followerUserId': str(user_profile.user.id),
+                        'followerUserName': user_profile.username,
+                        'followerUserAvatar': follower_avatar,
+                    },
+                    priority='normal'
+                )
+                print(f"✅ DEBUG: Successfully queued follow notification (ID: {notification.id}) for {target_profile.user.email}")
+                
+                # Import and use the notification service to send immediately
+                try:
+                    from notifications.services import notification_service
+                    print(f"🚀 DEBUG: Sending notification immediately...")
+                    success = notification_service.send_notification(notification)
+                    if success:
+                        print(f"✅ DEBUG: Follow notification sent successfully!")
+                        # Mark as sent to prevent duplicate processing
+                        notification.status = 'sent'
+                        notification.processed_at = timezone.now()
+                        notification.save()
+                    else:
+                        print(f"❌ DEBUG: Failed to send follow notification")
+                except Exception as service_error:
+                    print(f"❌ DEBUG: Notification service error: {service_error}")
+                    print(f"❌ DEBUG: Service exception details: {traceback.format_exc()}")
+                
+                logger.info(f"Queued follow notification for {target_profile.user.email}")
+            else:
+                print(f"⚠️ DEBUG: Follow notifications are disabled for user {target_profile.user.email}")
+                
+        except Exception as e:
+            print(f"❌ DEBUG: Failed to queue follow notification: {str(e)}")
+            print(f"❌ DEBUG: Exception details: {traceback.format_exc()}")
+            logger.warning(f"Failed to queue follow notification: {e}")
+        
+        print(f"🎉 DEBUG: Follow operation completed successfully")
         return Response({'success': True, 'message': f'Now following @{target_profile.username}'})
 
 
@@ -1111,16 +1200,29 @@ class UserUnfollowView(views.APIView):
     
     def post(self, request, user_id):
         """Unfollow a user"""
+        print(f"🔄 DEBUG: Unfollow request - User {request.user.id} wants to unfollow User {user_id}")
+        
         target_profile = get_object_or_404(UserProfile, user_id=user_id)
         user_profile = request.user.profile
         
+        print(f"✅ DEBUG: Found target profile: {target_profile.username} (ID: {target_profile.user.id})")
+        print(f"✅ DEBUG: Unfollower profile: {user_profile.username} (ID: {user_profile.user.id})")
+        
         if target_profile not in user_profile.following.all():
+            print(f"⚠️ DEBUG: User {user_profile.username} is not following {target_profile.username}")
             return Response(
                 {'success': False, 'error': 'You are not following this user'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Remove the follow relationship
         target_profile.followers.remove(user_profile)
+        print(f"✅ DEBUG: Successfully removed follow relationship: {user_profile.username} no longer follows {target_profile.username}")
+        
+        # No notification sent for unfollow (as per user request)
+        print(f"ℹ️ DEBUG: No notification sent for unfollow action (by design)")
+        
+        print(f"🎉 DEBUG: Unfollow operation completed successfully")
         return Response({'success': True, 'message': f'Unfollowed @{target_profile.username}'})
 
 

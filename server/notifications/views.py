@@ -17,7 +17,7 @@ from .models import (
 from .serializers import (
     NotificationSettingsSerializer, FCMTokenSerializer,
     NotificationHistorySerializer, FriendRequestSerializer,
-    EventConfirmationSerializer
+    EventConfirmationSerializer, NotificationQueueSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -154,6 +154,24 @@ class NotificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         
         serializer = self.get_serializer(notification)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def mark_unread(self, request, pk=None):
+        """Mark specific notification as unread"""
+        notification = self.get_object()
+        notification.read = False
+        notification.read_at = None
+        notification.save()
+        
+        serializer = self.get_serializer(notification)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['delete'])
+    def delete_notification(self, request, pk=None):
+        """Delete specific notification"""
+        notification = self.get_object()
+        notification.delete()
+        return Response({'message': 'Notification deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
 
 
 class FriendRequestViewSet(viewsets.ModelViewSet):
@@ -409,6 +427,29 @@ class EventConfirmationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(confirmation)
         return Response(serializer.data)
 
+
+class NotificationQueueViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for viewing notification queue (admin/debugging)"""
+    serializer_class = NotificationQueueSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Only allow users to see their own queued notifications
+        return NotificationQueue.objects.filter(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get notification queue statistics"""
+        queryset = self.get_queryset()
+        stats = {
+            'total': queryset.count(),
+            'pending': queryset.filter(status='pending').count(),
+            'processing': queryset.filter(status='processing').count(),
+            'sent': queryset.filter(status='sent').count(),
+            'failed': queryset.filter(status='failed').count(),
+            'cancelled': queryset.filter(status='cancelled').count(),
+        }
+        return Response(stats)
 
 class NotificationAPIView(viewsets.ViewSet):
     """General notification API endpoints"""

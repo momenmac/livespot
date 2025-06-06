@@ -7,6 +7,7 @@ import '../database/notification_database_service.dart';
 import '../api/notification_api_service.dart';
 import 'notification_types.dart';
 import '../../ui/pages/friends/friend_request_dialog.dart';
+import '../../ui/profile/other_user_profile_page.dart';
 import '../../routes/app_routes.dart';
 import '../utils/navigation_service.dart';
 
@@ -59,6 +60,10 @@ class NotificationHandler {
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           debugPrint('📱 Local notification tapped: ${response.payload}');
+          // Navigate to notifications page when local notification is tapped
+          if (_initialized && _navigatorKey?.currentContext != null) {
+            NavigationService().navigateTo(AppRoutes.notifications);
+          }
         },
       );
 
@@ -183,6 +188,14 @@ class NotificationHandler {
 
     debugPrint('🔄 Processing notification type: ${notificationData.type}');
 
+    // If tapped, navigate to notifications page for all notification types
+    if (isFromTap) {
+      debugPrint('👆 Notification tapped - navigating to notifications page');
+      NavigationService().navigateTo(AppRoutes.notifications);
+      return;
+    }
+
+    // For non-tap events (foreground notifications), handle type-specific logic
     switch (notificationData.type) {
       case NotificationType.friendRequest:
         await _handleFriendRequest(
@@ -192,6 +205,14 @@ class NotificationHandler {
         await _handleFriendRequestAccepted(
             notificationData as FriendRequestAcceptedNotificationData,
             isFromTap);
+        break;
+      case NotificationType.newFollower:
+        await _handleNewFollower(
+            notificationData as NewFollowerNotificationData, isFromTap);
+        break;
+      case NotificationType.unfollowed:
+        await _handleUnfollowed(
+            notificationData as UnfollowedNotificationData, isFromTap);
         break;
       case NotificationType.newEvent:
         await _handleNewEvent(
@@ -239,9 +260,8 @@ class NotificationHandler {
       debugPrint('👥 Showing friend request dialog...');
       await _showFriendRequestDialog(data);
     } else {
-      // Show local notification for foreground
-      debugPrint('👥 Showing local notification...');
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('${data.fromUserName} wants to be your friend! 👥');
     }
     debugPrint('✅ Friend request handling completed');
   }
@@ -255,9 +275,77 @@ class NotificationHandler {
       // Navigate to messages page (friends functionality)
       NavigationService().navigateTo(AppRoutes.messages);
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
       _showSnackBar('${data.fromUserName} accepted your friend request! 🎉');
     }
+  }
+
+  /// Handle new follower notification
+  static Future<void> _handleNewFollower(
+    NewFollowerNotificationData data,
+    bool isFromTap,
+  ) async {
+    debugPrint('👤 === HANDLING NEW FOLLOWER ===');
+    debugPrint(
+        '👤 Follower: ${data.followerUserName} (${data.followerUserId})');
+    debugPrint('👤 IsFromTap: $isFromTap');
+
+    if (isFromTap) {
+      // Navigate to the follower's profile by using MaterialPageRoute directly
+      if (_navigatorKey?.currentContext != null) {
+        Navigator.push(
+          _navigatorKey!.currentContext!,
+          MaterialPageRoute(
+            builder: (context) => OtherUserProfilePage(
+              userData: {
+                'id': int.parse(data.followerUserId),
+                'username': data.followerUserName,
+                'profileImage': data.followerUserAvatar,
+                'name': data.followerUserName,
+              },
+            ),
+          ),
+        );
+      }
+    } else {
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('${data.followerUserName} started following you! 👤');
+    }
+    debugPrint('✅ New follower handling completed');
+  }
+
+  /// Handle unfollowed notification
+  static Future<void> _handleUnfollowed(
+    UnfollowedNotificationData data,
+    bool isFromTap,
+  ) async {
+    debugPrint('💔 === HANDLING UNFOLLOWED ===');
+    debugPrint(
+        '💔 Unfollower: ${data.unfollowerUserName} (${data.unfollowerUserId})');
+    debugPrint('💔 IsFromTap: $isFromTap');
+
+    if (isFromTap) {
+      // Navigate to the unfollower's profile by using MaterialPageRoute directly
+      if (_navigatorKey?.currentContext != null) {
+        Navigator.push(
+          _navigatorKey!.currentContext!,
+          MaterialPageRoute(
+            builder: (context) => OtherUserProfilePage(
+              userData: {
+                'id': int.parse(data.unfollowerUserId),
+                'username': data.unfollowerUserName,
+                'profileImage': data.unfollowerUserAvatar,
+                'name': data.unfollowerUserName,
+              },
+            ),
+          ),
+        );
+      }
+    } else {
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('${data.unfollowerUserName} unfollowed you');
+    }
+    debugPrint('✅ Unfollowed handling completed');
   }
 
   /// Handle new event notification
@@ -269,7 +357,8 @@ class NotificationHandler {
       // Navigate to map or home page (event detail not implemented yet)
       NavigationService().navigateTo(AppRoutes.map);
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('New event: ${data.eventTitle}');
     }
   }
 
@@ -286,7 +375,8 @@ class NotificationHandler {
         body: data.body,
       );
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('${data.title}: ${data.body}');
     }
   }
 
@@ -298,7 +388,8 @@ class NotificationHandler {
     if (isFromTap) {
       NavigationService().navigateTo(AppRoutes.map);
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('Event "${data.eventTitle}" has been updated');
     }
   }
 
@@ -311,7 +402,8 @@ class NotificationHandler {
       _showSnackBar(
           'Event "${data.eventTitle}" has been cancelled: ${data.cancellationReason}');
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('Event "${data.eventTitle}" has been cancelled: ${data.cancellationReason}');
     }
   }
 
@@ -323,7 +415,8 @@ class NotificationHandler {
     if (isFromTap) {
       NavigationService().navigateTo(AppRoutes.map);
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('New event nearby: ${data.eventTitle}');
     }
   }
 
@@ -344,7 +437,8 @@ class NotificationHandler {
           _showSnackBar(data.body);
       }
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('Reminder: ${data.body}');
     }
   }
 
@@ -359,7 +453,8 @@ class NotificationHandler {
         _showSnackBar(data.body);
       }
     } else {
-      await _showLocalNotification(data);
+      // For foreground notifications, only show snackbar (push notification already shown by system)
+      _showSnackBar('System: ${data.body}');
     }
   }
 

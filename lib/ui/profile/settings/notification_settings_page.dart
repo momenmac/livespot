@@ -26,6 +26,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _reminders = true;
   bool _nearbyEvents = true;
   bool _systemNotifications = true;
+  bool _followNotifications = true;
+  bool _stillHappeningNotifications =
+      true; // Added for "Still happening" feature
 
   // Advanced settings
   bool _soundEnabled = true;
@@ -73,6 +76,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             _reminders = apiSettings['reminders'] ?? true;
             _nearbyEvents = apiSettings['nearby_events'] ?? true;
             _systemNotifications = apiSettings['system_notifications'] ?? true;
+            _followNotifications = apiSettings['follow_notifications'] ?? true;
+            _stillHappeningNotifications =
+                apiSettings['still_happening_notifications'] ?? true;
           });
         } else {
           // Fallback to local database
@@ -85,6 +91,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             _reminders = localSettings['reminders'] ?? true;
             _nearbyEvents = localSettings['nearbyEvents'] ?? true;
             _systemNotifications = localSettings['systemNotifications'] ?? true;
+            _followNotifications = localSettings['followNotifications'] ?? true;
+            _stillHappeningNotifications =
+                localSettings['stillHappeningNotifications'] ?? true;
           });
         }
       }
@@ -151,6 +160,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         reminders: _reminders,
         nearbyEvents: _nearbyEvents,
         systemNotifications: _systemNotifications,
+        followNotifications: _followNotifications,
+        stillHappeningNotifications: _stillHappeningNotifications,
       );
 
       // Save to local database as backup
@@ -162,6 +173,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           'reminders': _reminders,
           'nearbyEvents': _nearbyEvents,
           'systemNotifications': _systemNotifications,
+          'followNotifications': _followNotifications,
+          'stillHappeningNotifications': _stillHappeningNotifications,
         },
       );
 
@@ -366,6 +379,35 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                     _saveNotificationSettings();
                   },
                   secondary: const Icon(Icons.system_update),
+                ),
+                const Divider(),
+                SwitchListTile(
+                  title: const Text('Follow Notifications'),
+                  subtitle: const Text('When someone follows or unfollows you'),
+                  value: _followNotifications,
+                  activeColor: ThemeConstants.primaryColor,
+                  onChanged: (value) {
+                    setState(() {
+                      _followNotifications = value;
+                    });
+                    _saveNotificationSettings();
+                  },
+                  secondary: const Icon(Icons.people),
+                ),
+                const Divider(),
+                SwitchListTile(
+                  title: const Text('Still Happening Notifications'),
+                  subtitle: const Text(
+                      'Receive confirmations when you\'re near events to verify if they\'re still happening'),
+                  value: _stillHappeningNotifications,
+                  activeColor: ThemeConstants.primaryColor,
+                  onChanged: (value) {
+                    setState(() {
+                      _stillHappeningNotifications = value;
+                    });
+                    _saveNotificationSettings();
+                  },
+                  secondary: const Icon(Icons.event_available),
                 ),
               ]),
 

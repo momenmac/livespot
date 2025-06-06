@@ -7,7 +7,9 @@ import 'notification/notifications_page.dart';
 import '../profile/profile_page.dart';
 import 'home/components/home_content.dart';
 import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart';
+import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
+import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
 import 'dart:async';
 
 class Home extends StatefulWidget {
@@ -22,12 +24,17 @@ class _HomeState extends State<Home> {
   bool _showMap = false;
   double? dragStartX;
   int? _unreadMessageCount;
+  int? _unreadNotificationCount;
   Timer? _unreadCheckTimer;
   StreamSubscription? _unreadCountSubscription;
+  StreamSubscription? _notificationCountSubscription;
 
   // Reference to the MessagesController for unread count
   // We'll initialize this when creating the MessagesPage
   MessagesController? _messagesController;
+
+  // Reference to the NotificationsController for unread count
+  NotificationsController? _notificationsController;
 
   // Create pages list with the callback passed to HomeContent
   late final List<Widget> _pages;
@@ -38,6 +45,9 @@ class _HomeState extends State<Home> {
 
     // Create a MessagesController instance that will be shared
     _messagesController = MessagesController();
+
+    // Create a NotificationsController instance that will be shared
+    _notificationsController = NotificationsController();
 
     // Initialize pages with the shared controller
     _pages = <Widget>[
@@ -59,13 +69,23 @@ class _HomeState extends State<Home> {
       });
     });
 
-    // Set up a timer to periodically check for unread messages
+    // Load notification unread count
+    _notificationsController!.loadUnreadCount().then((_) {
+      _updateUnreadCounts();
+    });
+
+    // Set up a timer to periodically check for unread messages and notifications
     _unreadCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _updateUnreadCounts();
 
       // Periodically validate unread counts to fix any issues
       if (_messagesController != null) {
         _messagesController!.validateUnreadCounts();
+      }
+
+      // Refresh notification count from server
+      if (_notificationsController != null) {
+        _notificationsController!.refreshUnreadCount();
       }
     });
 
@@ -78,12 +98,23 @@ class _HomeState extends State<Home> {
         });
       }
     });
+
+    // Subscribe to notification count changes via NotificationEventBus for real-time updates
+    _notificationCountSubscription =
+        NotificationEventBus().unreadCountStream.listen((count) {
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = count;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _unreadCheckTimer?.cancel();
     _unreadCountSubscription?.cancel();
+    _notificationCountSubscription?.cancel();
     super.dispose();
   }
 
@@ -102,7 +133,24 @@ class _HomeState extends State<Home> {
       MessageEventBus().notifyUnreadCountChanged(unreadCount);
 
       // Debug print for verification
-      print('🔢 Home: Updated unread count to $unreadCount');
+      print('🔢 Home: Updated message unread count to $unreadCount');
+    }
+
+    if (_notificationsController != null) {
+      final notificationCount = _notificationsController!.unreadCount;
+
+      // Update the notification badge through normal state update
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = notificationCount;
+        });
+      }
+
+      // Also notify the NotificationEventBus so other parts of the app can stay updated
+      NotificationEventBus().notifyUnreadCountChanged(notificationCount);
+
+      // Debug print for verification
+      print('🔔 Home: Updated notification unread count to $notificationCount');
     }
   }
 
@@ -151,6 +199,7 @@ class _HomeState extends State<Home> {
                     onTap: _onItemTapped,
                     body: _pages[_selectedIndex],
                     unreadMessageCount: _unreadMessageCount,
+                    unreadNotificationCount: _unreadNotificationCount,
                   ),
                 );
               },
@@ -187,6 +236,7 @@ class _HomeState extends State<Home> {
             onTap: _onItemTapped,
             body: _pages[_selectedIndex],
             unreadMessageCount: _unreadMessageCount,
+            unreadNotificationCount: _unreadNotificationCount,
           ),
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),

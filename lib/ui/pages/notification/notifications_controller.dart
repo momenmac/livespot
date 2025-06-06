@@ -1,298 +1,283 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_application_2/services/firebase_messaging_service.dart';
+import 'package:flutter_application_2/services/api/notification_api_service.dart';
+import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
 import 'notification_model.dart';
 import 'notification_popup.dart';
-
-// TODO: Add Firebase imports when ready:
-// import 'package:firebase_messaging/firebase_messaging.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NotificationsController extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
   bool _isPermissionGranted = false;
+  String? _fcmToken;
+  int _unreadCount = 0;
 
   List<NotificationModel> get notifications => _notifications;
   bool get isPermissionGranted => _isPermissionGranted;
-
-  // TODO: Initialize Firebase listeners and permissions
-  Future<void> initializeNotifications() async {
-    // Request permission
-    // NotificationSettings settings = await _messaging.requestPermission(
-    //   alert: true,
-    //   badge: true,
-    //   sound: true,
-    // );
-    // _isPermissionGranted = settings.authorizationStatus == AuthorizationStatus.authorized;
-
-    // Get FCM token
-    // TODO: Implement FCM token handling for push notifications
-
-    // Save token to Firestore
-    // if (_fcmToken != null) {
-    //   await _saveTokenToFirestore(_fcmToken!);
-    // }
-
-    // Listen for token refresh
-    // _messaging.onTokenRefresh.listen(_saveTokenToFirestore);
-
-    // Set up message handlers
-    // FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    // FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-    // FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
-  }
-
-  // TODO: Save FCM token to Firestore
-  // Future<void> _saveTokenToFirestore(String token) async {
-  //   await _firestore
-  //     .collection('users')
-  //     .doc(currentUserId)
-  //     .update({
-  //       'fcmTokens': FieldValue.arrayUnion([token])
-  //     });
-  // }
-
-  // TODO: Handle foreground messages
-  // void _handleForegroundMessage(RemoteMessage message) {
-  //   final notification = NotificationModel.fromFirebaseMessage(message);
-  //   _notifications.insert(0, notification);
-  //   notifyListeners();
-  // }
-
-  // TODO: Handle when app is opened from notification
-  // void _handleMessageOpenedApp(RemoteMessage message) {
-  //   // Navigate to relevant screen based on notification data
-  // }
-
-  // TODO: Handle background messages
-  // Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-  //   // Process background message
-  // }
-
-  Future<void> loadNotifications() async {
-    // TODO: Replace with Firestore fetch
-    // try {
-    //   final snapshot = await _firestore
-    //     .collection('users')
-    //     .doc(currentUserId)
-    //     .collection('notifications')
-    //     .orderBy('timestamp', descending: true)
-    //     .get();
-    //
-    //   _notifications = snapshot.docs
-    //     .map((doc) => NotificationModel.fromFirestore(doc))
-    //     .toList();
-    //
-    //   notifyListeners();
-    // } catch (e) {
-    //   print('Error loading notifications: $e');
-    // }
-
-    // For now, use mock data
-    _notifications = [
-      NotificationModel(
-        message: "New message from John Doe",
-        dateTime: DateTime.now(),
-        icon: Icons.message,
-      ),
-      // ...add more mock notifications as needed
-    ];
-    notifyListeners();
-  }
-
-  Future<void> enableNotifications() async {
-    // TODO: Implement Firebase notification permission request
-    // try {
-    //   NotificationSettings settings = await _messaging.requestPermission(
-    //     alert: true,
-    //     badge: true,
-    //     sound: true,
-    //   );
-    //
-    //   _isPermissionGranted = settings.authorizationStatus == AuthorizationStatus.authorized;
-    //
-    //   if (_isPermissionGranted) {
-    //     _fcmToken = await _messaging.getToken();
-    //     await _saveTokenToFirestore(_fcmToken!);
-    //   }
-    //
-    //   final prefs = await SharedPreferences.getInstance();
-    //   await prefs.setBool('notifications_enabled', _isPermissionGranted);
-    //
-    //   notifyListeners();
-    // } catch (e) {
-    //   print('Error enabling notifications: $e');
-    //   throw Exception('Failed to enable notifications');
-    // }
-
-    // For now, just update SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notifications_enabled', true);
-    _isPermissionGranted = true;
-    notifyListeners();
-  }
-
-  Future<void> disableNotifications() async {
-    // TODO: Implement Firebase notification disable
-    // try {
-    //   if (_fcmToken != null) {
-    //     await _firestore
-    //       .collection('users')
-    //       .doc(currentUserId)
-    //       .update({
-    //         'fcmTokens': FieldValue.arrayRemove([_fcmToken])
-    //       });
-    //   }
-    //
-    //   final prefs = await SharedPreferences.getInstance();
-    //   await prefs.setBool('notifications_enabled', false);
-    //
-    //   _isPermissionGranted = false;
-    //   notifyListeners();
-    // } catch (e) {
-    //   print('Error disabling notifications: $e');
-    //   throw Exception('Failed to disable notifications');
-    // }
-
-    // For now, just update SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notifications_enabled', false);
-    _isPermissionGranted = false;
-    notifyListeners();
-  }
-
-  void markAsRead(String notificationId) {
-    // TODO: Update read status in Firestore
-    // try {
-    //   await _firestore
-    //     .collection('users')
-    //     .doc(currentUserId)
-    //     .collection('notifications')
-    //     .doc(notificationId)
-    //     .update({'isRead': true});
-    // } catch (e) {
-    //   print('Error marking notification as read: $e');
-    // }
-  }
-
-  void clearAll() {
-    // TODO: Clear notifications in Firestore
-    // try {
-    //   final batch = _firestore.batch();
-    //   final notifications = await _firestore
-    //     .collection('users')
-    //     .doc(currentUserId)
-    //     .collection('notifications')
-    //     .get();
-    //
-    //   for (var doc in notifications.docs) {
-    //     batch.delete(doc.reference);
-    //   }
-    //
-    //   await batch.commit();
-    //   _notifications.clear();
-    //   notifyListeners();
-    // } catch (e) {
-    //   print('Error clearing notifications: $e');
-    // }
-
-    _notifications.clear();
-    notifyListeners();
-  }
+  String? get fcmToken => _fcmToken;
+  int get unreadCount => _unreadCount;
 
   // Global key for accessing navigator
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+
+  NotificationsController() {
+    _loadInitialState();
+  }
+
+  /// Load initial state
+  Future<void> _loadInitialState() async {
+    await _loadPermissionState();
+    await loadNotifications();
+    await loadUnreadCount(); // Load unread count on initialization
+
+    // If permission is granted, try to get the FCM token
+    if (_isPermissionGranted) {
+      _fcmToken = await FirebaseMessagingService.getToken();
+      debugPrint('Loaded FCM token: $_fcmToken');
+    }
+  }
+
+  /// Load permission state from SharedPreferences
+  Future<void> _loadPermissionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isPermissionGranted = prefs.getBool('notifications_enabled') ?? false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading notification permission state: $e');
+    }
+  }
+
+  Future<void> initializeNotifications() async {
+    try {
+      // Request notification permissions
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      _isPermissionGranted =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional;
+
+      if (_isPermissionGranted) {
+        // Initialize FCM token service
+        await FirebaseMessagingService.initialize();
+        _fcmToken = await FirebaseMessagingService.getToken();
+
+        // Save permission state
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('notifications_enabled', true);
+
+        debugPrint('Notification permissions granted: $_isPermissionGranted');
+        debugPrint('FCM Token: $_fcmToken');
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error initializing notifications: $e');
+    }
+  }
+
+  Future<void> loadNotifications() async {
+    try {
+      // For now, use mock data with updated model structure
+      _notifications = [
+        NotificationModel(
+          id: '1',
+          title: 'Welcome to LiveSpot',
+          body: 'Thank you for joining our community!',
+          timestamp: DateTime.now().subtract(const Duration(days: 1)),
+          read: true,
+          type: 'welcome',
+          data: {'route': '/home'},
+        ),
+        NotificationModel(
+          id: '2',
+          title: 'New Event Nearby',
+          body: 'There\'s a new event happening near you!',
+          timestamp: DateTime.now().subtract(const Duration(hours: 3)),
+          read: false,
+          type: 'event',
+          data: {'route': '/events', 'eventId': '12345'},
+        ),
+        NotificationModel.legacy(
+          message: "New message from John Doe",
+          dateTime: DateTime.now(),
+          icon: Icons.message,
+        ),
+      ];
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading notifications: $e');
+    }
+  }
+
+  Future<void> enableNotifications() async {
+    try {
+      // Request notification permissions
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      _isPermissionGranted =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional;
+
+      if (_isPermissionGranted) {
+        // Initialize FCM token service
+        await FirebaseMessagingService.initialize();
+        _fcmToken = await FirebaseMessagingService.getToken();
+        debugPrint('✅ Notifications enabled, token: $_fcmToken');
+      }
+
+      // Save setting to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', _isPermissionGranted);
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error enabling notifications: $e');
+      throw Exception('Failed to enable notifications: $e');
+    }
+  }
+
+  Future<void> disableNotifications() async {
+    try {
+      // Deactivate the current FCM token
+      await FirebaseMessagingService.deactivateCurrentToken();
+
+      // Update SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', false);
+
+      _isPermissionGranted = false;
+      _fcmToken = null;
+      notifyListeners();
+
+      debugPrint('✅ Notifications disabled successfully');
+    } catch (e) {
+      debugPrint('❌ Error disabling notifications: $e');
+
+      // Fallback: just update SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', false);
+      _isPermissionGranted = false;
+      notifyListeners();
+    }
+  }
+
+  void markAsRead(String notificationId) {
+    try {
+      final index = _notifications.indexWhere((n) => n.id == notificationId);
+      if (index != -1) {
+        _notifications[index] = _notifications[index].copyWith(read: true);
+        notifyListeners();
+        debugPrint('Notification marked as read: $notificationId');
+      }
+    } catch (e) {
+      debugPrint('Error marking notification as read: $e');
+    }
+  }
+
+  void clearAll() {
+    try {
+      _notifications.clear();
+      notifyListeners();
+      debugPrint('All notifications cleared');
+    } catch (e) {
+      debugPrint('Error clearing notifications: $e');
+    }
+  }
+
   static void showNotification({
     required String title,
     required String message,
     IconData? icon,
     VoidCallback? onTap,
+    Map<String, dynamic>? data,
   }) {
-    print('🚀🚀🚀 SHOW NOTIFICATION CALLED! 🚀🚀🚀');
-    print('📞 NotificationsController.showNotification() invoked');
-    print('📝 Title: "$title"');
-    print('💬 Message: "$message"');
-    print('🏷️ Icon: ${icon?.codePoint ?? 'null'}');
-    print('🗂️ onTap callback: ${onTap != null ? 'provided' : 'null'}');
-
-    print('🔍 Checking navigator key...');
-    print('🔗 navigatorKey: ${navigatorKey.toString()}');
-    print('🎯 navigatorKey.currentContext: ${navigatorKey.currentContext}');
-    print('🏗️ navigatorKey.currentState: ${navigatorKey.currentState}');
+    debugPrint('🚀 NotificationsController.showNotification() called');
+    debugPrint('📝 Title: "$title"');
+    debugPrint('💬 Message: "$message"');
 
     if (navigatorKey.currentContext == null) {
-      print('❌❌❌ CRITICAL: Navigator context is NULL!');
-      print('❌ Cannot show notification - no context available');
-      print(
-          '❌ This means the navigatorKey is not properly connected to MaterialApp');
+      debugPrint('❌ Navigator context is NULL! Cannot show notification');
       return;
     }
 
-    print('✅✅✅ SUCCESS: Navigator context found!');
-    print('✅ Context type: ${navigatorKey.currentContext.runtimeType}');
-    print('✅ Context hashCode: ${navigatorKey.currentContext.hashCode}');
+    debugPrint('✅ Navigator context found, showing notification popup');
 
     try {
-      print('🎨 Getting overlay state...');
-      OverlayState overlayState = Overlay.of(navigatorKey.currentContext!);
-      print('✅ Overlay state obtained: ${overlayState.toString()}');
-
-      OverlayEntry? entry;
-      print('🏗️ Creating overlay entry...');
-
-      entry = OverlayEntry(
-        builder: (context) {
-          print(
-              '🎯 OverlayEntry builder called - creating NotificationPopup widget');
-          return NotificationPopup(
-            title: title,
-            message: message,
-            icon: icon,
-            backgroundColor: Theme.of(context).cardColor,
-            textColor:
-                Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87,
-            onTap: () {
-              print('🎯🎯🎯 NOTIFICATION TAPPED! 🎯🎯🎯');
-              print('🎯 Notification popup tapped: $title');
-              print('🗑️ Removing overlay entry...');
-              entry?.remove();
-              print('📞 Calling onTap callback...');
-              onTap?.call();
-              print('✅ onTap callback completed');
-            },
-            onDismiss: () {
-              print('❌ NOTIFICATION DISMISSED: $title');
-              print('🗑️ Removing overlay entry...');
-              entry?.remove();
-              print('✅ Dismiss completed');
-            },
-          );
+      NotificationPopup.show(
+        context: navigatorKey.currentContext!,
+        title: title,
+        message: message,
+        icon: icon,
+        data: data,
+        onTap: () {
+          debugPrint('🎯 Notification tapped: $title');
+          onTap?.call();
         },
       );
-
-      print('📌 Inserting overlay entry into overlay state...');
-      overlayState.insert(entry);
-      print('✅✅✅ SUCCESS: Notification popup inserted into overlay!');
-      print('🎉 Notification should now be visible on screen');
-
-      // Auto dismiss after 4 seconds
-      print('⏰ Setting up auto-dismiss timer (4 seconds)...');
-      Future.delayed(const Duration(seconds: 4), () {
-        print('⏰ Auto-dismiss timer triggered');
-        print('Auto-dismissing notification: $title');
-        entry?.remove();
-        print('✅ Auto-dismiss completed');
-      });
+      debugPrint('✅ Notification popup shown successfully');
     } catch (e) {
-      print('❌❌❌ ERROR showing notification: $e');
-      print('🔍 Error details: ${e.toString()}');
+      debugPrint('❌ Error showing notification: $e');
     }
+  }
+
+  /// Add a new notification
+  void addNotification(NotificationModel notification) {
+    _notifications.insert(0, notification);
+    notifyListeners();
+
+    // Show the notification popup
+    showNotification(
+      title: notification.title,
+      message: notification.body,
+      data: notification.data,
+    );
+  }
+
+  /// Load unread notification count from API
+  Future<void> loadUnreadCount() async {
+    try {
+      final count = await NotificationApiService.getUnreadNotificationCount();
+      _unreadCount = count;
+
+      // Notify the event bus of the updated count
+      NotificationEventBus().notifyUnreadCountChanged(count);
+
+      notifyListeners();
+      debugPrint('✅ Unread notification count loaded: $count');
+    } catch (e) {
+      debugPrint('❌ Error loading unread notification count: $e');
+    }
+  }
+
+  /// Update unread count and notify listeners
+  void updateUnreadCount(int newCount) {
+    if (_unreadCount != newCount) {
+      _unreadCount = newCount;
+      NotificationEventBus().notifyUnreadCountChanged(newCount);
+      notifyListeners();
+      debugPrint('🔔 Unread notification count updated to: $newCount');
+    }
+  }
+
+  /// Refresh unread count from server
+  Future<void> refreshUnreadCount() async {
+    await loadUnreadCount();
   }
 
   @override
   void dispose() {
-    // TODO: Clean up Firebase listeners
-    // _messaging.deleteToken();
+    debugPrint('Disposing NotificationsController');
     super.dispose();
   }
 }

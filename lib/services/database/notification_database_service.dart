@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:math';
 import '../notifications/notification_types.dart';
 
 /// Service for handling notification database operations with Firestore
@@ -8,7 +9,7 @@ class NotificationDatabaseService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Save FCM token to user document
+  /// Save FCM token to user document using a collection for multiple devices
   static Future<void> saveFCMToken(String token) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -17,8 +18,25 @@ class NotificationDatabaseService {
     }
 
     try {
+      // Create a unique token ID based on the token itself (substring for shorter ID)
+      final String tokenId = token.substring(0, min(token.length, 32));
+
+      // Save token in a subcollection to support multiple devices
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('fcmTokens')
+          .doc(tokenId)
+          .set({
+        'token': token,
+        'platform': defaultTargetPlatform.name,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActive': FieldValue.serverTimestamp(),
+        'isActive': true,
+      });
+
+      // For backward compatibility, also keep the old location
       await _firestore.collection('users').doc(user.uid).set({
-        'fcmToken': token,
         'lastTokenUpdate': FieldValue.serverTimestamp(),
         'deviceInfo': {
           'platform': defaultTargetPlatform.name,
@@ -29,6 +47,35 @@ class NotificationDatabaseService {
       debugPrint('✅ FCM token saved to Firestore for user: ${user.uid}');
     } catch (e) {
       debugPrint('❌ Error saving FCM token: $e');
+    }
+  }
+
+  /// Remove FCM token from user document
+  static Future<void> removeFCMToken(String token) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      debugPrint('⚠️ No authenticated user to remove FCM token');
+      return;
+    }
+
+    try {
+      // Create a unique token ID based on the token itself
+      final String tokenId = token.substring(0, min(token.length, 32));
+
+      // Mark token as inactive rather than deleting it
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('fcmTokens')
+          .doc(tokenId)
+          .update({
+        'isActive': false,
+        'deactivatedAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('✅ FCM token removed from Firestore for user: ${user.uid}');
+    } catch (e) {
+      debugPrint('❌ Error removing FCM token: $e');
     }
   }
 
@@ -155,6 +202,8 @@ class NotificationDatabaseService {
           'reminders': true,
           'nearbyEvents': true,
           'systemNotifications': true,
+          'followNotifications': true,
+          'stillHappeningNotifications': true,
         };
       }
 
@@ -165,6 +214,9 @@ class NotificationDatabaseService {
         'reminders': settings['reminders'] ?? true,
         'nearbyEvents': settings['nearbyEvents'] ?? true,
         'systemNotifications': settings['systemNotifications'] ?? true,
+        'followNotifications': settings['followNotifications'] ?? true,
+        'stillHappeningNotifications':
+            settings['stillHappeningNotifications'] ?? true,
       };
     } catch (e) {
       debugPrint('❌ Error getting notification settings: $e');
@@ -175,6 +227,8 @@ class NotificationDatabaseService {
         'reminders': true,
         'nearbyEvents': true,
         'systemNotifications': true,
+        'followNotifications': true,
+        'stillHappeningNotifications': true,
       };
     }
   }
@@ -293,6 +347,8 @@ class NotificationDatabaseService {
           'reminders': true,
           'nearbyEvents': true,
           'systemNotifications': true,
+          'followNotifications': true,
+          'stillHappeningNotifications': true,
         },
         'createdAt': FieldValue.serverTimestamp(),
         'lastActive': FieldValue.serverTimestamp(),

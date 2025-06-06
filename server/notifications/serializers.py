@@ -1,17 +1,19 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from .models import (
     NotificationSettings, FCMToken, NotificationHistory, 
     FriendRequest, EventConfirmation, NotificationQueue
 )
+
+User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Basic user serializer for notifications"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email']
-        read_only_fields = ['id', 'username', 'email']
+        fields = ['id', 'email', 'first_name', 'last_name']
+        read_only_fields = ['id', 'email']
 
 
 class NotificationSettingsSerializer(serializers.ModelSerializer):
@@ -20,7 +22,7 @@ class NotificationSettingsSerializer(serializers.ModelSerializer):
         model = NotificationSettings
         fields = [
             'friend_requests', 'events', 'reminders', 
-            'nearby_events', 'system_notifications',
+            'nearby_events', 'system_notifications', 'follow_notifications',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']

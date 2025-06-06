@@ -21,22 +21,24 @@ enum NotificationFilter {
 
     switch (this) {
       case NotificationFilter.today:
-        return notifications
-            .where((n) =>
-                n.dateTime.isAfter(today.subtract(const Duration(days: 1))))
-            .toList();
+        return notifications.where((n) {
+          final notificationDate = n.dateTime ?? n.timestamp;
+          return notificationDate
+              .isAfter(today.subtract(const Duration(days: 1)));
+        }).toList();
       case NotificationFilter.thisWeek:
         // Filter notifications from the start of this week
-        return notifications
-            .where((n) =>
-                n.dateTime.isAfter(weekStart.subtract(const Duration(days: 1))))
-            .toList();
+        return notifications.where((n) {
+          final notificationDate = n.dateTime ?? n.timestamp;
+          return notificationDate
+              .isAfter(weekStart.subtract(const Duration(days: 1)));
+        }).toList();
       case NotificationFilter.thisMonth:
-        return notifications
-            .where((n) => n.dateTime.isAfter(monthStart))
-            .toList();
+        return notifications.where((n) {
+          final notificationDate = n.dateTime ?? n.timestamp;
+          return notificationDate.isAfter(monthStart);
+        }).toList();
       case NotificationFilter.all:
-      default:
         return notifications;
     }
   }

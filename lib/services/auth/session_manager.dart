@@ -179,7 +179,7 @@ class SessionManager {
       // Add timestamp to prevent caching
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final url =
-          Uri.parse('${ApiUrls.baseUrl}/accounts/profile/?_t=$timestamp');
+          Uri.parse('${ApiUrls.baseUrl}/api/accounts/profile/?_t=$timestamp');
 
       final response = await http.get(
         url,

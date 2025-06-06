@@ -15,6 +15,7 @@ class NotificationSettings(models.Model):
     reminders = models.BooleanField(default=True)
     nearby_events = models.BooleanField(default=True)
     system_notifications = models.BooleanField(default=True)
+    follow_notifications = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -22,7 +23,8 @@ class NotificationSettings(models.Model):
         db_table = 'notification_settings'
 
     def __str__(self):
-        return f"{self.user.username} notification settings"
+        # Use email since Account model doesn't have username
+        return f"{self.user.email} notification settings"
 
 
 class FCMToken(models.Model):
@@ -39,7 +41,7 @@ class FCMToken(models.Model):
         unique_together = ['user', 'token']
 
     def __str__(self):
-        return f"{self.user.username} - {self.device_platform}"
+        return f"{self.user.email} - {self.device_platform}"
 
 
 class NotificationHistory(models.Model):
@@ -54,6 +56,8 @@ class NotificationHistory(models.Model):
         ('nearby_event', 'Nearby Event'),
         ('reminder', 'Reminder'),
         ('system', 'System Notification'),
+        ('new_follower', 'New Follower'),
+        ('unfollowed', 'Unfollowed'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -81,7 +85,7 @@ class NotificationHistory(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.notification_type} for {self.user.username}"
+        return f"{self.notification_type} for {self.user.email}"
 
 
 class FriendRequest(models.Model):

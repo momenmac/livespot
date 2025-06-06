@@ -7,7 +7,7 @@ class ApiUrls {
     if (kIsWeb) {
       return 'http://localhost:8000'; // For web development
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.36:8000'; // For Android emulator
+      return 'http://192.168.1.8:8000'; // For Android emulator
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'http://localhost:8000'; // For iOS simulator
     } else {
@@ -19,37 +19,49 @@ class ApiUrls {
   static String get baseApiUrl => baseUrl;
 
   // Authentication URLs
-  static String get register => '$baseUrl/accounts/register/';
-  static String get login => '$baseUrl/accounts/login/';
-  static String get googleLogin => '$baseUrl/accounts/google-login/';
-  static String get profile => '$baseUrl/accounts/profile/';
+  static String get register => '$baseUrl/api/accounts/register/';
+  static String get login => '$baseUrl/api/accounts/login/';
+  static String get googleLogin => '$baseUrl/api/accounts/google-login/';
+  static String get profile => '$baseUrl/api/accounts/profile/';
 
   // Token management for JWT - remove CSRF endpoint
-  static String get tokenRefresh => '$baseUrl/accounts/token/refresh/';
-  static String get verifyToken => '$baseUrl/accounts/token/verify/';
+  static String get tokenRefresh => '$baseUrl/api/accounts/token/refresh/';
+  static String get token => '$baseUrl/api/accounts/token/';
   static String get tokenValidate =>
-      '$baseUrl/accounts/token/validate/'; // New endpoint
-  static String get logout => '$baseUrl/accounts/logout/';
+      '$baseUrl/api/accounts/token/validate/'; // New endpoint
+  static String get logout => '$baseUrl/api/accounts/logout/';
 
   // Profile image upload - updated paths based on server configuration
-  static String get profileImage => '$baseUrl/accounts/profile-image/';
-  static String get updateProfile => '$baseUrl/accounts/users/profile/update/';
+  static String get profileImage => '$baseUrl/api/accounts/profile-image/';
+  static String get updateProfile =>
+      '$baseUrl/api/accounts/users/profile/update/';
 
   // Email verification URLs
-  static String get verifyEmail => '$baseUrl/accounts/verify-email/';
+  static String get verifyEmail => '$baseUrl/api/accounts/verify-email/';
   static String get resendVerificationCode =>
-      '$baseUrl/accounts/resend-verification-code/';
+      '$baseUrl/api/accounts/resend-verification-code/';
 
   // Password reset endpoints
-  static String get forgotPassword => '$baseUrl/accounts/forgot-password/';
-  static String get verifyResetCode => '$baseUrl/accounts/verify-reset-code/';
-  static String get resetPassword => '$baseUrl/accounts/reset-password/';
+  static String get forgotPassword => '$baseUrl/api/accounts/forgot-password/';
+  static String get verifyResetCode =>
+      '$baseUrl/api/accounts/verify-reset-code/';
+  static String get resetPassword => '$baseUrl/api/accounts/reset-password/';
 
   // Posts endpoints
   static String get posts => '$baseUrl/api/posts/';
   static String get nearbyPosts => '$baseUrl/api/posts/nearby/';
   static String get searchPosts => '$baseUrl/api/posts/search/';
   static String postVote(int postId) => '$baseUrl/api/posts/$postId/vote/';
+
+  // Notification endpoints
+  static String get notifications => '$baseUrl/api/notifications/';
+  static String get fcmTokens => '$baseUrl/api/notifications/fcm-tokens/';
+  static String get registerFcmToken =>
+      '$baseUrl/api/notifications/fcm-tokens/register_token/';
+  static String get deactivateFcmToken =>
+      '$baseUrl/api/notifications/fcm-tokens/deactivate_token/';
+  static String get notificationSettings =>
+      '$baseUrl/api/notifications/settings/';
 
   // Using the correct endpoint that matches server URL patterns
   // We need to filter threads by post ID in the client side since there's no direct API endpoint

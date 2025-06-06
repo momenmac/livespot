@@ -2,6 +2,8 @@
 enum NotificationType {
   friendRequest('friend_request'),
   friendRequestAccepted('friend_request_accepted'),
+  newFollower('new_follower'),
+  unfollowed('unfollowed'),
   newEvent('new_event'),
   stillThere('still_there'),
   eventUpdate('event_update'),
@@ -46,6 +48,10 @@ abstract class NotificationData {
         return FriendRequestNotificationData.fromMap(map);
       case NotificationType.friendRequestAccepted:
         return FriendRequestAcceptedNotificationData.fromMap(map);
+      case NotificationType.newFollower:
+        return NewFollowerNotificationData.fromMap(map);
+      case NotificationType.unfollowed:
+        return UnfollowedNotificationData.fromMap(map);
       case NotificationType.newEvent:
         return NewEventNotificationData.fromMap(map);
       case NotificationType.stillThere:
@@ -175,6 +181,116 @@ class FriendRequestAcceptedNotificationData extends NotificationData {
               'from_user_id',
               'from_user_name',
               'from_user_avatar'
+            ].contains(key)),
+    );
+  }
+}
+
+/// New follower notification data
+class NewFollowerNotificationData extends NotificationData {
+  final String followerUserId;
+  final String followerUserName;
+  final String followerUserAvatar;
+
+  const NewFollowerNotificationData({
+    required this.followerUserId,
+    required this.followerUserName,
+    required this.followerUserAvatar,
+    required super.title,
+    required super.body,
+    required super.timestamp,
+    Map<String, dynamic>? additionalData,
+  }) : super(
+          type: NotificationType.newFollower,
+          data: additionalData ?? const {},
+        );
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type.value,
+      'title': title,
+      'body': body,
+      'timestamp': timestamp.toIso8601String(),
+      'follower_user_id': followerUserId,
+      'follower_user_name': followerUserName,
+      'follower_user_avatar': followerUserAvatar,
+      ...data,
+    };
+  }
+
+  factory NewFollowerNotificationData.fromMap(Map<String, dynamic> map) {
+    return NewFollowerNotificationData(
+      followerUserId: map['follower_user_id'] ?? '',
+      followerUserName: map['follower_user_name'] ?? 'Unknown User',
+      followerUserAvatar: map['follower_user_avatar'] ?? '',
+      title: map['title'] ?? 'New Follower',
+      body: map['body'] ?? 'Someone started following you',
+      timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
+      additionalData: Map<String, dynamic>.from(map)
+        ..removeWhere((key, value) => [
+              'type',
+              'title',
+              'body',
+              'timestamp',
+              'follower_user_id',
+              'follower_user_name',
+              'follower_user_avatar'
+            ].contains(key)),
+    );
+  }
+}
+
+/// Unfollowed notification data
+class UnfollowedNotificationData extends NotificationData {
+  final String unfollowerUserId;
+  final String unfollowerUserName;
+  final String unfollowerUserAvatar;
+
+  const UnfollowedNotificationData({
+    required this.unfollowerUserId,
+    required this.unfollowerUserName,
+    required this.unfollowerUserAvatar,
+    required super.title,
+    required super.body,
+    required super.timestamp,
+    Map<String, dynamic>? additionalData,
+  }) : super(
+          type: NotificationType.unfollowed,
+          data: additionalData ?? const {},
+        );
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type.value,
+      'title': title,
+      'body': body,
+      'timestamp': timestamp.toIso8601String(),
+      'unfollower_user_id': unfollowerUserId,
+      'unfollower_user_name': unfollowerUserName,
+      'unfollower_user_avatar': unfollowerUserAvatar,
+      ...data,
+    };
+  }
+
+  factory UnfollowedNotificationData.fromMap(Map<String, dynamic> map) {
+    return UnfollowedNotificationData(
+      unfollowerUserId: map['unfollower_user_id'] ?? '',
+      unfollowerUserName: map['unfollower_user_name'] ?? 'Unknown User',
+      unfollowerUserAvatar: map['unfollower_user_avatar'] ?? '',
+      title: map['title'] ?? 'User Unfollowed',
+      body: map['body'] ?? 'Someone unfollowed you',
+      timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
+      additionalData: Map<String, dynamic>.from(map)
+        ..removeWhere((key, value) => [
+              'type',
+              'title',
+              'body',
+              'timestamp',
+              'unfollower_user_id',
+              'unfollower_user_name',
+              'unfollower_user_avatar'
             ].contains(key)),
     );
   }

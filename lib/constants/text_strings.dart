@@ -263,6 +263,7 @@ class TextStrings {
   static const String imageSaveManually = 'Right-click to save image manually';
 
   //! Notifications
+  static const String notifications = 'Notifications';
   static const String turnOnNotifications = 'Turn on notifications';
   static const String enableNotifications = 'Enable Notifications';
   static const String disableNotifications = 'Disable Notifications';
