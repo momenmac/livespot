@@ -590,6 +590,38 @@ class PostViewSet(viewsets.ModelViewSet):
                 'votes', 'status_votes'
             ).order_by('-created_at')
             
+            # Date filtering - same implementation as other endpoints
+            import datetime 
+            from django.utils import timezone
+            
+            date_str = request.query_params.get('date')
+            if date_str:
+                try:
+                    # Parse the date string
+                    filter_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                    
+                    # Create datetime objects for the start and end of the day
+                    start_datetime = datetime.datetime.combine(filter_date, datetime.datetime.min.time())
+                    end_datetime = datetime.datetime.combine(filter_date, datetime.datetime.max.time())
+                    
+                    # Apply timezone awareness if using timezone-aware datetimes in Django
+                    if timezone.is_aware(timezone.now()):
+                        start_datetime = timezone.make_aware(start_datetime)
+                        end_datetime = timezone.make_aware(end_datetime)
+                    
+                    # Filter posts by date range
+                    recent_posts = recent_posts.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+                    
+                    # Debug output to help diagnose issues
+                    print(f"Following posts date filtering: {date_str} -> {start_datetime} to {end_datetime}")
+                    print(f"Found {recent_posts.count()} following posts for this date")
+                except ValueError:
+                    print(f"Invalid date format in following_posts: {date_str}")
+                    return Response(
+                        {"error": "Invalid date format. Use YYYY-MM-DD"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
             # Group posts by user in memory to reduce database queries
             posts_by_user = {}
             for post in recent_posts:

@@ -122,39 +122,53 @@ class NewsService {
         .trim();
   }
 
-  /// Fetch from multiple sources for variety
+  /// Fetch from multiple sources for variety with content-based category filtering
   static Future<List<NewsArticle>> _fetchFromMixedSources({
     String category = 'general',
     int page = 1,
     int pageSize = 20,
   }) async {
-    _logger.info('Fetching from multiple major news sources for page $page...');
+    _logger.info(
+        'Fetching from all sources and filtering by content for category: $category, page $page...');
 
-    if (_cachedArticles.isEmpty) {
+    // Create a unique cache key for each category to avoid mixing categories
+    final cacheKey = '${category}_$page';
+
+    if (_cachedArticles.isEmpty || _lastCategory != category) {
+      _cachedArticles.clear(); // Clear cache when category changes
       final List<NewsArticle> allArticles = [];
       final Set<String> seenIds = {};
       final Set<String> seenLinks = {};
       final Set<String> seenTitleHash = {};
 
       try {
+        // Fetch from ALL sources - don't discriminate by source
         final sources = <Future<List<NewsArticle>>>[
-          _fetchFromGuardianAPI(limit: 15),
-          _fetchFromCNNRSS(limit: 15),
-          _fetchFromFoxNewsRSS(limit: 15),
-          _fetchFromNPRAPI(limit: 15),
-          _fetchFromAxiosRSS(limit: 15),
-          _fetchFromPoliticoRSS(limit: 15),
-          _fetchFromBBCRSS(limit: 15),
-          _fetchFromWashingtonPostRSS(limit: 15),
-          _fetchFromDeadlineRSS(limit: 15),
-          _fetchFromUSATodayRSS(limit: 15),
-          _fetchFromPostMagazineRSS(limit: 15),
-          _fetchFromAlJazeeraRSS(limit: 15), // NEW: Al Jazeera
+          _fetchFromGuardianAPI(limit: 20),
+          _fetchFromCNNRSS(limit: 20),
+          _fetchFromFoxNewsRSS(limit: 20),
+          _fetchFromNPRAPI(limit: 20),
+          _fetchFromAxiosRSS(limit: 20),
+          _fetchFromPoliticoRSS(limit: 20),
+          _fetchFromBBCRSS(limit: 20),
+          _fetchFromWashingtonPostRSS(limit: 20),
+          _fetchFromDeadlineRSS(limit: 20),
+          _fetchFromUSATodayRSS(limit: 20),
+          _fetchFromPostMagazineRSS(limit: 20),
+          _fetchFromAlJazeeraRSS(limit: 20),
         ];
+
+        _logger.info('Fetching from ${sources.length} sources...');
         final results = await Future.wait(sources);
 
         for (final articles in results) {
           for (final article in articles) {
+            // Filter by content FIRST - this is the key change
+            if (!_articleMatchesCategory(article, category)) {
+              continue; // Skip articles that don't match the category
+            }
+
+            // Then do deduplication
             final titleHash = (article.title + article.source)
                 .toLowerCase()
                 .replaceAll(RegExp(r'\s+'), '');
@@ -171,11 +185,22 @@ class NewsService {
         }
 
         if (allArticles.isNotEmpty) {
-          allArticles.shuffle();
+          // Sort by category relevance and recency instead of random shuffle
+          allArticles.sort((a, b) {
+            final aRelevance = _getCategoryRelevanceScore(a, category);
+            final bRelevance = _getCategoryRelevanceScore(b, category);
+            if (aRelevance != bRelevance) {
+              return bRelevance.compareTo(aRelevance); // Higher relevance first
+            }
+            return b.publishedAt.compareTo(a.publishedAt); // Then by recency
+          });
+
           _cachedArticles.addAll(allArticles);
+          _logger.info(
+              'Filtered and cached ${allArticles.length} articles for category: $category');
         }
       } catch (e) {
-        _logger.warning('Multiple sources failed: $e');
+        _logger.warning('Multiple sources failed for category $category: $e');
       }
     }
 
@@ -187,8 +212,190 @@ class NewsService {
         : <NewsArticle>[];
 
     _logger.info(
-        'Mixed sources page $page: ${limitedArticles.length} unique articles from ${_cachedArticles.length} total');
+        'Category "$category" page $page: ${limitedArticles.length} articles from ${_cachedArticles.length} total filtered');
     return limitedArticles;
+  }
+
+  /// Check if an article matches the requested category based on content
+  static bool _articleMatchesCategory(NewsArticle article, String category) {
+    // For general and featured, include all articles
+    if (category == 'general' || category == 'featured') return true;
+
+    final title = article.title.toLowerCase();
+    final description = article.description.toLowerCase();
+    final content = article.content.toLowerCase();
+    final text = '$title $description $content';
+
+    switch (category.toLowerCase()) {
+      case 'technology':
+        return text.contains(RegExp(
+            r'\b(tech|technology|ai|artificial intelligence|software|app|digital|cyber|computer|internet|startup|silicon valley|meta|google|apple|microsoft|tesla|spacex|innovation|coding|programming|blockchain|crypto|bitcoin|data|cloud|5g|robot|drone|virtual reality|vr|ar|augmented reality)\b'));
+
+      case 'business':
+        return text.contains(RegExp(
+            r'\b(business|economy|economic|market|stock|finance|financial|company|corporate|trade|investment|bank|banking|money|dollar|profit|revenue|ceo|billion|million|earnings|nasdaq|dow|wall street|unemployment|inflation|gdp|merger|acquisition)\b'));
+
+      case 'politics':
+        return text.contains(RegExp(
+            r'\b(politic|government|congress|senate|president|election|vote|voting|campaign|democrat|republican|policy|law|legislation|court|justice|biden|trump|washington dc|white house|capitol|governor|mayor|parliament|minister)\b'));
+
+      case 'world':
+        return text.contains(RegExp(
+            r'\b(international|global|world|foreign|country|nation|embassy|diplomatic|war|conflict|peace|treaty|ukraine|russia|china|europe|asia|africa|middle east|united nations|nato|brexit|immigration|refugee|crisis|sanctions)\b'));
+
+      case 'sports':
+        return text.contains(RegExp(
+            r'\b(sport|football|basketball|baseball|soccer|tennis|golf|olympic|olympics|nfl|nba|mlb|fifa|championship|team|player|game|match|victory|defeat|coach|league|stadium|tournament|world cup|super bowl|playoffs)\b'));
+
+      case 'health':
+        return text.contains(RegExp(
+            r'\b(health|medical|medicine|doctor|hospital|disease|virus|vaccine|vaccination|covid|coronavirus|treatment|patient|study|research|drug|pharmaceutical|wellness|fitness|mental health|cancer|diabetes|heart|brain|surgery)\b'));
+
+      case 'science':
+        return text.contains(RegExp(
+            r'\b(science|scientific|research|study|discovery|experiment|climate|environment|space|nasa|nature|biology|chemistry|physics|energy|renewable|solar|wind|nuclear|genome|evolution|asteroid|mars|earth|ocean|species)\b'));
+
+      case 'entertainment':
+        return text.contains(RegExp(
+            r'\b(entertainment|movie|film|tv|television|show|actor|actress|celebrity|music|singer|artist|hollywood|netflix|disney|streaming|concert|album|oscar|emmy|grammy|box office|premiere|director|producer)\b'));
+
+      default:
+        return true; // For unknown categories, include all articles
+    }
+  }
+
+  /// Calculate relevance score for category matching
+  static int _getCategoryRelevanceScore(NewsArticle article, String category) {
+    if (category == 'general' || category == 'featured') return 1;
+
+    final title = article.title.toLowerCase();
+    final description = article.description.toLowerCase();
+    int score = 0;
+
+    // Get category-specific keywords
+    List<String> keywords = [];
+    switch (category.toLowerCase()) {
+      case 'technology':
+        keywords = [
+          'tech',
+          'technology',
+          'ai',
+          'artificial intelligence',
+          'software',
+          'app',
+          'digital',
+          'cyber',
+          'computer',
+          'internet',
+          'startup',
+          'innovation'
+        ];
+        break;
+      case 'business':
+        keywords = [
+          'business',
+          'economy',
+          'market',
+          'stock',
+          'finance',
+          'company',
+          'corporate',
+          'trade',
+          'investment',
+          'bank'
+        ];
+        break;
+      case 'politics':
+        keywords = [
+          'politic',
+          'government',
+          'congress',
+          'president',
+          'election',
+          'vote',
+          'campaign',
+          'law',
+          'court'
+        ];
+        break;
+      case 'world':
+        keywords = [
+          'international',
+          'global',
+          'world',
+          'foreign',
+          'war',
+          'conflict',
+          'peace',
+          'ukraine',
+          'russia',
+          'china'
+        ];
+        break;
+      case 'sports':
+        keywords = [
+          'sport',
+          'football',
+          'basketball',
+          'baseball',
+          'soccer',
+          'tennis',
+          'nfl',
+          'nba',
+          'olympic',
+          'game'
+        ];
+        break;
+      case 'health':
+        keywords = [
+          'health',
+          'medical',
+          'doctor',
+          'hospital',
+          'disease',
+          'vaccine',
+          'covid',
+          'treatment',
+          'medicine'
+        ];
+        break;
+      case 'science':
+        keywords = [
+          'science',
+          'research',
+          'study',
+          'discovery',
+          'climate',
+          'space',
+          'nasa',
+          'environment',
+          'energy'
+        ];
+        break;
+      case 'entertainment':
+        keywords = [
+          'entertainment',
+          'movie',
+          'film',
+          'tv',
+          'show',
+          'actor',
+          'celebrity',
+          'music',
+          'hollywood'
+        ];
+        break;
+    }
+
+    // Score based on keyword matches
+    for (final keyword in keywords) {
+      if (title.contains(keyword)) {
+        score += 3; // Title matches are more important
+      }
+      if (description.contains(keyword)) score += 1;
+    }
+
+    return score;
   }
 
   /// Fetch from BBC RSS (real parsing, with image support)

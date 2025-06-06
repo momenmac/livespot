@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/news_article.dart';
 import '../../../services/news/news_service.dart';
 import '../../../constants/theme_constants.dart';
@@ -8,40 +8,31 @@ import 'news_detail_page.dart';
 class NewsListPage extends StatefulWidget {
   final String title;
   final String? category;
+
+  const NewsListPage({
+    super.key,
+    this.title = 'Latest News',
+    this.category,
+  });
+
   static IconData getSourceIcon(String source) {
     switch (source.toLowerCase()) {
       case 'bbc news':
-        return Icons.radio;
+        return Icons.public;
       case 'cnn':
         return Icons.tv;
       case 'fox news':
-        return Icons.tv;
+        return Icons.live_tv;
       case 'the new york times':
         return Icons.newspaper;
       case 'reuters':
-        return Icons.language;
+        return Icons.feed;
       case 'associated press':
-        return Icons.public;
-      case 'the guardian':
-        return Icons.newspaper;
-      case 'npr':
-        return Icons.radio;
-      case 'politico':
-        return Icons.account_balance;
-      case 'axios':
         return Icons.article;
-      case 'the washington post':
-        return Icons.newspaper;
-      case 'usa today':
-        return Icons.newspaper;
-      case 'deadline':
-        return Icons.movie;
-      case 'cointelegraph':
-        return Icons.currency_bitcoin;
-      case 'post magazine':
-        return Icons.auto_stories;
+      case 'the guardian':
+        return Icons.shield;
       case 'al jazeera':
-        return Icons.satellite;
+        return Icons.language;
       case 'sky news':
         return Icons.cloud;
       case 'hackernews':
@@ -55,25 +46,33 @@ class NewsListPage extends StatefulWidget {
       case 'tech news':
         return Icons.computer;
       case 'sample news':
-        return Icons.article;
+        return Icons.article_outlined;
       case 'tech feed':
-        return Icons.computer;
+        return Icons.rss_feed;
       case 'business report':
-        return Icons.business_center;
+        return Icons.business;
       case 'github':
-        return Icons.code_outlined;
+        return Icons.code_off;
       case 'global news':
         return Icons.public;
+      case 'politico':
+        return Icons.how_to_vote;
+      case 'axios':
+        return Icons.trending_up;
+      case 'deadline':
+        return Icons.access_time;
+      case 'usa today':
+        return Icons.flag;
+      case 'post magazine':
+        return Icons.auto_stories;
+      case 'washington post':
+        return Icons.newspaper;
+      case 'npr':
+        return Icons.radio;
       default:
         return Icons.article;
     }
   }
-
-  const NewsListPage({
-    super.key,
-    this.title = 'Latest News',
-    this.category,
-  });
 
   @override
   State<NewsListPage> createState() => _NewsListPageState();
@@ -90,7 +89,7 @@ class _NewsListPageState extends State<NewsListPage> {
   String _selectedCategory = 'featured';
 
   // Dynamic category ordering based on last clicked
-  static List<String> _categoryOrder = [
+  static final List<String> _categoryOrder = [
     'featured',
     'trending',
     'recent',
@@ -105,22 +104,6 @@ class _NewsListPageState extends State<NewsListPage> {
     'world',
     'magazine'
   ];
-
-  static const Map<String, String> _categoryLabels = {
-    'featured': 'Featured',
-    'trending': 'Trending',
-    'recent': 'Most Recent',
-    'general': 'General',
-    'business': 'Business',
-    'entertainment': 'Entertainment',
-    'health': 'Health',
-    'science': 'Science',
-    'sports': 'Sports',
-    'technology': 'Tech',
-    'politics': 'Politics',
-    'world': 'World',
-    'magazine': 'Magazine',
-  };
 
   @override
   void initState() {
@@ -148,20 +131,41 @@ class _NewsListPageState extends State<NewsListPage> {
   }
 
   void _onCategorySelected(String category) {
-    if (_selectedCategory != category) {
+    debugPrint(
+        '🔥 Category selected: $category (currently: $_selectedCategory)');
+
+    if (_selectedCategory == category) {
+      // If same category is selected, deselect it and go to 'general'
+      debugPrint('🔥 Same category clicked, switching to general');
+      setState(() {
+        _selectedCategory = 'general';
+      });
+    } else {
       // Move selected category to front
       _categoryOrder.remove(category);
       _categoryOrder.insert(0, category);
 
+      debugPrint('🔥 New category selected: $category');
       setState(() {
         _selectedCategory = category;
       });
-      _loadNews();
     }
+
+    // Clear articles and reload
+    setState(() {
+      _articles.clear();
+      _currentPage = 1;
+      _hasMoreArticles = true;
+    });
+
+    debugPrint('🔥 Loading news for category: $_selectedCategory');
+    _loadNews();
   }
 
   Future<void> _loadNews({bool resetPage = true}) async {
     try {
+      debugPrint('🔥 _loadNews called for category: $_selectedCategory');
+
       setState(() {
         if (resetPage) _currentPage = 1;
         _isLoading = true;
@@ -178,18 +182,34 @@ class _NewsListPageState extends State<NewsListPage> {
       switch (_selectedCategory) {
         case 'featured':
           backendCategory = 'featured';
+          debugPrint('🔥 Using featured category');
           break;
         case 'trending':
           backendCategory = 'general';
           sortByTrending = true;
+          debugPrint('🔥 Using trending (general + shuffle)');
           break;
         case 'recent':
           backendCategory = 'general';
           sortByRecent = true;
+          debugPrint('🔥 Using recent (general + sort by date)');
+          break;
+        case 'business':
+        case 'entertainment':
+        case 'health':
+        case 'science':
+        case 'sports':
+        case 'technology':
+          backendCategory = _selectedCategory;
+          debugPrint('🔥 Using NewsAPI category: $_selectedCategory');
           break;
         default:
-          backendCategory = _selectedCategory;
+          backendCategory = 'general';
+          debugPrint(
+              '🔥 Using default general category for: $_selectedCategory');
       }
+
+      debugPrint('🔥 Fetching news with backend category: $backendCategory');
 
       var articles = await NewsService.fetchNews(
         category: backendCategory,
@@ -197,11 +217,15 @@ class _NewsListPageState extends State<NewsListPage> {
         page: _currentPage,
       );
 
+      debugPrint('🔥 Received ${articles.length} articles from NewsService');
+
       // Simple sort logic for demo: trending = shuffle, recent = sort by date desc
       if (sortByTrending) {
         articles.shuffle();
+        debugPrint('🔥 Shuffled articles for trending');
       } else if (sortByRecent) {
         articles.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+        debugPrint('🔥 Sorted articles by date for recent');
       }
 
       if (mounted) {
@@ -213,8 +237,10 @@ class _NewsListPageState extends State<NewsListPage> {
           _isLoading = false;
           _hasMoreArticles = articles.isNotEmpty;
         });
+        debugPrint('🔥 Updated UI with ${_articles.length} total articles');
       }
     } catch (e) {
+      debugPrint('🔥 ERROR in _loadNews: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -285,43 +311,6 @@ class _NewsListPageState extends State<NewsListPage> {
 
   Future<void> _onRefresh() async {
     await _loadNews();
-  }
-
-  Widget _buildCategoryChips() {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Row(
-        children: _categoryOrder.map((category) {
-          final isSelected = category == _selectedCategory;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: FilterChip(
-              label: Text(_categoryLabels[category] ?? category),
-              selected: isSelected,
-              onSelected: (_) => _onCategorySelected(category),
-              backgroundColor: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-              selectedColor: ThemeConstants.primaryColor,
-              checkmarkColor: Colors.white,
-              labelStyle: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : (isDarkMode ? Colors.white : Colors.black87),
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              side: BorderSide(
-                color: isSelected
-                    ? ThemeConstants.primaryColor
-                    : (isDarkMode ? Colors.grey[600]! : Colors.grey[300]!),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
   }
 
   @override
@@ -481,77 +470,153 @@ class _NewsListPageState extends State<NewsListPage> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
+      shadowColor: Colors.black.withAlpha(25),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isDarkMode ? Colors.grey[850] : Colors.white,
       child: InkWell(
         onTap: () => _navigateToDetail(article),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 130,
+          padding: const EdgeInsets.all(12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Source badge
+              // Image Section (Left)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                width: 100,
+                height: double.infinity,
                 decoration: BoxDecoration(
-                  color: _getSourceColor(article.source),
                   borderRadius: BorderRadius.circular(12),
+                  color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                  border: Border.all(
+                    color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
+                    width: 0.5,
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: article.imageUrl?.isNotEmpty == true
+                      ? CachedNetworkImage(
+                          imageUrl: article.imageUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: isDarkMode
+                                ? Colors.grey[800]
+                                : Colors.grey[200],
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: isDarkMode
+                                ? Colors.grey[800]
+                                : Colors.grey[200],
+                            child: Icon(
+                              NewsListPage.getSourceIcon(article.source),
+                              size: 30,
+                              color: _getSourceColor(article.source),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: _getSourceColor(article.source).withAlpha(26),
+                          child: Icon(
+                            NewsListPage.getSourceIcon(article.source),
+                            size: 30,
+                            color: _getSourceColor(article.source),
+                          ),
+                        ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // Content Section (Right)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      NewsListPage.getSourceIcon(article.source),
-                      size: 12,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      article.source,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                    // Source badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _getSourceColor(article.source),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            NewsListPage.getSourceIcon(article.source),
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            article.source,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Title
+                    Expanded(
+                      child: Text(
+                        article.title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                          fontSize: 14,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Time
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 12,
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          article.timeAgo,
+                          style: TextStyle(
+                            color: isDarkMode
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Title
-              Text(
-                article.title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Description
-              Text(
-                article.description,
-                style: theme.textTheme.bodyMedium,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              // Time
-              Row(
-                children: [
-                  Icon(Icons.access_time, size: 16, color: ThemeConstants.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    article.timeAgo,
-                    style: TextStyle(color: ThemeConstants.grey, fontSize: 12),
-                  ),
-                ],
               ),
             ],
           ),
         ),
       ),
     );
-
   }
 
   Color _getSourceColor(String source) {
@@ -609,8 +674,94 @@ class _NewsListPageState extends State<NewsListPage> {
     }
   }
 
-  // Add the static method here
-  
+  Widget _buildCategoryChips() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: _getOrderedCategories().map((category) {
+          final isSelected = _selectedCategory == category;
+          return Container(
+            margin: const EdgeInsets.only(right: 6),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              child: FilterChip(
+                label: Text(
+                  _getCategoryDisplayName(category),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDarkMode ? Colors.white70 : Colors.black87),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (selected) => _onCategorySelected(category),
+                backgroundColor:
+                    isDarkMode ? Colors.grey[800] : Colors.grey[50],
+                selectedColor: ThemeConstants.primaryColor,
+                checkmarkColor: Colors.white,
+                elevation: isSelected ? 2 : 0,
+                pressElevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                side: BorderSide(
+                  color: isSelected
+                      ? ThemeConstants.primaryColor
+                      : (isDarkMode ? Colors.grey[600]! : Colors.grey[300]!),
+                  width: 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  List<String> _getOrderedCategories() {
+    return _categoryOrder;
+  }
+
+  String _getCategoryDisplayName(String category) {
+    switch (category) {
+      case 'featured':
+        return 'Featured';
+      case 'trending':
+        return 'Trending';
+      case 'recent':
+        return 'Most Recent';
+      case 'general':
+        return 'General';
+      case 'business':
+        return 'Business';
+      case 'entertainment':
+        return 'Entertainment';
+      case 'health':
+        return 'Health';
+      case 'science':
+        return 'Science';
+      case 'sports':
+        return 'Sports';
+      case 'technology':
+        return 'Technology';
+      default:
+        return category
+            .split(' ')
+            .map((word) =>
+                word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
 
   void _navigateToDetail(NewsArticle article) {
     Navigator.push(
