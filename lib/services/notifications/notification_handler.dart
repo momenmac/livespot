@@ -60,17 +60,110 @@ class NotificationHandler {
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           debugPrint('📱 Local notification tapped: ${response.payload}');
-          // Navigate to notifications page when local notification is tapped
-          if (_initialized && _navigatorKey?.currentContext != null) {
-            NavigationService().navigateTo(AppRoutes.notifications);
-          }
+          _handleNotificationAction(response);
         },
       );
+
+      // Create notification channels for Android
+      await _createNotificationChannels();
 
       _localNotificationsInitialized = true;
       debugPrint('✅ Local notifications initialized successfully');
     } catch (e) {
       debugPrint('❌ Error initializing local notifications: $e');
+    }
+  }
+
+  /// Create notification channels for Android
+  static Future<void> _createNotificationChannels() async {
+    if (_localNotifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>() !=
+        null) {
+      // Messages channel
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()!
+          .createNotificationChannel(
+            const AndroidNotificationChannel(
+              'messages',
+              'Messages',
+              description: 'Notifications for new messages',
+              importance: Importance.high,
+              enableVibration: true,
+              enableLights: true,
+              ledColor: Colors.blue,
+            ),
+          );
+
+      debugPrint('📱 Android notification channels created');
+    }
+  }
+
+  /// Handle notification action responses
+  static void _handleNotificationAction(NotificationResponse response) {
+    final actionId = response.actionId;
+    final payload = response.payload;
+
+    debugPrint('🎯 Notification action: $actionId, Payload: $payload');
+
+    switch (actionId) {
+      case 'reply':
+        // Handle reply action
+        _handleReplyAction(payload);
+        break;
+      case 'mark_read':
+        // Handle mark as read action
+        _handleMarkReadAction(payload);
+        break;
+      default:
+        // Handle regular tap
+        if (_initialized && _navigatorKey?.currentContext != null) {
+          if (payload != null && payload.contains('conversation_id')) {
+            // Navigate to specific conversation
+            final conversationId = _extractConversationId(payload);
+            if (conversationId != null) {
+              NavigationService().navigateTo('/messages/$conversationId');
+            } else {
+              NavigationService().navigateTo(AppRoutes.messages);
+            }
+          } else {
+            NavigationService().navigateTo(AppRoutes.notifications);
+          }
+        }
+        break;
+    }
+  }
+
+  /// Handle reply action
+  static void _handleReplyAction(String? payload) {
+    debugPrint('💬 Reply action triggered');
+    // TODO: Implement quick reply functionality
+    // For now, navigate to the conversation
+    if (payload != null && payload.contains('conversation_id')) {
+      final conversationId = _extractConversationId(payload);
+      if (conversationId != null) {
+        NavigationService().navigateTo('/messages/$conversationId');
+      }
+    }
+  }
+
+  /// Handle mark as read action
+  static void _handleMarkReadAction(String? payload) {
+    debugPrint('✅ Mark as read action triggered');
+    // TODO: Implement mark as read functionality
+    // This would typically make an API call to mark the message as read
+  }
+
+  /// Extract conversation ID from payload
+  static String? _extractConversationId(String payload) {
+    try {
+      // Assuming payload is JSON-like or contains conversation_id
+      final regex = RegExp(r'conversation_id["\s]*[:=]["\s]*([^"\s,}]+)');
+      final match = regex.firstMatch(payload);
+      return match?.group(1);
+    } catch (e) {
+      debugPrint('❌ Error extracting conversation ID: $e');
+      return null;
     }
   }
 
@@ -121,8 +214,105 @@ class NotificationHandler {
     final notificationData = _parseNotificationData(message);
     if (notificationData == null) return;
 
-    // For background notifications, we typically just store them or show local notifications
-    await _showLocalNotification(notificationData);
+    // For background notifications, show local notifications with action buttons for messages
+    if (notificationData.type == NotificationType.message) {
+      await _showMessageLocalNotification(
+          notificationData as MessageNotificationData);
+    } else {
+      await _showLocalNotification(notificationData);
+    }
+  }
+
+  /// Show local notification for messages with action buttons (background only)
+  static Future<void> _showMessageLocalNotification(
+      MessageNotificationData data) async {
+    try {
+      debugPrint(
+          '📱 Showing background message local notification with actions');
+
+      // Ensure local notifications are initialized
+      if (!_localNotificationsInitialized) {
+        await _initializeLocalNotifications();
+      }
+
+      // Create payload with conversation data
+      final payload = {
+        'type': 'message',
+        'conversation_id': data.conversationId,
+        'message_id': data.messageId,
+        'from_user_id': data.fromUserId,
+      };
+
+      // Create notification body based on message type
+      String notificationBody = data.body;
+      if (data.messageType == 'image') {
+        notificationBody = '📷 Sent a photo';
+      } else if (data.messageType == 'file') {
+        notificationBody = '📎 Sent a file';
+      }
+
+      // Generate unique notification ID based on conversation to enable grouping
+      final notificationId = data.conversationId.hashCode.abs();
+      final tag = 'message_${data.messageId}';
+
+      final AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'messages', // Use the correct channel ID
+        'Messages',
+        channelDescription: 'Notifications for new messages',
+        importance: Importance.high,
+        priority: Priority.high,
+        groupKey: 'message_notifications',
+        tag: tag, // Unique tag per message
+        setAsGroupSummary: false,
+        enableVibration: true,
+        enableLights: true,
+        icon: 'ic_notification',
+        actions: const [
+          AndroidNotificationAction(
+            'reply',
+            'Reply',
+            icon: DrawableResourceAndroidBitmap('ic_reply'),
+            inputs: [
+              AndroidNotificationActionInput(
+                label: 'Type a message...',
+                allowFreeFormInput: true,
+              ),
+            ],
+          ),
+          AndroidNotificationAction(
+            'mark_read',
+            'Mark as Read',
+            icon: DrawableResourceAndroidBitmap('ic_check'),
+          ),
+        ],
+      );
+
+      const DarwinNotificationDetails iosPlatformChannelSpecifics =
+          DarwinNotificationDetails(
+        categoryIdentifier: 'MESSAGE_CATEGORY',
+        threadIdentifier: 'messages',
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      await _localNotifications.show(
+        notificationId,
+        '${data.fromUserName}', // Show sender name as title
+        notificationBody,
+        NotificationDetails(
+          android: androidPlatformChannelSpecifics,
+          iOS: iosPlatformChannelSpecifics,
+        ),
+        payload: payload.toString(),
+      );
+
+      debugPrint('✅ Background message local notification shown with actions');
+      debugPrint('📱 Notification ID: $notificationId, Tag: $tag');
+    } catch (e) {
+      debugPrint('❌ Error showing background message local notification: $e');
+    }
   }
 
   /// Parse notification data from Firebase message
@@ -241,6 +431,10 @@ class NotificationHandler {
       case NotificationType.system:
         await _handleSystemNotification(
             notificationData as SystemNotificationData, isFromTap);
+        break;
+      case NotificationType.message:
+        await _handleMessage(
+            notificationData as MessageNotificationData, isFromTap);
         break;
     }
   }
@@ -403,7 +597,8 @@ class NotificationHandler {
           'Event "${data.eventTitle}" has been cancelled: ${data.cancellationReason}');
     } else {
       // For foreground notifications, only show snackbar (push notification already shown by system)
-      _showSnackBar('Event "${data.eventTitle}" has been cancelled: ${data.cancellationReason}');
+      _showSnackBar(
+          'Event "${data.eventTitle}" has been cancelled: ${data.cancellationReason}');
     }
   }
 
@@ -455,6 +650,38 @@ class NotificationHandler {
     } else {
       // For foreground notifications, only show snackbar (push notification already shown by system)
       _showSnackBar('System: ${data.body}');
+    }
+  }
+
+  /// Handle message notification
+  static Future<void> _handleMessage(
+    MessageNotificationData data,
+    bool isFromTap,
+  ) async {
+    debugPrint('💬 === HANDLING MESSAGE NOTIFICATION ===');
+    debugPrint('💬 From: ${data.fromUserName} (${data.fromUserId})');
+    debugPrint('💬 Conversation: ${data.conversationId}');
+    debugPrint('💬 Message Type: ${data.messageType}');
+    debugPrint('💬 Message ID: ${data.messageId}');
+    debugPrint('💬 IsFromTap: $isFromTap');
+
+    if (isFromTap) {
+      // Navigate to messages page and specific conversation
+      if (data.conversationId.isNotEmpty) {
+        NavigationService().navigateTo('/messages/${data.conversationId}');
+      } else {
+        NavigationService().navigateTo(AppRoutes.messages);
+      }
+    } else {
+      // For foreground notifications, only show snackbar (FCM system notification already shown)
+      // Don't show local notification to avoid duplicates
+      String notificationBody = data.body;
+      if (data.messageType == 'image') {
+        notificationBody = '📷 Sent a photo';
+      } else if (data.messageType == 'file') {
+        notificationBody = '📎 Sent a file';
+      }
+      _showSnackBar('${data.fromUserName}: $notificationBody');
     }
   }
 

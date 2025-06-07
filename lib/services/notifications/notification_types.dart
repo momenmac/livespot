@@ -10,7 +10,8 @@ enum NotificationType {
   eventCancelled('event_cancelled'),
   nearbyEvent('nearby_event'),
   reminder('reminder'),
-  system('system');
+  system('system'),
+  message('message');
 
   const NotificationType(this.value);
   final String value;
@@ -66,6 +67,8 @@ abstract class NotificationData {
         return ReminderNotificationData.fromMap(map);
       case NotificationType.system:
         return SystemNotificationData.fromMap(map);
+      case NotificationType.message:
+        return MessageNotificationData.fromMap(map);
     }
   }
 }
@@ -720,7 +723,8 @@ class SystemNotificationData extends NotificationData {
       'title': title,
       'body': body,
       'timestamp': timestamp.toIso8601String(),
-      'message_type': messageType,
+      'msg_type':
+          messageType, // Changed from 'message_type' to avoid FCM restrictions
       if (actionUrl != null) 'action_url': actionUrl,
       ...data,
     };
@@ -728,7 +732,8 @@ class SystemNotificationData extends NotificationData {
 
   factory SystemNotificationData.fromMap(Map<String, dynamic> map) {
     return SystemNotificationData(
-      messageType: map['message_type'] ?? 'general',
+      messageType: map['msg_type'] ??
+          'general', // Changed from 'message_type' to 'msg_type'
       actionUrl: map['action_url'],
       title: map['title'] ?? 'System Notification',
       body: map['body'] ?? 'System message',
@@ -739,8 +744,85 @@ class SystemNotificationData extends NotificationData {
               'title',
               'body',
               'timestamp',
-              'message_type',
+              'msg_type', // Changed from 'message_type' to 'msg_type'
               'action_url'
+            ].contains(key)),
+    );
+  }
+}
+
+/// Message notification data for direct FCM notifications without database storage
+class MessageNotificationData extends NotificationData {
+  final String messageId;
+  final String conversationId;
+  final String fromUserId;
+  final String fromUserName;
+  final String fromUserAvatar;
+  final String messageContent;
+  final String messageType; // 'text', 'image', 'file', etc.
+
+  const MessageNotificationData({
+    required this.messageId,
+    required this.conversationId,
+    required this.fromUserId,
+    required this.fromUserName,
+    required this.fromUserAvatar,
+    required this.messageContent,
+    required this.messageType,
+    required super.title,
+    required super.body,
+    required super.timestamp,
+    Map<String, dynamic>? additionalData,
+  }) : super(
+          type: NotificationType.message,
+          data: additionalData ?? const {},
+        );
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type.value,
+      'title': title,
+      'body': body,
+      'timestamp': timestamp.toIso8601String(),
+      'message_id': messageId,
+      'conversation_id': conversationId,
+      'from_user_id': fromUserId,
+      'from_user_name': fromUserName,
+      'from_user_avatar': fromUserAvatar,
+      'message_content': messageContent,
+      'msg_type':
+          messageType, // Changed from 'message_type' to avoid FCM restrictions
+      ...data,
+    };
+  }
+
+  factory MessageNotificationData.fromMap(Map<String, dynamic> map) {
+    return MessageNotificationData(
+      messageId: map['message_id'] ?? '',
+      conversationId: map['conversation_id'] ?? '',
+      fromUserId: map['from_user_id'] ?? '',
+      fromUserName: map['from_user_name'] ?? 'Unknown User',
+      fromUserAvatar: map['from_user_avatar'] ?? '',
+      messageContent: map['message_content'] ?? '',
+      messageType: map['msg_type'] ??
+          'text', // Changed from 'message_type' to 'msg_type'
+      title: map['title'] ?? 'New Message',
+      body: map['body'] ?? 'You have a new message',
+      timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
+      additionalData: Map<String, dynamic>.from(map)
+        ..removeWhere((key, value) => [
+              'type',
+              'title',
+              'body',
+              'timestamp',
+              'message_id',
+              'conversation_id',
+              'from_user_id',
+              'from_user_name',
+              'from_user_avatar',
+              'message_content',
+              'msg_type' // Changed from 'message_type' to 'msg_type'
             ].contains(key)),
     );
   }

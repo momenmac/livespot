@@ -577,4 +577,45 @@ class NotificationApiService {
       return false;
     }
   }
+
+  /// Send direct notification without storing in database (for messages)
+  static Future<bool> sendDirectNotification({
+    required String recipientUserId,
+    required String notificationType,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+    String priority = 'normal',
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/actions/send-direct/'),
+        headers: headers,
+        body: jsonEncode({
+          'recipient_user_id': recipientUserId,
+          'notification_type': notificationType,
+          'title': title,
+          'body': body,
+          'data': data,
+          'priority': priority,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        debugPrint('✅ Direct notification sent successfully');
+        debugPrint('📊 Sent to ${responseData['sent_count']} devices');
+        return true;
+      } else {
+        debugPrint(
+            '❌ Failed to send direct notification: ${response.statusCode}');
+        debugPrint('Response: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Error sending direct notification: $e');
+      return false;
+    }
+  }
 }

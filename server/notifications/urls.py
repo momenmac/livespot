@@ -23,10 +23,15 @@ test_notification_view = NotificationAPIView.as_view({
     'post': 'test_notification',
 })
 
+send_direct_view = NotificationAPIView.as_view({
+    'post': 'send_direct',
+})
+
 app_name = 'notifications'
 
 urlpatterns = [
     path('', include(router.urls)),
     path('actions/send-still-there-confirmation/', api_view, name='send-still-there-confirmation'),
     path('actions/test-notification/', test_notification_view, name='test-notification'),
+    path('actions/send-direct/', send_direct_view, name='send-direct'),
 ]

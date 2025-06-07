@@ -107,9 +107,9 @@ class FirebaseMessagingService {
     // Create notification channel for Android
     if (Platform.isAndroid) {
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'high_importance_channel',
-        'High Importance Notifications',
-        description: 'This channel is used for important notifications.',
+        'messages',
+        'Messages',
+        description: 'Notifications for new messages',
         importance: Importance.high,
       );
 

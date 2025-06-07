@@ -133,12 +133,12 @@ class FCMTokenService {
 
   /// Get the current platform as a string
   String _getPlatformString() {
-    if (Platform.isAndroid) {
+    if (kIsWeb) {
+      return 'web';
+    } else if (Platform.isAndroid) {
       return 'android';
     } else if (Platform.isIOS) {
       return 'ios';
-    } else if (kIsWeb) {
-      return 'web';
     } else {
       return 'other';
     }

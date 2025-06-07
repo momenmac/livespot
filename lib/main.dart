@@ -230,6 +230,24 @@ Future<void> main() async {
         } catch (e) {
           print('⚠️ Firebase Messaging initialization failed: $e');
         }
+      } else {
+        // Initialize Firebase Messaging on web platform too
+        try {
+          await FirebaseMessagingService.initialize();
+          print('✅ Firebase Messaging initialized successfully on web');
+
+          // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed on web: $e');
+        }
       }
     } else {
       print('✅ Firebase already initialized');
@@ -251,6 +269,24 @@ Future<void> main() async {
           print('✅ NotificationHandler initialized successfully');
         } catch (e) {
           print('⚠️ Firebase Messaging initialization failed: $e');
+        }
+      } else {
+        // Initialize Firebase Messaging on web platform too
+        try {
+          await FirebaseMessagingService.initialize();
+          print('✅ Firebase Messaging initialized successfully on web');
+
+          // Initialize ActionConfirmationService with NavigationService's navigator key
+          ActionConfirmationService.initialize(
+              NavigationService().navigatorKey);
+          print('✅ ActionConfirmationService initialized successfully');
+
+          // Initialize NotificationHandler with NavigationService's navigator key
+          await NotificationHandler.initialize(
+              NavigationService().navigatorKey);
+          print('✅ NotificationHandler initialized successfully');
+        } catch (e) {
+          print('⚠️ Firebase Messaging initialization failed on web: $e');
         }
       }
     }
@@ -311,7 +347,7 @@ Future<void> main() async {
 
   // We'll use FirebaseMessagingService.initialize() which handles token management
   // instead of directly getting the token here
-  if (!kIsWeb && _isFirebaseInitialized) {
+  if (_isFirebaseInitialized) {
     try {
       await FirebaseMessagingService.initialize();
       print('✅ Firebase Messaging Service initialized successfully');
@@ -319,8 +355,7 @@ Future<void> main() async {
       print('❌ Failed to initialize Firebase Messaging Service: $e');
     }
   } else {
-    print(
-        '🌐 Skipping FCM initialization on web platform or when Firebase is not initialized');
+    print('🌐 Skipping FCM initialization when Firebase is not initialized');
   }
   runApp(
     MultiProvider(
