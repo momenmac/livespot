@@ -4,6 +4,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'notifications/notification_handler.dart';
 import 'notifications/fcm_token_service.dart';
+import 'utils/navigation_service.dart';
+import '../routes/app_routes.dart';
 
 class FirebaseMessagingService {
   static final FirebaseMessaging _firebaseMessaging =
@@ -12,7 +14,18 @@ class FirebaseMessagingService {
       FlutterLocalNotificationsPlugin();
   static final FCMTokenService _fcmTokenService = FCMTokenService();
 
+  // Add initialization guard to prevent multiple listener setups
+  static bool _isInitialized = false;
+
   static Future<void> initialize() async {
+    // Prevent multiple initialization
+    if (_isInitialized) {
+      print(
+          '🔄 FirebaseMessagingService already initialized, skipping duplicate setup');
+      return;
+    }
+
+    print('🚀 Initializing FirebaseMessagingService for the first time...');
     // Request permission for notifications with more explicit approach
     NotificationSettings settings = await _firebaseMessaging.requestPermission(
       alert: true,
@@ -99,6 +112,10 @@ class FirebaseMessagingService {
     } else {
       print('🔄 No initial message found');
     }
+
+    // Mark as initialized to prevent duplicate setups
+    _isInitialized = true;
+    print('✅ FirebaseMessagingService initialization completed');
   }
 
   static Future<void> _initializeLocalNotifications() async {
@@ -143,21 +160,17 @@ class FirebaseMessagingService {
     final payload = response.payload;
     if (payload != null) {
       final data = jsonDecode(payload);
-      final title = data['title'] ?? '';
-      final body = data['body'] ?? '';
+      debugPrint('📱 Local notification tapped: ${data['title']}');
 
-      // Use the comprehensive NotificationHandler for local notification taps
-      // Create a dummy RemoteMessage for compatibility
-      final message = RemoteMessage(
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-        data: Map<String, String>.from(data),
-        notification: RemoteNotification(
-          title: title,
-          body: body,
-        ),
-      );
-
-      NotificationHandler.handleNotificationTap(message);
+      // Handle local notification taps directly through NavigationService
+      // to avoid creating duplicate RemoteMessage objects
+      if (data.containsKey('conversation_id')) {
+        NavigationService().navigateTo('/messages/${data['conversation_id']}');
+      } else if (data.containsKey('route')) {
+        NavigationService().navigateTo(data['route']);
+      } else {
+        NavigationService().navigateTo(AppRoutes.notifications);
+      }
     }
   }
 

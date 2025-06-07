@@ -6,7 +6,6 @@ import '../action_confirmation_service.dart';
 import '../database/notification_database_service.dart';
 import '../api/notification_api_service.dart';
 import 'notification_types.dart';
-import '../../ui/pages/friends/friend_request_dialog.dart';
 import '../../ui/profile/other_user_profile_page.dart';
 import '../../routes/app_routes.dart';
 import '../utils/navigation_service.dart';
@@ -79,7 +78,7 @@ class NotificationHandler {
     if (_localNotifications.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>() !=
         null) {
-      // Messages channel
+      // Messages channel with enhanced features
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()!
@@ -87,15 +86,16 @@ class NotificationHandler {
             const AndroidNotificationChannel(
               'messages',
               'Messages',
-              description: 'Notifications for new messages',
+              description: 'Notifications for new messages with quick actions',
               importance: Importance.high,
               enableVibration: true,
               enableLights: true,
               ledColor: Colors.blue,
+              showBadge: true,
             ),
           );
 
-      debugPrint('📱 Android notification channels created');
+      debugPrint('📱 Android notification channels with actions created');
     }
   }
 
@@ -106,43 +106,67 @@ class NotificationHandler {
 
     debugPrint('🎯 Notification action: $actionId, Payload: $payload');
 
+    // Handle specific action buttons
     switch (actionId) {
       case 'reply':
         // Handle reply action
-        _handleReplyAction(payload);
+        _handleReplyAction(payload, response.input);
         break;
       case 'mark_read':
         // Handle mark as read action
         _handleMarkReadAction(payload);
         break;
       default:
-        // Handle regular tap
-        if (_initialized && _navigatorKey?.currentContext != null) {
-          if (payload != null && payload.contains('conversation_id')) {
-            // Navigate to specific conversation
-            final conversationId = _extractConversationId(payload);
-            if (conversationId != null) {
-              NavigationService().navigateTo('/messages/$conversationId');
-            } else {
-              NavigationService().navigateTo(AppRoutes.messages);
-            }
-          } else {
-            NavigationService().navigateTo(AppRoutes.notifications);
-          }
+        // Handle regular tap - but only if no action was specified
+        // This prevents duplicate navigation when action buttons are tapped
+        if (actionId == null || actionId.isEmpty) {
+          _handleNotificationTap(payload);
         }
         break;
     }
   }
 
+  /// Handle regular notification tap (not action buttons)
+  static void _handleNotificationTap(String? payload) {
+    if (_initialized &&
+        _navigatorKey?.currentContext != null &&
+        payload != null) {
+      debugPrint('🎯 Handling notification tap with payload: $payload');
+      if (payload.contains('conversation_id')) {
+        // Navigate to specific conversation
+        final conversationId = _extractConversationId(payload);
+        if (conversationId != null) {
+          NavigationService().navigateTo('/messages/$conversationId');
+        } else {
+          NavigationService().navigateTo(AppRoutes.messages);
+        }
+      } else {
+        NavigationService().navigateTo(AppRoutes.notifications);
+      }
+    }
+  }
+
   /// Handle reply action
-  static void _handleReplyAction(String? payload) {
+  static void _handleReplyAction(String? payload, [String? replyText]) {
     debugPrint('💬 Reply action triggered');
-    // TODO: Implement quick reply functionality
-    // For now, navigate to the conversation
-    if (payload != null && payload.contains('conversation_id')) {
-      final conversationId = _extractConversationId(payload);
+    if (replyText != null && replyText.isNotEmpty) {
+      debugPrint('💬 Reply text: $replyText');
+      // TODO: Implement actual API call for quick reply
+      _showSnackBar('Reply sent: "$replyText"');
+
+      // Extract conversation ID for potential navigation
+      final conversationId = _extractConversationId(payload ?? '');
       if (conversationId != null) {
+        // For now, navigate to the conversation (later we'll implement quick reply API)
         NavigationService().navigateTo('/messages/$conversationId');
+      }
+    } else {
+      // No reply text provided, just navigate to conversation
+      if (payload != null && payload.contains('conversation_id')) {
+        final conversationId = _extractConversationId(payload);
+        if (conversationId != null) {
+          NavigationService().navigateTo('/messages/$conversationId');
+        }
       }
     }
   }
@@ -363,9 +387,9 @@ class NotificationHandler {
     debugPrint('👥 IsFromTap: $isFromTap');
 
     if (isFromTap) {
-      // Show friend request dialog
-      debugPrint('👥 Showing friend request dialog...');
-      await _showFriendRequestDialog(data);
+      // Navigate to notifications page instead of showing dialog
+      debugPrint('👥 Navigating to notifications page...');
+      NavigationService().navigateTo(AppRoutes.notifications);
     } else {
       // For foreground notifications, only show snackbar (push notification already shown by system)
       _showSnackBar('${data.fromUserName} wants to be your friend! 👥');
@@ -400,12 +424,29 @@ class NotificationHandler {
     if (isFromTap) {
       // Navigate to the follower's profile by using MaterialPageRoute directly
       if (_navigatorKey?.currentContext != null) {
+        // Safely parse user ID - handle both string and integer values
+        int userId;
+        try {
+          final dynamic userIdValue = data.followerUserId;
+          if (userIdValue is int) {
+            userId = userIdValue;
+          } else if (userIdValue is String) {
+            userId = int.parse(userIdValue);
+          } else {
+            userId = int.parse(userIdValue.toString());
+          }
+        } catch (e) {
+          debugPrint(
+              '❌ Error parsing follower user ID: ${data.followerUserId}, error: $e');
+          return;
+        }
+
         Navigator.push(
           _navigatorKey!.currentContext!,
           MaterialPageRoute(
             builder: (context) => OtherUserProfilePage(
               userData: {
-                'id': int.parse(data.followerUserId),
+                'id': userId,
                 'username': data.followerUserName,
                 'profileImage': data.followerUserAvatar,
                 'name': data.followerUserName,
@@ -434,12 +475,29 @@ class NotificationHandler {
     if (isFromTap) {
       // Navigate to the unfollower's profile by using MaterialPageRoute directly
       if (_navigatorKey?.currentContext != null) {
+        // Safely parse user ID - handle both string and integer values
+        int userId;
+        try {
+          final dynamic userIdValue = data.unfollowerUserId;
+          if (userIdValue is int) {
+            userId = userIdValue;
+          } else if (userIdValue is String) {
+            userId = int.parse(userIdValue);
+          } else {
+            userId = int.parse(userIdValue.toString());
+          }
+        } catch (e) {
+          debugPrint(
+              '❌ Error parsing unfollower user ID: ${data.unfollowerUserId}, error: $e');
+          return;
+        }
+
         Navigator.push(
           _navigatorKey!.currentContext!,
           MaterialPageRoute(
             builder: (context) => OtherUserProfilePage(
               userData: {
-                'id': int.parse(data.unfollowerUserId),
+                'id': userId,
                 'username': data.unfollowerUserName,
                 'profileImage': data.unfollowerUserAvatar,
                 'name': data.unfollowerUserName,
@@ -604,23 +662,6 @@ class NotificationHandler {
     debugPrint('💬 === MESSAGE NOTIFICATION HANDLING COMPLETED ===');
   }
 
-  /// Show friend request dialog
-  static Future<void> _showFriendRequestDialog(
-      FriendRequestNotificationData data) async {
-    final context = _navigatorKey?.currentContext;
-    if (context == null) return;
-
-    await showDialog(
-      context: context,
-      builder: (context) => FriendRequestDialog(
-        fromUserId: data.fromUserId,
-        fromUserName: data.fromUserName,
-        fromUserAvatar: data.fromUserAvatar,
-        requestId: data.requestId,
-      ),
-    );
-  }
-
   /// Show local notification
   static Future<void> _showLocalNotification(NotificationData data) async {
     try {
@@ -633,27 +674,96 @@ class NotificationHandler {
         await _initializeLocalNotifications();
       }
 
-      // Android notification details
-      const AndroidNotificationDetails androidNotificationDetails =
-          AndroidNotificationDetails(
-        'firebase_notifications',
-        'Firebase Notifications',
-        channelDescription: 'Notifications received from Firebase',
-        importance: Importance.max,
-        priority: Priority.high,
-        showWhen: true,
-        icon: 'ic_notification',
-      );
+      // Enhanced Android notification details with actions and profile picture
+      AndroidNotificationDetails androidNotificationDetails;
 
-      // iOS notification details
+      if (data.type == NotificationType.message) {
+        final messageData = data as MessageNotificationData;
+
+        // Create actions for message notifications
+        final List<AndroidNotificationAction> actions = [
+          const AndroidNotificationAction(
+            'reply',
+            'Reply',
+            icon: DrawableResourceAndroidBitmap('ic_reply'),
+            inputs: [
+              AndroidNotificationActionInput(
+                label: 'Type a message...',
+                allowFreeFormInput: true,
+              ),
+            ],
+          ),
+          const AndroidNotificationAction(
+            'mark_read',
+            'Mark as Read',
+            icon: DrawableResourceAndroidBitmap('ic_check'),
+          ),
+        ];
+
+        androidNotificationDetails = AndroidNotificationDetails(
+          'messages',
+          'Messages',
+          channelDescription: 'Notifications for new messages',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+          icon: 'ic_notification',
+          largeIcon: messageData.fromUserAvatar.isNotEmpty
+              ? ByteArrayAndroidBitmap.fromBase64String(
+                  '') // We'll implement avatar loading later
+              : const DrawableResourceAndroidBitmap('ic_person'),
+          styleInformation: MessagingStyleInformation(
+            Person(
+              name: messageData.fromUserName,
+              icon: messageData.fromUserAvatar.isNotEmpty
+                  ? ByteArrayAndroidIcon.fromBase64String('')
+                  : null,
+            ),
+            conversationTitle: 'Message from ${messageData.fromUserName}',
+            groupConversation: false,
+            messages: [
+              Message(
+                messageData.body,
+                DateTime.now(),
+                Person(
+                  name: messageData.fromUserName,
+                  icon: messageData.fromUserAvatar.isNotEmpty
+                      ? ByteArrayAndroidIcon.fromBase64String('')
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          actions: actions,
+          category: AndroidNotificationCategory.message,
+          enableVibration: true,
+          enableLights: true,
+          ledColor: const Color(0xFF2196F3),
+          color: const Color(0xFF2196F3),
+        );
+      } else {
+        // Default notification details for non-message notifications
+        androidNotificationDetails = const AndroidNotificationDetails(
+          'firebase_notifications',
+          'Firebase Notifications',
+          channelDescription: 'Notifications received from Firebase',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+          icon: 'ic_notification',
+        );
+      }
+
+      // iOS notification details with category for actions
       const DarwinNotificationDetails iosNotificationDetails =
           DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        categoryIdentifier: 'MESSAGE_CATEGORY',
       );
 
-      const NotificationDetails notificationDetails = NotificationDetails(
+      final NotificationDetails notificationDetails = NotificationDetails(
         android: androidNotificationDetails,
         iOS: iosNotificationDetails,
       );
@@ -667,7 +777,7 @@ class NotificationHandler {
         payload: data.toMap().toString(),
       );
 
-      debugPrint('✅ Local notification shown successfully');
+      debugPrint('✅ Enhanced local notification shown successfully');
     } catch (e) {
       debugPrint('❌ Error showing local notification: $e');
       debugPrint('❌ Stack trace: ${StackTrace.current}');

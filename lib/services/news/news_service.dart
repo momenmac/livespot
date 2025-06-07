@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:xml/xml.dart';
@@ -865,7 +866,7 @@ class NewsService {
     return [];
   }
 
-  /// Enhanced Guardian API with better descriptions and correct links (strip HTML from description/content)
+  /// Enhanced Guardian API with better descriptions and improved image extraction
   static Future<List<NewsArticle>> _fetchFromGuardianAPI(
       {int limit = 10}) async {
     try {
@@ -882,20 +883,26 @@ class NewsService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final results = data['response']['results'] as List;
-        final guardianArticles = results.map((article) {
+
+        // Process articles with improved image extraction
+        final articlesFutures = results.map((article) async {
           // Only use trailText or standfirst for description, never body/headline
           String description = article['fields']?['trailText'] ??
               article['fields']?['standfirst'] ??
               '';
           description = description.replaceAll(RegExp(r'<[^>]*>'), '');
           String content = description;
+
+          // Enhanced image extraction with fallback
+          String? imageUrl = await _extractGuardianImage(article);
+
           return NewsArticle(
             id: 'guardian_${DateTime.now().millisecondsSinceEpoch}_${article['id']}',
             title: _cleanText(article['webTitle'] ?? 'Guardian Article'),
             description: _cleanText(description),
             content: _cleanText(content),
             url: article['webUrl'] ?? 'https://theguardian.com',
-            imageUrl: article['fields']?['thumbnail'] ??
+            imageUrl: imageUrl ??
                 'https://picsum.photos/seed/guardian${article['id']}/800/600',
             source: 'The Guardian',
             author: article['fields']?['byline'] ?? 'Guardian Staff',
@@ -904,12 +911,302 @@ class NewsService {
             category: 'general',
           );
         }).toList();
+
+        final guardianArticles = await Future.wait(articlesFutures);
         return guardianArticles;
       }
     } catch (e) {
       _logger.warning('Guardian API failed: $e');
     }
     return [];
+  }
+
+  /// Generate a web-safe Guardian image for CORS-restricted CDN URLs
+  static String _generateWebSafeGuardianImage(Map<String, dynamic> article) {
+    // Extract article ID or use fallback
+    final articleId =
+        article['id'] ?? article['webTitle']?.hashCode.toString() ?? 'guardian';
+
+    // Extract section for better categorization
+    final section = article['sectionId'] ?? article['sectionName'] ?? 'news';
+
+    // Create a deterministic seed based on article content
+    final seed = '$articleId-$section';
+
+    // Generate a web-safe placeholder image using a reliable service
+    final webSafeUrl = 'https://picsum.photos/seed/$seed/800/600';
+
+    _logger.info('Guardian: Generated web-safe image URL: $webSafeUrl');
+    return webSafeUrl;
+  }
+
+  /// Enhanced image extraction for Guardian articles with multiple fallback methods and web CORS handling
+  static Future<String?> _extractGuardianImage(
+      Map<String, dynamic> article) async {
+    try {
+      // Primary method: Use thumbnail from API fields if available
+      final apiThumbnail = article['fields']?['thumbnail'];
+      if (apiThumbnail != null && apiThumbnail.isNotEmpty) {
+        _logger.info('Guardian: Using API thumbnail: $apiThumbnail');
+
+        // For web platform, check if this is a Guardian CDN URL that might have CORS issues
+        if (kIsWeb && apiThumbnail.contains('media.guim.co.uk')) {
+          _logger.info(
+              'Guardian: Web platform detected - using CORS-safe fallback for CDN image');
+          return _generateWebSafeGuardianImage(article);
+        }
+
+        return apiThumbnail;
+      }
+
+      // Secondary method: Try to extract from trail text HTML
+      final trailText = article['fields']?['trailText'] ?? '';
+      if (trailText.isNotEmpty) {
+        // First try to find srcset attribute
+        final srcsetMatch =
+            RegExp(r'<img[^>]*srcset="([^"]+)"[^>]*>').firstMatch(trailText);
+        if (srcsetMatch != null && srcsetMatch.groupCount > 0) {
+          final bestUrl = _getBestImageFromSrcset(srcsetMatch.group(1)!);
+          if (bestUrl.isNotEmpty) {
+            final normalizedUrl = bestUrl.startsWith('/')
+                ? 'https://www.theguardian.com$bestUrl'
+                : bestUrl;
+            _logger.info(
+                'Guardian: Found image in trail text srcset: $normalizedUrl');
+
+            // Check for CORS issues on web platform
+            if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+              _logger.info(
+                  'Guardian: Web platform CORS issue detected - using fallback');
+              return _generateWebSafeGuardianImage(article);
+            }
+
+            return normalizedUrl;
+          }
+        }
+
+        // Fallback to regular src attribute
+        final imgMatch =
+            RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(trailText);
+        if (imgMatch != null && imgMatch.groupCount > 0) {
+          var src = imgMatch.group(1)!;
+          if (src.startsWith('/')) {
+            src = 'https://www.theguardian.com$src';
+          }
+          _logger.info('Guardian: Found image in trail text: $src');
+
+          // Check for CORS issues on web platform
+          if (kIsWeb && src.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Web platform CORS issue detected - using fallback');
+            return _generateWebSafeGuardianImage(article);
+          }
+
+          return src;
+        }
+      }
+
+      // Tertiary method: Web scraping fallback - fetch article page and extract main image
+      final articleUrl = article['webUrl'];
+      if (articleUrl != null && articleUrl.isNotEmpty) {
+        // For web platform, skip web scraping as it's likely to encounter CORS
+        if (kIsWeb) {
+          _logger.info(
+              'Guardian: Web platform detected - skipping web scraping, using safe fallback');
+          return _generateWebSafeGuardianImage(article);
+        }
+
+        final scrapedImage = await _scrapeGuardianArticleImage(articleUrl);
+        if (scrapedImage != null) {
+          _logger.info('Guardian: Found image via web scraping: $scrapedImage');
+
+          // Check for CORS issues even in scraped images
+          if (scrapedImage.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Scraped image has CORS issues - using fallback');
+            return _generateWebSafeGuardianImage(article);
+          }
+
+          return scrapedImage;
+        }
+      }
+
+      _logger.warning(
+          'Guardian: No image found for article ${article['id']} - using web-safe fallback');
+      return _generateWebSafeGuardianImage(article);
+    } catch (e) {
+      _logger.warning('Guardian image extraction failed: $e');
+      return null;
+    }
+  }
+
+  /// Web scraping fallback for Guardian article images with CORS handling
+  static Future<String?> _scrapeGuardianArticleImage(String articleUrl) async {
+    try {
+      final pageResp = await http.get(Uri.parse(articleUrl), headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; NewsApp/1.0)'
+      }).timeout(const Duration(seconds: 5));
+
+      if (pageResp.statusCode == 200) {
+        final html = pageResp.body;
+
+        // Try multiple Guardian-specific image selectors in order of preference
+
+        // 1. Main article image with Guardian's typical class - check for srcset first
+        String? imageUrl = _extractImageFromHtml(html,
+            r'<figure[^>]*class="[^"]*main-media[^"]*"[^>]*>.*?<img[^>]*(?:srcset="([^"]+)"|src="([^"]+)")[^>]*>');
+        if (imageUrl != null) {
+          final normalizedUrl = _normalizeGuardianImageUrl(imageUrl);
+          // Check for CORS issues on web platform
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Scraped image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+
+        // 2. Article featured image - check for srcset first
+        imageUrl = _extractImageFromHtml(html,
+            r'<figure[^>]*class="[^"]*article-featured-image[^"]*"[^>]*>.*?<img[^>]*(?:srcset="([^"]+)"|src="([^"]+)")[^>]*>');
+        if (imageUrl != null) {
+          final normalizedUrl = _normalizeGuardianImageUrl(imageUrl);
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Scraped featured image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+
+        // 3. Any figure with img tag - check for srcset first
+        imageUrl = _extractImageFromHtml(html,
+            r'<figure[^>]*>.*?<img[^>]*(?:srcset="([^"]+)"|src="([^"]+)")[^>]*>');
+        if (imageUrl != null) {
+          final normalizedUrl = _normalizeGuardianImageUrl(imageUrl);
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Scraped figure image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+
+        // 4. Open Graph image meta tag
+        final ogImageMatch =
+            RegExp(r'<meta property="og:image" content="([^"]+)"')
+                .firstMatch(html);
+        if (ogImageMatch != null && ogImageMatch.groupCount > 0) {
+          final normalizedUrl =
+              _normalizeGuardianImageUrl(ogImageMatch.group(1)!);
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: OG image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+
+        // 5. Twitter card image
+        final twitterImageMatch =
+            RegExp(r'<meta name="twitter:image" content="([^"]+)"')
+                .firstMatch(html);
+        if (twitterImageMatch != null && twitterImageMatch.groupCount > 0) {
+          final normalizedUrl =
+              _normalizeGuardianImageUrl(twitterImageMatch.group(1)!);
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Twitter card image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+
+        // 6. First img tag in article content - check for srcset first
+        imageUrl = _extractImageFromHtml(
+            html, r'<img[^>]*(?:srcset="([^"]+)"|src="([^"]+)")[^>]*>');
+        if (imageUrl != null) {
+          final normalizedUrl = _normalizeGuardianImageUrl(imageUrl);
+          if (kIsWeb && normalizedUrl.contains('media.guim.co.uk')) {
+            _logger.info(
+                'Guardian: Content image has CORS issues - returning null for fallback');
+            return null;
+          }
+          return normalizedUrl;
+        }
+      }
+    } catch (e) {
+      _logger.warning('Guardian web scraping failed: $e');
+    }
+    return null;
+  }
+
+  /// Extract image URL from HTML, prioritizing srcset over src
+  static String? _extractImageFromHtml(String html, String pattern) {
+    final match = RegExp(pattern, dotAll: true).firstMatch(html);
+    if (match != null) {
+      // Check for srcset first (group 1)
+      final srcset = match.group(1);
+      if (srcset != null && srcset.isNotEmpty) {
+        return _getBestImageFromSrcset(srcset);
+      }
+
+      // Fallback to src (group 2)
+      final src = match.group(2);
+      if (src != null && src.isNotEmpty) {
+        return src;
+      }
+    }
+    return null;
+  }
+
+  /// Parse srcset attribute and return the best quality image URL
+  static String _getBestImageFromSrcset(String srcset) {
+    // Parse srcset format: "url1 width1, url2 width2, url3 width3"
+    // Example: "https://i.guim.co.uk/img/media/abc123/master/0_0_2048_1536/500.jpg?width=300&quality=85&auto=format&fit=max&s=xyz 300w, https://i.guim.co.uk/img/media/abc123/master/0_0_2048_1536/1000.jpg?width=620&quality=85&auto=format&fit=max&s=xyz 620w"
+
+    final sources = srcset.split(',');
+    String bestUrl = '';
+    int bestWidth = 0;
+
+    for (final source in sources) {
+      final trimmed = source.trim();
+      final parts = trimmed.split(' ');
+
+      if (parts.length >= 2) {
+        final url = parts[0];
+        final widthStr = parts[1].replaceAll('w', ''); // Remove 'w' suffix
+        final width = int.tryParse(widthStr) ?? 0;
+
+        // Prefer larger images but cap at reasonable size (1200px)
+        if (width > bestWidth && width <= 1200) {
+          bestUrl = url;
+          bestWidth = width;
+        }
+      }
+    }
+
+    // If no good sized image found, use the first URL
+    if (bestUrl.isEmpty && sources.isNotEmpty) {
+      final firstSource = sources.first.trim();
+      final parts = firstSource.split(' ');
+      if (parts.isNotEmpty) {
+        bestUrl = parts[0];
+      }
+    }
+
+    return bestUrl;
+  }
+
+  /// Normalize Guardian image URLs
+  static String _normalizeGuardianImageUrl(String url) {
+    if (url.startsWith('/')) {
+      return 'https://www.theguardian.com$url';
+    }
+    if (url.startsWith('//')) {
+      return 'https:$url';
+    }
+    return url;
   }
 
   static int get currentPage => _currentPage;
