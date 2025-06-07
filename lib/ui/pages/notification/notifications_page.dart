@@ -9,6 +9,7 @@ import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
 import 'package:intl/intl.dart';
 import 'notification_filter.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -406,9 +407,7 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update notification count via event bus
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked as unread')),
-        );
+        GlobalNotificationService().showSuccess('Marked as unread');
       } else {
         // Fallback to local update if API call fails
         setState(() {
@@ -423,9 +422,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update local notification count
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked as unread (local only)')),
-        );
+        GlobalNotificationService()
+            .showWarning('Marked as unread (local only)');
       }
     } catch (e) {
       debugPrint('Error marking notification as unread: $e');
@@ -439,9 +437,7 @@ class _NotificationsPageState extends State<NotificationsPage>
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marked as unread (local only)')),
-      );
+      GlobalNotificationService().showWarning('Marked as unread (local only)');
     }
   }
 
@@ -480,9 +476,7 @@ class _NotificationsPageState extends State<NotificationsPage>
           // Update notification count via event bus
           _refreshNotificationCount();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification deleted')),
-          );
+          GlobalNotificationService().showSuccess('Notification deleted');
         } else {
           // Fallback to local deletion if API call fails
           setState(() {
@@ -492,9 +486,8 @@ class _NotificationsPageState extends State<NotificationsPage>
           // Update local notification count
           _refreshNotificationCount();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification deleted (local only)')),
-          );
+          GlobalNotificationService()
+              .showWarning('Notification deleted (local only)');
         }
       }
     } catch (e) {
@@ -505,9 +498,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         notifications.removeWhere((n) => n.id == notification.id);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification deleted (local only)')),
-      );
+      GlobalNotificationService()
+          .showWarning('Notification deleted (local only)');
     }
   }
 
@@ -573,9 +565,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update notification count via event bus (should be 0 after marking all as read)
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All notifications marked as read')),
-        );
+        GlobalNotificationService()
+            .showSuccess('All notifications marked as read');
       } else {
         // Fallback to local update if API call fails
         setState(() {
@@ -588,10 +579,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update local notification count
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('All notifications marked as read (local only)')),
-        );
+        GlobalNotificationService()
+            .showWarning('All notifications marked as read (local only)');
       }
     } catch (e) {
       debugPrint('Error marking all notifications as read: $e');
@@ -607,10 +596,8 @@ class _NotificationsPageState extends State<NotificationsPage>
       // Update local notification count
       _refreshNotificationCount();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('All notifications marked as read (local only)')),
-      );
+      GlobalNotificationService()
+          .showWarning('All notifications marked as read (local only)');
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/action_confirmation_dialog.dart';
 import 'api/notification_api_service.dart';
+import 'utils/global_notification_service.dart';
 
 class ActionConfirmationService {
   // Singleton instance
@@ -153,21 +154,11 @@ class ActionConfirmationService {
 
   /// Show feedback snackbar
   static void _showFeedbackSnackBar(String message, {required bool isSuccess}) {
-    final context = _navigatorKey?.currentContext;
-    if (context == null) return;
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    scaffoldMessenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isSuccess ? Colors.green : Colors.red,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
+    if (isSuccess) {
+      GlobalNotificationService().showSuccess(message);
+    } else {
+      GlobalNotificationService().showError(message);
+    }
   }
 
   /// Check if a notification is a "still there" type

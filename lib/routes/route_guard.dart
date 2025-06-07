@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/services/auth/session_manager.dart';
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 import 'package:flutter_application_2/app_entry.dart' as app;
 
 void main() => app.main();
@@ -100,15 +101,8 @@ class RouteGuard {
         // Only show warning if the context is still valid and mounted
         if (context.mounted) {
           try {
-            // Check if Scaffold is available
-            if (ScaffoldMessenger.maybeOf(context) != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Please login to access this feature"),
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            }
+            GlobalNotificationService()
+                .showWarning("Please login to access this feature");
           } catch (e) {
             print('⚠️ Could not show login required message: $e');
           }

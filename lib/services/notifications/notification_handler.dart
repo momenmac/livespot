@@ -9,6 +9,7 @@ import 'notification_types.dart';
 import '../../ui/profile/other_user_profile_page.dart';
 import '../../routes/app_routes.dart';
 import '../utils/navigation_service.dart';
+import '../utils/global_notification_service.dart';
 
 /// Comprehensive notification handler for all app notification types
 class NotificationHandler {
@@ -786,19 +787,7 @@ class NotificationHandler {
 
   /// Show snackbar message
   static void _showSnackBar(String message) {
-    final context = _navigatorKey?.currentContext;
-    if (context == null) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
+    GlobalNotificationService().showInfo(message);
   }
 
   /// Test method to simulate different notification types
