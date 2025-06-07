@@ -31,7 +31,7 @@ SECRET_KEY = "django-insecure-h=_g7*7--tj2kxm^o^5lskc&e(&l=4ca_pkr04k!dh+nyi*)co
 DEBUG = True
 
 # Update ALLOWED_HOSTS to include the Android emulator's special IP
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.8', '192.168.1.x']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.13', '192.168.1.x']
 
 # Base URL for serving uploaded media files - needed for web file upload
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
@@ -257,7 +257,7 @@ CORS_ALLOW_HEADERS = [
 # JWT tokens are sent in headers, not cookies, so CSRF isn't needed
 
 # Simplify ALLOWED_HOSTS - keeping this part
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.0.3', '192.168.1.x', '10.0.0.3','192.168.1.8']  # Added your IP for mobile testing
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.0.3', '192.168.1.x', '10.0.0.3','192.168.1.13']  # Added your IP for mobile testing
 
 # Firebase Admin SDK Configuration
 import firebase_admin

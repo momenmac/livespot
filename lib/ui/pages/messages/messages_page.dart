@@ -23,8 +23,9 @@ import 'dart:developer' as developer;
 
 class MessagesPage extends StatefulWidget {
   final MessagesController? controller;
+  final String? conversationId;
 
-  const MessagesPage({super.key, this.controller});
+  const MessagesPage({super.key, this.controller, this.conversationId});
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -64,6 +65,11 @@ class _MessagesPageState extends State<MessagesPage>
         setState(() {
           _isLoading = false;
         });
+      }
+
+      // If a conversationId was provided, automatically open that conversation
+      if (widget.conversationId != null) {
+        _openConversationById(widget.conversationId!);
       }
     } catch (e) {
       if (mounted) {
@@ -127,6 +133,48 @@ class _MessagesPageState extends State<MessagesPage>
         state == AppLifecycleState.detached) {
       _safeSetUserOnlineStatus(false); // Set user offline status
     }
+  }
+
+  // Method to automatically open a conversation by ID when coming from notification
+  void _openConversationById(String conversationId) {
+    // Use a small delay to ensure the UI is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Find the conversation in the loaded conversations
+      final conversation =
+          _controller.conversations.cast<Conversation?>().firstWhere(
+                (conv) => conv?.id == conversationId,
+                orElse: () => null,
+              );
+
+      if (conversation != null) {
+        print('🎯 Found conversation $conversationId, opening ChatDetailPage');
+
+        // Create a new controller for the chat detail page
+        final detailController = MessagesController();
+        detailController.selectConversation(conversation);
+
+        // Navigate to the chat detail page
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailPage(
+              controller: detailController,
+              conversation: conversation,
+            ),
+          ),
+        );
+      } else {
+        print(
+            '❌ Conversation $conversationId not found in loaded conversations');
+        // Show a message that the conversation wasn't found
+        if (mounted) {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: 'Conversation not found',
+          );
+        }
+      }
+    });
   }
 
   @override

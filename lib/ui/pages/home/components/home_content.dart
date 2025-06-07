@@ -13,6 +13,7 @@ import 'package:flutter_application_2/services/auth/auth_service.dart'; // Creat
 import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/providers/user_profile_provider.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 
 class HomeContent extends StatefulWidget {
   final VoidCallback? onMapToggle;
@@ -142,9 +143,7 @@ class _HomeContentState extends State<HomeContent> {
         onTap: () {
           print(
               '🏠🎯 HOME PAGE - NOTIFICATION TAPPED! onTap callback executed');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification tapped!')),
-          );
+          GlobalNotificationService().showInfo('Notification tapped!');
         },
       );
       print(
@@ -190,8 +189,11 @@ class _HomeContentState extends State<HomeContent> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ComprehensiveSearchPage(
-                    postsProvider: Provider.of<PostsProvider>(context, listen: false),
-                    userProfileProvider: Provider.of<UserProfileProvider>(context, listen: false),
+                    postsProvider:
+                        Provider.of<PostsProvider>(context, listen: false),
+                    userProfileProvider: Provider.of<UserProfileProvider>(
+                        context,
+                        listen: false),
                   ),
                 ),
               );

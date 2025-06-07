@@ -1,19 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
 import '../notifications/notification_types.dart';
+import '../auth/session_manager.dart';
 
 /// Service for handling notification database operations with Firestore
 class NotificationDatabaseService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final SessionManager _sessionManager = SessionManager();
 
   /// Save FCM token to user document using a collection for multiple devices
   static Future<void> saveFCMToken(String token) async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    // Use Django authentication instead of Firebase Auth
+    if (!_sessionManager.isAuthenticated) {
       debugPrint('⚠️ No authenticated user to save FCM token');
+      return;
+    }
+
+    final userData = _sessionManager.user;
+    if (userData == null) {
+      debugPrint('⚠️ Unable to get user data for FCM token save');
+      return;
+    }
+
+    final userId = userData.id.toString();
+    if (userId.isEmpty) {
+      debugPrint('⚠️ User ID is empty, cannot save FCM token');
       return;
     }
 
@@ -24,7 +36,7 @@ class NotificationDatabaseService {
       // Save token in a subcollection to support multiple devices
       await _firestore
           .collection('users')
-          .doc(user.uid)
+          .doc(userId)
           .collection('fcmTokens')
           .doc(tokenId)
           .set({
@@ -36,7 +48,7 @@ class NotificationDatabaseService {
       });
 
       // For backward compatibility, also keep the old location
-      await _firestore.collection('users').doc(user.uid).set({
+      await _firestore.collection('users').doc(userId).set({
         'lastTokenUpdate': FieldValue.serverTimestamp(),
         'deviceInfo': {
           'platform': defaultTargetPlatform.name,
@@ -44,7 +56,7 @@ class NotificationDatabaseService {
         }
       }, SetOptions(merge: true));
 
-      debugPrint('✅ FCM token saved to Firestore for user: ${user.uid}');
+      debugPrint('✅ FCM token saved to Firestore for user: $userId');
     } catch (e) {
       debugPrint('❌ Error saving FCM token: $e');
     }
@@ -52,9 +64,20 @@ class NotificationDatabaseService {
 
   /// Remove FCM token from user document
   static Future<void> removeFCMToken(String token) async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    if (!_sessionManager.isAuthenticated) {
       debugPrint('⚠️ No authenticated user to remove FCM token');
+      return;
+    }
+
+    final userData = _sessionManager.user;
+    if (userData == null) {
+      debugPrint('⚠️ Unable to get user data for FCM token removal');
+      return;
+    }
+
+    final userId = userData.id.toString();
+    if (userId.isEmpty) {
+      debugPrint('⚠️ User ID is empty, cannot remove FCM token');
       return;
     }
 
@@ -65,7 +88,7 @@ class NotificationDatabaseService {
       // Mark token as inactive rather than deleting it
       await _firestore
           .collection('users')
-          .doc(user.uid)
+          .doc(userId)
           .collection('fcmTokens')
           .doc(tokenId)
           .update({
@@ -73,7 +96,7 @@ class NotificationDatabaseService {
         'deactivatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ FCM token removed from Firestore for user: ${user.uid}');
+      debugPrint('✅ FCM token removed from Firestore for user: $userId');
     } catch (e) {
       debugPrint('❌ Error removing FCM token: $e');
     }

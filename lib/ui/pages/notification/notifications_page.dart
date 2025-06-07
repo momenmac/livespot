@@ -9,6 +9,7 @@ import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
 import 'package:intl/intl.dart';
 import 'notification_filter.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -27,6 +28,7 @@ class _NotificationsPageState extends State<NotificationsPage>
   // Real notification data from backend
   List<NotificationModel> notifications = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false; // Separate state for pagination loading
   String? _errorMessage;
   int _currentPage = 1;
   bool _hasMoreData = true;
@@ -34,6 +36,11 @@ class _NotificationsPageState extends State<NotificationsPage>
 
   List<NotificationModel> _getFilteredNotifications() {
     return _selectedFilter.filterNotifications(notifications);
+  }
+
+  // Get notification count for a specific filter
+  int _getFilterCount(NotificationFilter filter) {
+    return filter.filterNotifications(notifications).length;
   }
 
   @override
@@ -57,8 +64,9 @@ class _NotificationsPageState extends State<NotificationsPage>
 
   void _onScroll() {
     if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      if (!_isLoading && _hasMoreData) {
+        _scrollController.position.maxScrollExtent - 300) {
+      // Increased trigger distance
+      if (!_isLoading && !_isLoadingMore && _hasMoreData) {
         _loadMoreNotifications();
       }
     }
@@ -105,14 +113,16 @@ class _NotificationsPageState extends State<NotificationsPage>
   }
 
   Future<void> _loadMoreNotifications() async {
-    if (_isLoading || !_hasMoreData) return;
+    if (_isLoading || _isLoadingMore || !_hasMoreData) return;
 
     setState(() {
-      _isLoading = true;
+      _isLoadingMore = true;
     });
 
     try {
       final nextPage = _currentPage + 1;
+      debugPrint('🔄 Loading more notifications - Page $nextPage');
+
       final notificationData =
           await NotificationApiService.getNotificationHistory(
         page: nextPage,
@@ -129,14 +139,17 @@ class _NotificationsPageState extends State<NotificationsPage>
         notifications.addAll(convertedNotifications);
         _currentPage = nextPage;
         _hasMoreData = notificationData.length >= 20;
-        _isLoading = false;
+        _isLoadingMore = false;
       });
+
+      debugPrint(
+          '✅ Loaded ${convertedNotifications.length} more notifications. Total: ${notifications.length}');
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _isLoading = false;
+        _isLoadingMore = false;
       });
-      debugPrint('Error loading more notifications: $e');
+      debugPrint('❌ Error loading more notifications: $e');
     }
   }
 
@@ -394,9 +407,7 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update notification count via event bus
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked as unread')),
-        );
+        GlobalNotificationService().showSuccess('Marked as unread');
       } else {
         // Fallback to local update if API call fails
         setState(() {
@@ -411,9 +422,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update local notification count
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked as unread (local only)')),
-        );
+        GlobalNotificationService()
+            .showWarning('Marked as unread (local only)');
       }
     } catch (e) {
       debugPrint('Error marking notification as unread: $e');
@@ -427,9 +437,7 @@ class _NotificationsPageState extends State<NotificationsPage>
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marked as unread (local only)')),
-      );
+      GlobalNotificationService().showWarning('Marked as unread (local only)');
     }
   }
 
@@ -468,9 +476,7 @@ class _NotificationsPageState extends State<NotificationsPage>
           // Update notification count via event bus
           _refreshNotificationCount();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification deleted')),
-          );
+          GlobalNotificationService().showSuccess('Notification deleted');
         } else {
           // Fallback to local deletion if API call fails
           setState(() {
@@ -480,9 +486,8 @@ class _NotificationsPageState extends State<NotificationsPage>
           // Update local notification count
           _refreshNotificationCount();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification deleted (local only)')),
-          );
+          GlobalNotificationService()
+              .showWarning('Notification deleted (local only)');
         }
       }
     } catch (e) {
@@ -493,9 +498,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         notifications.removeWhere((n) => n.id == notification.id);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification deleted (local only)')),
-      );
+      GlobalNotificationService()
+          .showWarning('Notification deleted (local only)');
     }
   }
 
@@ -561,9 +565,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update notification count via event bus (should be 0 after marking all as read)
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All notifications marked as read')),
-        );
+        GlobalNotificationService()
+            .showSuccess('All notifications marked as read');
       } else {
         // Fallback to local update if API call fails
         setState(() {
@@ -576,10 +579,8 @@ class _NotificationsPageState extends State<NotificationsPage>
         // Update local notification count
         _refreshNotificationCount();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('All notifications marked as read (local only)')),
-        );
+        GlobalNotificationService()
+            .showWarning('All notifications marked as read (local only)');
       }
     } catch (e) {
       debugPrint('Error marking all notifications as read: $e');
@@ -595,10 +596,8 @@ class _NotificationsPageState extends State<NotificationsPage>
       // Update local notification count
       _refreshNotificationCount();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('All notifications marked as read (local only)')),
-      );
+      GlobalNotificationService()
+          .showWarning('All notifications marked as read (local only)');
     }
   }
 
@@ -739,14 +738,65 @@ class _NotificationsPageState extends State<NotificationsPage>
       onRefresh: _refreshNotifications,
       child: ListView.builder(
         controller: _scrollController,
-        itemCount: groupedNotifications.length + (_isLoading ? 1 : 0),
+        itemCount: groupedNotifications.length +
+            (_isLoadingMore || (_isLoading && notifications.isEmpty) ? 1 : 0) +
+            (!_hasMoreData && notifications.isNotEmpty ? 1 : 0),
         itemBuilder: (context, index) {
+          // Show end reached message
+          if (!_hasMoreData &&
+              notifications.isNotEmpty &&
+              index == groupedNotifications.length + (_isLoadingMore ? 1 : 0)) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'You\'re all caught up!',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           // Show loading indicator at the end
           if (index >= groupedNotifications.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
+            if (_isLoadingMore) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Loading more notifications...',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
           }
 
           final dateHeader = groupedNotifications.keys.elementAt(index);
@@ -1092,31 +1142,32 @@ class _NotificationsPageState extends State<NotificationsPage>
 
   Widget _buildFilterBar() {
     return Container(
-      height: 50,
+      height: 50, // Reduced height for more compact look
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: NotificationFilter.values.map((filter) {
           final isSelected = _selectedFilter == filter;
           return Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(
+                right: 8), // Reduced spacing between filters
             child: Material(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16), // Smaller border radius
               color: isSelected
                   ? Theme.of(context).colorScheme.primary
                   : Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 onTap: () {
                   setState(() {
                     _selectedFilter = filter;
                   });
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6), // Reduced padding
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected
                           ? Theme.of(context).colorScheme.primary
@@ -1127,16 +1178,53 @@ class _NotificationsPageState extends State<NotificationsPage>
                       width: 1,
                     ),
                   ),
-                  child: Text(
-                    filter.label,
-                    style: TextStyle(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      fontSize: 12,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        filter.label,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurface,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontSize: 11, // Smaller font size
+                        ),
+                      ),
+                      if (_getFilterCount(filter) > 0) ...[
+                        const SizedBox(width: 4), // Reduced spacing
+                        Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            // Explicitly center the text
+                            child: Text(
+                              '${_getFilterCount(filter)}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 9, // Smaller badge text
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),

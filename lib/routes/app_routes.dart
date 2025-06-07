@@ -75,7 +75,10 @@ class AppRoutes {
     //   return const Placeholder();
     // },
     map: (args) => const MapPage(),
-    messages: (args) => const MessagesPage(),
+    messages: (args) {
+      final conversationId = args?['conversationId'] as String?;
+      return MessagesPage(conversationId: conversationId);
+    },
     networkTest: (args) => const NetworkTestPage(),
     chatDetail: (args) =>
         const Placeholder(), // Placeholder for chat detail page

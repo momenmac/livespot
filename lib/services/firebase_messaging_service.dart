@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'notifications/notification_handler.dart';
 import 'notifications/fcm_token_service.dart';
+import 'utils/navigation_service.dart';
+import '../routes/app_routes.dart';
 
 class FirebaseMessagingService {
   static final FirebaseMessaging _firebaseMessaging =
@@ -13,7 +14,18 @@ class FirebaseMessagingService {
       FlutterLocalNotificationsPlugin();
   static final FCMTokenService _fcmTokenService = FCMTokenService();
 
+  // Add initialization guard to prevent multiple listener setups
+  static bool _isInitialized = false;
+
   static Future<void> initialize() async {
+    // Prevent multiple initialization
+    if (_isInitialized) {
+      print(
+          '🔄 FirebaseMessagingService already initialized, skipping duplicate setup');
+      return;
+    }
+
+    print('🚀 Initializing FirebaseMessagingService for the first time...');
     // Request permission for notifications with more explicit approach
     NotificationSettings settings = await _firebaseMessaging.requestPermission(
       alert: true,
@@ -72,14 +84,38 @@ class FirebaseMessagingService {
     FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
 
     // Configure notification tap handler
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    print('🔄 Setting up notification tap handler...');
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('🎯 === onMessageOpenedApp TRIGGERED ===');
+      print('🎯 User tapped notification while app was in background');
+      print('🎯 Message ID: ${message.messageId}');
+      print('🎯 Data: ${message.data}');
+      print(
+          '🎯 Android Click Action: ${message.notification?.android?.clickAction}');
+      print('🎯 Calling _handleNotificationTap...');
+      _handleNotificationTap(message);
+    }, onError: (error) {
+      print('❌ onMessageOpenedApp ERROR: $error');
+    });
 
     // Handle notification tap when app is terminated
+    print('🔄 Checking for initial message (app was terminated)...');
     RemoteMessage? initialMessage =
         await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
+      print('🎯 === INITIAL MESSAGE FOUND ===');
+      print('🎯 App was opened from notification while terminated');
+      print('🎯 Message ID: ${initialMessage.messageId}');
+      print('🎯 Data: ${initialMessage.data}');
+      print('🎯 Calling _handleNotificationTap...');
       _handleNotificationTap(initialMessage);
+    } else {
+      print('🔄 No initial message found');
     }
+
+    // Mark as initialized to prevent duplicate setups
+    _isInitialized = true;
+    print('✅ FirebaseMessagingService initialization completed');
   }
 
   static Future<void> _initializeLocalNotifications() async {
@@ -105,11 +141,11 @@ class FirebaseMessagingService {
     );
 
     // Create notification channel for Android
-    if (Platform.isAndroid) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'high_importance_channel',
-        'High Importance Notifications',
-        description: 'This channel is used for important notifications.',
+        'messages',
+        'Messages',
+        description: 'Notifications for new messages',
         importance: Importance.high,
       );
 
@@ -124,21 +160,17 @@ class FirebaseMessagingService {
     final payload = response.payload;
     if (payload != null) {
       final data = jsonDecode(payload);
-      final title = data['title'] ?? '';
-      final body = data['body'] ?? '';
+      debugPrint('📱 Local notification tapped: ${data['title']}');
 
-      // Use the comprehensive NotificationHandler for local notification taps
-      // Create a dummy RemoteMessage for compatibility
-      final message = RemoteMessage(
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-        data: Map<String, String>.from(data),
-        notification: RemoteNotification(
-          title: title,
-          body: body,
-        ),
-      );
-
-      NotificationHandler.handleNotificationTap(message);
+      // Handle local notification taps directly through NavigationService
+      // to avoid creating duplicate RemoteMessage objects
+      if (data.containsKey('conversation_id')) {
+        NavigationService().navigateTo('/messages/${data['conversation_id']}');
+      } else if (data.containsKey('route')) {
+        NavigationService().navigateTo(data['route']);
+      } else {
+        NavigationService().navigateTo(AppRoutes.notifications);
+      }
     }
   }
 
@@ -158,12 +190,20 @@ class FirebaseMessagingService {
   }
 
   static void _handleNotificationTap(RemoteMessage message) async {
+    print('🔥 === NOTIFICATION TAP DETECTED ===');
+    print('🔥 Message ID: ${message.messageId}');
+    print('🔥 Data: ${message.data}');
+    print(
+        '🔥 Notification: ${message.notification?.title} - ${message.notification?.body}');
+    print('🔥 About to call NotificationHandler.handleNotificationTap...');
+
     if (kDebugMode) {
       print('Notification tapped: ${message.messageId}');
     }
 
     // Use the comprehensive NotificationHandler for notification taps
     await NotificationHandler.handleNotificationTap(message);
+    print('🔥 === NOTIFICATION TAP HANDLING COMPLETED ===');
   }
 
   static void setOnNotificationTap(

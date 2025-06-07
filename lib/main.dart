@@ -1,4 +1,3 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -212,46 +211,27 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       print('✅ Firebase initialized successfully');
-      _isFirebaseInitialized =
-          true; // Initialize Firebase Messaging after Firebase core initialization
-      if (!kIsWeb) {
-        try {
-          await FirebaseMessagingService.initialize();
-          print(
-              '✅ Firebase Messaging initialized successfully'); // Initialize ActionConfirmationService with NavigationService's navigator key
-          ActionConfirmationService.initialize(
-              NavigationService().navigatorKey);
-          print('✅ ActionConfirmationService initialized successfully');
-
-          // Initialize NotificationHandler with NavigationService's navigator key
-          await NotificationHandler.initialize(
-              NavigationService().navigatorKey);
-          print('✅ NotificationHandler initialized successfully');
-        } catch (e) {
-          print('⚠️ Firebase Messaging initialization failed: $e');
-        }
-      }
+      _isFirebaseInitialized = true;
     } else {
       print('✅ Firebase already initialized');
-      _isFirebaseInitialized =
-          true; // Initialize Firebase Messaging for existing Firebase instance
-      if (!kIsWeb) {
-        try {
-          await FirebaseMessagingService.initialize();
-          print('✅ Firebase Messaging initialized successfully');
+      _isFirebaseInitialized = true;
+    }
 
-          // Initialize ActionConfirmationService with NavigationService's navigator key
-          ActionConfirmationService.initialize(
-              NavigationService().navigatorKey);
-          print('✅ ActionConfirmationService initialized successfully');
+    // Initialize Firebase Messaging and related services (only once, after Firebase core is ready)
+    if (_isFirebaseInitialized) {
+      try {
+        await FirebaseMessagingService.initialize();
+        print('✅ Firebase Messaging initialized successfully');
 
-          // Initialize NotificationHandler with NavigationService's navigator key
-          await NotificationHandler.initialize(
-              NavigationService().navigatorKey);
-          print('✅ NotificationHandler initialized successfully');
-        } catch (e) {
-          print('⚠️ Firebase Messaging initialization failed: $e');
-        }
+        // Initialize ActionConfirmationService with NavigationService's navigator key
+        ActionConfirmationService.initialize(NavigationService().navigatorKey);
+        print('✅ ActionConfirmationService initialized successfully');
+
+        // Initialize NotificationHandler with NavigationService's navigator key
+        await NotificationHandler.initialize(NavigationService().navigatorKey);
+        print('✅ NotificationHandler initialized successfully');
+      } catch (e) {
+        print('⚠️ Firebase services initialization failed: $e');
       }
     }
   } catch (e) {
@@ -309,19 +289,7 @@ Future<void> main() async {
     locationCacheService.dispose();
   });
 
-  // We'll use FirebaseMessagingService.initialize() which handles token management
-  // instead of directly getting the token here
-  if (!kIsWeb && _isFirebaseInitialized) {
-    try {
-      await FirebaseMessagingService.initialize();
-      print('✅ Firebase Messaging Service initialized successfully');
-    } catch (e) {
-      print('❌ Failed to initialize Firebase Messaging Service: $e');
-    }
-  } else {
-    print(
-        '🌐 Skipping FCM initialization on web platform or when Firebase is not initialized');
-  }
+  // Firebase Messaging is already initialized above
   runApp(
     MultiProvider(
       providers: [
@@ -345,16 +313,8 @@ Future<void> main() async {
     ),
   );
 
-  // Set up notification tap handler
-  if (!kIsWeb && _isFirebaseInitialized) {
-    FirebaseMessagingService.setOnNotificationTap((title, body, data) {
-      print('🔔 Notification tapped: $title - $body');
-      // Handle notification tap - navigate to appropriate screen based on data
-      if (data.containsKey('route')) {
-        NavigationService().navigateTo(data['route']);
-      }
-    });
-  }
+  // Note: Notification tap handling is now done by NotificationHandler
+  // to prevent multiple navigation handlers from conflicting
 
   // Final Firebase status update with special handling for iOS simulator
   Timer(const Duration(milliseconds: 1500), () async {

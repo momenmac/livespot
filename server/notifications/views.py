@@ -2,13 +2,16 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models
 import firebase_admin
 from firebase_admin import messaging
 import json
 import logging
+
+# Get the custom Account model
+Account = get_user_model()
 
 from .models import (
     NotificationSettings, FCMToken, NotificationHistory, 
@@ -76,25 +79,68 @@ class FCMTokenViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Deactivate old tokens for this user on the same platform
-        FCMToken.objects.filter(
-            user=request.user, 
-            device_platform=platform
-        ).update(is_active=False)
+        try:
+            with transaction.atomic():
+                # Deactivate old tokens for this user on the same platform
+                # (but not the same token, as it might be shared)
+                FCMToken.objects.filter(
+                    user=request.user, 
+                    device_platform=platform
+                ).exclude(token=token).update(is_active=False)
 
-        # Create or update the token
-        fcm_token, created = FCMToken.objects.update_or_create(
-            user=request.user,
-            token=token,
-            defaults={
-                'device_platform': platform,
-                'is_active': True,
-                'last_used': timezone.now()
-            }
-        )
+                # Try to get existing token for this user
+                try:
+                    fcm_token = FCMToken.objects.get(
+                        user=request.user,
+                        token=token
+                    )
+                    # Update existing token
+                    fcm_token.device_platform = platform
+                    fcm_token.is_active = True
+                    fcm_token.last_used = timezone.now()
+                    fcm_token.save()
+                    created = False
+                    
+                except FCMToken.DoesNotExist:
+                    # Create new token for this user
+                    try:
+                        fcm_token = FCMToken.objects.create(
+                            user=request.user,
+                            token=token,
+                            device_platform=platform,
+                            is_active=True,
+                            last_used=timezone.now()
+                        )
+                        created = True
+                        
+                    except Exception as create_error:
+                        # Handle race condition where another request created the same user-token pair
+                        if 'duplicate key' in str(create_error).lower() or 'unique constraint' in str(create_error).lower():
+                            # Try to get the token that was just created by another request
+                            fcm_token = FCMToken.objects.get(
+                                user=request.user,
+                                token=token
+                            )
+                            # Update it
+                            fcm_token.device_platform = platform
+                            fcm_token.is_active = True
+                            fcm_token.last_used = timezone.now()
+                            fcm_token.save()
+                            created = False
+                        else:
+                            # Re-raise if it's a different error
+                            raise create_error
 
-        serializer = self.get_serializer(fcm_token)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            serializer = self.get_serializer(fcm_token)
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            return Response(serializer.data, status=status_code)
+            
+        except Exception as e:
+            logger.error(f"Error registering FCM token: {str(e)}")
+            return Response(
+                {'error': 'Failed to register FCM token'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def deactivate_token(self, request):
@@ -192,8 +238,8 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         message = request.data.get('message', '')
 
         try:
-            to_user = User.objects.get(id=to_user_id)
-        except User.DoesNotExist:
+            to_user = Account.objects.get(id=to_user_id)
+        except Account.DoesNotExist:
             return Response(
                 {'error': 'User not found'}, 
                 status=status.HTTP_404_NOT_FOUND
@@ -474,7 +520,7 @@ class NotificationAPIView(viewsets.ViewSet):
 
         for user_id in user_ids:
             try:
-                user = User.objects.get(id=user_id)
+                user = Account.objects.get(id=user_id)
                 
                 # Create confirmation request
                 confirmation = EventConfirmation.objects.create(
@@ -490,7 +536,7 @@ class NotificationAPIView(viewsets.ViewSet):
 
                 confirmations_created.append(str(confirmation.id))
 
-            except User.DoesNotExist:
+            except Account.DoesNotExist:
                 logger.warning(f"User {user_id} not found for still there confirmation")
                 continue
             except Exception as e:
@@ -612,6 +658,143 @@ class NotificationAPIView(viewsets.ViewSet):
             })
         except Exception as e:
             logger.error(f"Failed to send test notification: {e}")
+            return Response(
+                {'error': f'Failed to send notification: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def send_direct(self, request):
+        """
+        Send a direct FCM notification without storing in notification queue
+        Used for message notifications that should not be persisted
+        """
+        try:
+            recipient_user_id = request.data.get('recipient_user_id')
+            notification_type = request.data.get('notification_type', 'message')
+            title = request.data.get('title', 'Notification')
+            body = request.data.get('body', '')
+            data = request.data.get('data', {})
+            priority = request.data.get('priority', 'normal')
+            android_config = request.data.get('android', {})
+            apns_config = request.data.get('apns', {})
+
+            if not recipient_user_id:
+                return Response(
+                    {'error': 'recipient_user_id is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get recipient user
+            try:
+                recipient_user = Account.objects.get(id=recipient_user_id)
+            except Account.DoesNotExist:
+                return Response(
+                    {'error': 'Recipient user not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Get active FCM tokens for recipient
+            active_tokens = FCMToken.objects.filter(
+                user=recipient_user,
+                is_active=True
+            ).values_list('token', flat=True)
+
+            if not active_tokens:
+                return Response(
+                    {'error': 'No active FCM tokens found for recipient'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Convert data to strings (FCM requirement)
+            fcm_data = {str(k): str(v) for k, v in data.items()}
+            
+            # Add notification metadata
+            fcm_data.update({
+                'notification_type': notification_type,
+                'sender_id': str(request.user.id),
+                'sent_at': timezone.now().isoformat(),
+            })
+
+            # Set priority
+            android_priority = 'high' if priority == 'high' else 'normal'
+            
+            # Build Android config
+            android_notification_config = android_config.get('notification', {})
+            android_notification = messaging.AndroidNotification(
+                click_action='FLUTTER_NOTIFICATION_CLICK',
+                priority=android_priority,
+                channel_id=android_notification_config.get('channel_id', 'default'),
+            )
+            
+            # Add grouping if specified
+            if 'group_key' in android_notification_config:
+                android_notification.tag = android_notification_config.get('group_key')
+            
+            android_cfg = messaging.AndroidConfig(
+                priority=android_priority,
+                notification=android_notification
+            )
+            
+            # Build APNS config  
+            apns_payload = apns_config.get('payload', {})
+            apns_aps = apns_payload.get('aps', {})
+            apns_cfg = messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(
+                        content_available=True,
+                        category=apns_aps.get('category', 'MESSAGE'),
+                        thread_id=apns_aps.get('thread-id', None),
+                    )
+                )
+            )
+            
+            # Create Firebase message
+            if len(active_tokens) == 1:
+                # Single token
+                message = messaging.Message(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body
+                    ),
+                    data=fcm_data,
+                    token=list(active_tokens)[0],
+                    android=android_cfg,
+                    apns=apns_cfg
+                )
+                
+                response = messaging.send(message)
+                success_count = 1
+                failure_count = 0
+                
+            else:
+                # Multiple tokens
+                message = messaging.MulticastMessage(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body
+                    ),
+                    data=fcm_data,
+                    tokens=list(active_tokens),
+                    android=android_cfg,
+                    apns=apns_cfg
+                )
+                
+                response = messaging.send_multicast(message)
+                success_count = response.success_count
+                failure_count = response.failure_count
+
+            logger.info(f"Direct notification sent - Success: {success_count}, Failed: {failure_count}")
+
+            return Response({
+                'success': True,
+                'sent_count': success_count,
+                'failure_count': failure_count,
+                'message': f'Notification sent to {success_count} devices'
+            })
+
+        except Exception as e:
+            logger.error(f"Failed to send direct notification: {e}")
             return Response(
                 {'error': f'Failed to send notification: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

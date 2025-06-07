@@ -19,6 +19,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_application_2/services/api/attachments/attachments_api.dart'
     as import_api;
 import 'package:flutter_application_2/models/user_profile.dart'; // Add import for UserProfile class
+import 'package:flutter_application_2/services/notifications/message_notification_service.dart'; // Add import for message notifications
 
 enum FilterMode {
   all,
@@ -533,6 +534,26 @@ class MessagesController extends ChangeNotifier {
 
       debugPrint('[sendMessage] Message send complete, notifyListeners()');
       notifyListeners();
+
+      // Send notification to other participants
+      try {
+        await MessageNotificationService.sendMessageNotification(
+          conversationId: _selectedConversation!.id,
+          messageId: messageId,
+          participantIds:
+              _selectedConversation!.participants.map((p) => p.id).toList(),
+          senderName: accountProvider.currentUser?.firstName ?? 'Someone',
+          senderAvatar:
+              '', // Account model doesn't have profileImageUrl, use empty string
+          messageContent: content.trim(),
+          messageType: type.toString().split('.').last,
+        );
+        debugPrint('[sendMessage] Message notification sent successfully');
+      } catch (notificationError) {
+        debugPrint(
+            '[sendMessage] Failed to send notification: $notificationError');
+        // Don't rethrow - notification failure shouldn't prevent message sending
+      }
 
       // Simulate message being delivered after a short delay
       Future.delayed(const Duration(seconds: 1), () {
@@ -1754,13 +1775,7 @@ class MessagesController extends ChangeNotifier {
 
   void ensureMessageControllerReferences() {
     if (_isDisposed) return; // Don't do anything if already disposed
-
-    for (final conversation in _conversations) {
-      // No longer need to set controller references
-      for (final message in conversation.messages) {
-        // No longer need to set controller references
-      }
-    }
+    // Controller references are no longer needed as per updated architecture
   }
 
   // Handle typing indicator

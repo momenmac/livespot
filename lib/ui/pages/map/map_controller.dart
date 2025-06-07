@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/text_strings.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
@@ -369,6 +370,12 @@ class MapPageController extends ChangeNotifier {
       return;
     }
 
+    // Disable snackbars on web platform for map pages
+    if (kIsWeb) {
+      print("Map Error (Web): $message");
+      return;
+    }
+
     ResponsiveSnackBar.showError(
       context: _context!,
       message: message,
@@ -378,6 +385,12 @@ class MapPageController extends ChangeNotifier {
   void showInfoMessage(String message) {
     if (_isDisposed || _context == null) return; // Safety check
 
+    // Disable snackbars on web platform for map pages
+    if (kIsWeb) {
+      print("Map Info (Web): $message");
+      return;
+    }
+
     ResponsiveSnackBar.showInfo(
       context: _context!,
       message: message,
@@ -386,6 +399,12 @@ class MapPageController extends ChangeNotifier {
 
   void showSuccessMessage(String message) {
     if (_isDisposed || _context == null) return; // Safety check
+
+    // Disable snackbars on web platform for map pages
+    if (kIsWeb) {
+      print("Map Success (Web): $message");
+      return;
+    }
 
     ResponsiveSnackBar.showSuccess(
       context: _context!,

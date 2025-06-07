@@ -62,19 +62,29 @@ class NavigationService {
 
   // Push a new route onto the navigation stack
   Future<dynamic> navigateTo(String routeName, {Object? arguments}) {
-    debugPrint("[NavigationService] Navigating to: $routeName");
+    debugPrint("[NavigationService] 🔥 NAVIGATION REQUEST: $routeName");
+    debugPrint("[NavigationService] 🔥 Arguments: $arguments");
+    debugPrint(
+        "[NavigationService] 🔥 Navigator state exists: ${navigatorKey.currentState != null}");
+    debugPrint("[NavigationService] 🔥 Current route: $_currentRoute");
+
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot navigate to $routeName');
+      debugPrint(
+          '[NavigationService] ❌ WARNING: navigatorKey.currentState is null, cannot navigate to $routeName');
       return Future.value(null);
     }
-    return navigatorKey.currentState!.pushNamed(routeName, arguments: arguments);
+
+    debugPrint("[NavigationService] ✅ Executing pushNamed for: $routeName");
+    return navigatorKey.currentState!
+        .pushNamed(routeName, arguments: arguments);
   }
 
   // Replace the current route with a new one
   Future<dynamic> replaceTo(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing with: $routeName");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceTo $routeName');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceTo $routeName');
       return Future.value(null);
     }
     return navigatorKey.currentState!.pushReplacementNamed(
@@ -87,7 +97,8 @@ class NavigationService {
   Future<dynamic> replaceAllWith(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing all routes with $routeName");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceAllWith $routeName');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceAllWith $routeName');
       return Future.value(null);
     }
     return navigatorKey.currentState!.pushNamedAndRemoveUntil(
@@ -101,7 +112,8 @@ class NavigationService {
   Future<dynamic> replaceUntilHome(String routeName, {Object? arguments}) {
     debugPrint("[NavigationService] Replacing until home with: $routeName");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceUntilHome $routeName');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceUntilHome $routeName');
       return Future.value(null);
     }
     return navigatorKey.currentState!.pushNamedAndRemoveUntil(
@@ -115,7 +127,8 @@ class NavigationService {
   void reset() {
     debugPrint("[NavigationService] Resetting navigation stack");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot reset navigation stack');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot reset navigation stack');
       return;
     }
     navigatorKey.currentState!.popUntil((route) => route.isFirst);
@@ -129,7 +142,8 @@ class NavigationService {
   void goBack() {
     debugPrint("[NavigationService] Going back");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot goBack');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot goBack');
       return;
     }
     if (navigatorKey.currentState!.canPop()) {
@@ -141,7 +155,8 @@ class NavigationService {
   void popUntil(String routeName) {
     debugPrint("[NavigationService] Popping until $routeName");
     if (navigatorKey.currentState == null) {
-      debugPrint('[NavigationService] WARNING: navigatorKey.currentState is null, cannot popUntil $routeName');
+      debugPrint(
+          '[NavigationService] WARNING: navigatorKey.currentState is null, cannot popUntil $routeName');
       return;
     }
     navigatorKey.currentState!.popUntil(ModalRoute.withName(routeName));
