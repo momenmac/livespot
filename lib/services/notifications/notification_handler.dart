@@ -197,12 +197,21 @@ class NotificationHandler {
 
   /// Handle notification tap (when user taps on notification)
   static Future<void> handleNotificationTap(RemoteMessage message) async {
+    debugPrint('🔥 === NOTIFICATION TAP HANDLER STARTED ===');
     debugPrint('👆 Handling notification tap: ${message.notification?.title}');
+    debugPrint('👆 Message ID: ${message.messageId}');
+    debugPrint('👆 Message data: ${message.data}');
 
     final notificationData = _parseNotificationData(message);
-    if (notificationData == null) return;
+    if (notificationData == null) {
+      debugPrint('❌ Failed to parse notification data for tap');
+      return;
+    }
 
+    debugPrint('✅ Parsed notification data for tap: ${notificationData.type}');
+    debugPrint('🔄 Calling _processNotification with isFromTap: true...');
     await _processNotification(notificationData, isFromTap: true);
+    debugPrint('🔥 === NOTIFICATION TAP HANDLER COMPLETED ===');
   }
 
   /// Handle background notification
@@ -214,105 +223,16 @@ class NotificationHandler {
     final notificationData = _parseNotificationData(message);
     if (notificationData == null) return;
 
-    // For background notifications, show local notifications with action buttons for messages
+    // For message notifications, don't show local notification to avoid duplicates
+    // The push notification from Firebase will handle the display and navigation
     if (notificationData.type == NotificationType.message) {
-      await _showMessageLocalNotification(
-          notificationData as MessageNotificationData);
-    } else {
-      await _showLocalNotification(notificationData);
-    }
-  }
-
-  /// Show local notification for messages with action buttons (background only)
-  static Future<void> _showMessageLocalNotification(
-      MessageNotificationData data) async {
-    try {
       debugPrint(
-          '📱 Showing background message local notification with actions');
-
-      // Ensure local notifications are initialized
-      if (!_localNotificationsInitialized) {
-        await _initializeLocalNotifications();
-      }
-
-      // Create payload with conversation data
-      final payload = {
-        'type': 'message',
-        'conversation_id': data.conversationId,
-        'message_id': data.messageId,
-        'from_user_id': data.fromUserId,
-      };
-
-      // Create notification body based on message type
-      String notificationBody = data.body;
-      if (data.messageType == 'image') {
-        notificationBody = '📷 Sent a photo';
-      } else if (data.messageType == 'file') {
-        notificationBody = '📎 Sent a file';
-      }
-
-      // Generate unique notification ID based on conversation to enable grouping
-      final notificationId = data.conversationId.hashCode.abs();
-      final tag = 'message_${data.messageId}';
-
-      final AndroidNotificationDetails androidPlatformChannelSpecifics =
-          AndroidNotificationDetails(
-        'messages', // Use the correct channel ID
-        'Messages',
-        channelDescription: 'Notifications for new messages',
-        importance: Importance.high,
-        priority: Priority.high,
-        groupKey: 'message_notifications',
-        tag: tag, // Unique tag per message
-        setAsGroupSummary: false,
-        enableVibration: true,
-        enableLights: true,
-        icon: 'ic_notification',
-        actions: const [
-          AndroidNotificationAction(
-            'reply',
-            'Reply',
-            icon: DrawableResourceAndroidBitmap('ic_reply'),
-            inputs: [
-              AndroidNotificationActionInput(
-                label: 'Type a message...',
-                allowFreeFormInput: true,
-              ),
-            ],
-          ),
-          AndroidNotificationAction(
-            'mark_read',
-            'Mark as Read',
-            icon: DrawableResourceAndroidBitmap('ic_check'),
-          ),
-        ],
-      );
-
-      const DarwinNotificationDetails iosPlatformChannelSpecifics =
-          DarwinNotificationDetails(
-        categoryIdentifier: 'MESSAGE_CATEGORY',
-        threadIdentifier: 'messages',
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      await _localNotifications.show(
-        notificationId,
-        '${data.fromUserName}', // Show sender name as title
-        notificationBody,
-        NotificationDetails(
-          android: androidPlatformChannelSpecifics,
-          iOS: iosPlatformChannelSpecifics,
-        ),
-        payload: payload.toString(),
-      );
-
-      debugPrint('✅ Background message local notification shown with actions');
-      debugPrint('📱 Notification ID: $notificationId, Tag: $tag');
-    } catch (e) {
-      debugPrint('❌ Error showing background message local notification: $e');
+          '📱 Skipping local notification for message (using push notification only)');
+      return;
     }
+
+    // For other notification types, show local notifications
+    await _showLocalNotification(notificationData);
   }
 
   /// Parse notification data from Firebase message
@@ -378,14 +298,7 @@ class NotificationHandler {
 
     debugPrint('🔄 Processing notification type: ${notificationData.type}');
 
-    // If tapped, navigate to notifications page for all notification types
-    if (isFromTap) {
-      debugPrint('👆 Notification tapped - navigating to notifications page');
-      NavigationService().navigateTo(AppRoutes.notifications);
-      return;
-    }
-
-    // For non-tap events (foreground notifications), handle type-specific logic
+    // Handle type-specific logic for both tap and non-tap events
     switch (notificationData.type) {
       case NotificationType.friendRequest:
         await _handleFriendRequest(
@@ -666,12 +579,17 @@ class NotificationHandler {
     debugPrint('💬 IsFromTap: $isFromTap');
 
     if (isFromTap) {
+      debugPrint(
+          '💬 🔥 NOTIFICATION TAP DETECTED - Navigating to conversation');
       // Navigate to messages page and specific conversation
       if (data.conversationId.isNotEmpty) {
+        debugPrint('💬 🔥 Navigating to: /messages/${data.conversationId}');
         NavigationService().navigateTo('/messages/${data.conversationId}');
       } else {
+        debugPrint('💬 🔥 Navigating to: ${AppRoutes.messages}');
         NavigationService().navigateTo(AppRoutes.messages);
       }
+      debugPrint('💬 🔥 Navigation command sent');
     } else {
       // For foreground notifications, only show snackbar (FCM system notification already shown)
       // Don't show local notification to avoid duplicates
@@ -683,6 +601,7 @@ class NotificationHandler {
       }
       _showSnackBar('${data.fromUserName}: $notificationBody');
     }
+    debugPrint('💬 === MESSAGE NOTIFICATION HANDLING COMPLETED ===');
   }
 
   /// Show friend request dialog

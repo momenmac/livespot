@@ -142,6 +142,7 @@ class RouteGuard {
   /// Get the widget for a route
   static Widget _getRouteWidget(
       String routeName, dynamic args, BuildContext context) {
+    // Check for exact route match first
     final routeBuilder = AppRoutes.routes[routeName];
     if (routeBuilder != null) {
       if (args != null) {
@@ -149,6 +150,28 @@ class RouteGuard {
       }
       return routeBuilder({});
     }
+
+    // Handle dynamic routes that don't have exact matches
+    if (routeName.startsWith('/messages/') &&
+        routeName.length > '/messages/'.length) {
+      // This is a dynamic conversation route like /messages/{conversationId}
+      // Extract the conversation ID and navigate to the messages page
+      final conversationId = routeName.substring('/messages/'.length);
+      print(
+          '🔗 Handling dynamic message route: $routeName, conversationId: $conversationId');
+
+      // Return the MessagesPage (the key in the routes map is '/messages' with the slash)
+      final messagesBuilder = AppRoutes.routes['/messages'];
+      if (messagesBuilder != null) {
+        print(
+            '🔗 Successfully found messages route builder, creating MessagesPage with conversationId: $conversationId');
+        return messagesBuilder({'conversationId': conversationId});
+      } else {
+        print('❌ Could not find messages route builder in AppRoutes.routes');
+        print('Available routes: ${AppRoutes.routes.keys.toList()}');
+      }
+    }
+
     return Scaffold(
       body: Center(
         child: Text("Route not found: $routeName"),

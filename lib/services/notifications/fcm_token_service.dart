@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import '../api/notification_api_service.dart';
@@ -135,12 +133,22 @@ class FCMTokenService {
   String _getPlatformString() {
     if (kIsWeb) {
       return 'web';
-    } else if (Platform.isAndroid) {
-      return 'android';
-    } else if (Platform.isIOS) {
-      return 'ios';
-    } else {
-      return 'other';
+    }
+
+    // Use defaultTargetPlatform for better web compatibility
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.macOS:
+        return 'macos';
+      case TargetPlatform.windows:
+        return 'windows';
+      case TargetPlatform.linux:
+        return 'linux';
+      case TargetPlatform.fuchsia:
+        return 'fuchsia';
     }
   }
 

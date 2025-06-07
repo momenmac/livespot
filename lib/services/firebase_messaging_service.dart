@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
@@ -72,13 +71,33 @@ class FirebaseMessagingService {
     FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
 
     // Configure notification tap handler
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    print('🔄 Setting up notification tap handler...');
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('🎯 === onMessageOpenedApp TRIGGERED ===');
+      print('🎯 User tapped notification while app was in background');
+      print('🎯 Message ID: ${message.messageId}');
+      print('🎯 Data: ${message.data}');
+      print(
+          '🎯 Android Click Action: ${message.notification?.android?.clickAction}');
+      print('🎯 Calling _handleNotificationTap...');
+      _handleNotificationTap(message);
+    }, onError: (error) {
+      print('❌ onMessageOpenedApp ERROR: $error');
+    });
 
     // Handle notification tap when app is terminated
+    print('🔄 Checking for initial message (app was terminated)...');
     RemoteMessage? initialMessage =
         await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
+      print('🎯 === INITIAL MESSAGE FOUND ===');
+      print('🎯 App was opened from notification while terminated');
+      print('🎯 Message ID: ${initialMessage.messageId}');
+      print('🎯 Data: ${initialMessage.data}');
+      print('🎯 Calling _handleNotificationTap...');
       _handleNotificationTap(initialMessage);
+    } else {
+      print('🔄 No initial message found');
     }
   }
 
@@ -105,7 +124,7 @@ class FirebaseMessagingService {
     );
 
     // Create notification channel for Android
-    if (Platform.isAndroid) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
         'messages',
         'Messages',
@@ -158,12 +177,20 @@ class FirebaseMessagingService {
   }
 
   static void _handleNotificationTap(RemoteMessage message) async {
+    print('🔥 === NOTIFICATION TAP DETECTED ===');
+    print('🔥 Message ID: ${message.messageId}');
+    print('🔥 Data: ${message.data}');
+    print(
+        '🔥 Notification: ${message.notification?.title} - ${message.notification?.body}');
+    print('🔥 About to call NotificationHandler.handleNotificationTap...');
+
     if (kDebugMode) {
       print('Notification tapped: ${message.messageId}');
     }
 
     // Use the comprehensive NotificationHandler for notification taps
     await NotificationHandler.handleNotificationTap(message);
+    print('🔥 === NOTIFICATION TAP HANDLING COMPLETED ===');
   }
 
   static void setOnNotificationTap(

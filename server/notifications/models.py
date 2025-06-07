@@ -30,7 +30,7 @@ class NotificationSettings(models.Model):
 class FCMToken(models.Model):
     """FCM tokens for push notifications"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='fcm_tokens')
-    token = models.TextField(unique=True)
+    token = models.TextField()  # Removed unique=True - tokens can be shared between users
     device_platform = models.CharField(max_length=20, default='unknown')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,6 +38,7 @@ class FCMToken(models.Model):
 
     class Meta:
         db_table = 'fcm_tokens'
+        # Only one active token per user per device platform
         unique_together = ['user', 'token']
 
     def __str__(self):

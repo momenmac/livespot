@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models
 import firebase_admin
 from firebase_admin import messaging
 import json
@@ -79,25 +79,68 @@ class FCMTokenViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Deactivate old tokens for this user on the same platform
-        FCMToken.objects.filter(
-            user=request.user, 
-            device_platform=platform
-        ).update(is_active=False)
+        try:
+            with transaction.atomic():
+                # Deactivate old tokens for this user on the same platform
+                # (but not the same token, as it might be shared)
+                FCMToken.objects.filter(
+                    user=request.user, 
+                    device_platform=platform
+                ).exclude(token=token).update(is_active=False)
 
-        # Create or update the token
-        fcm_token, created = FCMToken.objects.update_or_create(
-            user=request.user,
-            token=token,
-            defaults={
-                'device_platform': platform,
-                'is_active': True,
-                'last_used': timezone.now()
-            }
-        )
+                # Try to get existing token for this user
+                try:
+                    fcm_token = FCMToken.objects.get(
+                        user=request.user,
+                        token=token
+                    )
+                    # Update existing token
+                    fcm_token.device_platform = platform
+                    fcm_token.is_active = True
+                    fcm_token.last_used = timezone.now()
+                    fcm_token.save()
+                    created = False
+                    
+                except FCMToken.DoesNotExist:
+                    # Create new token for this user
+                    try:
+                        fcm_token = FCMToken.objects.create(
+                            user=request.user,
+                            token=token,
+                            device_platform=platform,
+                            is_active=True,
+                            last_used=timezone.now()
+                        )
+                        created = True
+                        
+                    except Exception as create_error:
+                        # Handle race condition where another request created the same user-token pair
+                        if 'duplicate key' in str(create_error).lower() or 'unique constraint' in str(create_error).lower():
+                            # Try to get the token that was just created by another request
+                            fcm_token = FCMToken.objects.get(
+                                user=request.user,
+                                token=token
+                            )
+                            # Update it
+                            fcm_token.device_platform = platform
+                            fcm_token.is_active = True
+                            fcm_token.last_used = timezone.now()
+                            fcm_token.save()
+                            created = False
+                        else:
+                            # Re-raise if it's a different error
+                            raise create_error
 
-        serializer = self.get_serializer(fcm_token)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            serializer = self.get_serializer(fcm_token)
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            return Response(serializer.data, status=status_code)
+            
+        except Exception as e:
+            logger.error(f"Error registering FCM token: {str(e)}")
+            return Response(
+                {'error': 'Failed to register FCM token'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def deactivate_token(self, request):
