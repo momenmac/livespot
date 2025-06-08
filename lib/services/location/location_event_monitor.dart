@@ -73,11 +73,13 @@ class LocationEventMonitor with WidgetsBindingObserver {
       } catch (e) {
         debugPrint(
             '⚠️ LocationEventMonitor: Could not get initial position: $e');
-        // Try to get last known position as fallback
-        _lastPosition = await _locationService.getLastKnownPosition();
-        if (_lastPosition != null) {
-          debugPrint(
-              '📍 Using last known position: ${_lastPosition?.latitude}, ${_lastPosition?.longitude}');
+        // Try to get last known position as fallback (only on non-web platforms)
+        if (!kIsWeb) {
+          _lastPosition = await _locationService.getLastKnownPosition();
+          if (_lastPosition != null) {
+            debugPrint(
+                '📍 Using last known position: ${_lastPosition?.latitude}, ${_lastPosition?.longitude}');
+          }
         }
       }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_2/services/location/location_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:developer' as developer;
 
 class LocationCacheService {
@@ -78,12 +79,17 @@ class LocationCacheService {
     try {
       developer.log('Updating user location...', name: 'LocationCache');
 
-      // Try last known position first
-      Position? position = await _locationService.getLastKnownPosition();
+      // Try last known position first (only on non-web platforms)
+      Position? position;
 
+      if (!kIsWeb) {
+        position = await _locationService.getLastKnownPosition();
+      }
+
+      // If no last known position, get current position
       position ??= await _locationService
-            .getCurrentPosition()
-            .timeout(const Duration(seconds: 5));
+          .getCurrentPosition()
+          .timeout(const Duration(seconds: 5));
 
       _cachedPosition = position;
       _lastUpdate = DateTime.now();
@@ -98,7 +104,7 @@ class LocationCacheService {
           'Location updated: ${position.latitude}, ${position.longitude}',
           name: 'LocationCache');
       return position;
-        } catch (e) {
+    } catch (e) {
       developer.log('Failed to update location: $e', name: 'LocationCache');
     }
     return null;
