@@ -1303,3 +1303,56 @@ class UserSearchView(generics.ListAPIView):
                 'total': len(serializer.data)
             }
         })
+
+
+class UserRandomView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get random users for suggestions"""
+        try:
+            # Get limit parameter, default to 10
+            limit = int(request.query_params.get('limit', 10))
+            limit = min(limit, 50)  # Cap at 50 to prevent abuse
+            
+            # Get current user to exclude from suggestions
+            current_user = request.user
+            
+            # Get users that current user is already following to exclude them
+            try:
+                current_profile = current_user.profile
+                following_ids = current_profile.following.values_list('user_id', flat=True)
+            except UserProfile.DoesNotExist:
+                following_ids = []
+            
+            # Get random user profiles, excluding current user and users they're already following
+            # Also exclude users without profiles (just in case)
+            random_profiles = UserProfile.objects.exclude(
+                user_id=current_user.id
+            ).exclude(
+                user_id__in=following_ids
+            ).select_related('user').order_by('?')[:limit]
+            
+            # Serialize the results
+            serializer = UserSearchResultSerializer(random_profiles, many=True)
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'users': serializer.data,
+                    'total': len(serializer.data),
+                    'limit': limit
+                }
+            })
+            
+        except ValueError:
+            return Response(
+                {'success': False, 'error': 'Invalid limit parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error fetching random users: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Failed to fetch suggested users'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -1,4 +1,5 @@
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LocationService {
   /// Get the current position of the user
@@ -34,6 +35,16 @@ class LocationService {
 
   /// Get the last known position of the user
   Future<Position?> getLastKnownPosition() async {
+    // getLastKnownPosition is not supported on web platform
+    if (kIsWeb) {
+      // For web, we need to get current position instead
+      try {
+        return await getCurrentPosition();
+      } catch (e) {
+        // If we can't get current position, return null
+        return null;
+      }
+    }
     return await Geolocator.getLastKnownPosition();
   }
 
