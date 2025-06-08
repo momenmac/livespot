@@ -761,6 +761,174 @@ class UserProfileProvider extends ChangeNotifier {
     }
   }
 
+  // Fetch random/suggested users for discovery
+  Future<List<Map<String, dynamic>>> fetchRandomUsers({int limit = 10}) async {
+    final token = _accountProvider.token;
+    if (token == null) return [];
+
+    try {
+      developer.log('Fetching random users for discovery, limit: $limit',
+          name: 'UserProfileProvider');
+
+      // Use the search endpoint with an empty query to get random users
+      // This is a common pattern when backend supports it
+      final endpoint = '/api/accounts/users/random/?limit=$limit';
+      developer.log('Random users endpoint: $endpoint',
+          name: 'UserProfileProvider');
+
+      final response = await ApiClient.get(
+        endpoint,
+        token: token.accessToken,
+      );
+
+      developer.log('Fetch random users raw response: $response',
+          name: 'UserProfileProvider');
+
+      if (response['success'] == true && response['data'] != null) {
+        // Handle the nested response structure
+        var data = response['data'];
+
+        // Check if data is nested another level deep
+        if (data is Map &&
+            data.containsKey('success') &&
+            data.containsKey('data')) {
+          developer.log(
+              'Detected nested data structure in random users response',
+              name: 'UserProfileProvider');
+          data = data['data'];
+        }
+
+        // Check if 'users' key exists, if not, assume data is directly the users list
+        List<dynamic> usersData;
+        if (data.containsKey('users')) {
+          usersData = data['users'] as List;
+        } else if (data is List) {
+          usersData = data;
+        } else {
+          developer.log(
+              'Unexpected data structure in random users response: $data',
+              name: 'UserProfileProvider');
+          return [];
+        }
+
+        developer.log('Found ${usersData.length} random users',
+            name: 'UserProfileProvider');
+
+        // Filter out the current user from the suggestions
+        final currentUserId = _currentUserProfile?.account.id;
+
+        return usersData
+            .where((userData) {
+              final account = userData['account'] ?? {};
+              final userId = account['id'];
+              return userId != currentUserId; // Exclude current user
+            })
+            .map((userData) {
+              // Convert each user data into a format that can be used by the UI
+              final account = userData['account'] ?? {};
+              return {
+                'id': account['id'],
+                'email': account['email'],
+                'name':
+                    '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'
+                        .trim(),
+                'profileImage': account['profile_picture'],
+                'username': userData['username'],
+                'bio': userData['bio'] ?? '',
+                'location': userData['location'] ?? '',
+                'website': userData['website'] ?? '',
+                'is_verified': userData['is_verified'] ?? false,
+                'followers': userData['followers_count'] ?? 0,
+                'following': userData['following_count'] ?? 0,
+                'posts': userData['posts_count'] ?? 0,
+                'saved': userData['saved_posts_count'] ?? 0,
+                'upvoted': userData['upvoted_posts_count'] ?? 0,
+                'comments': userData['comments_count'] ?? 0,
+                'honesty': userData['honesty_score'] ?? 0,
+                'joinDate': userData['join_date'] ?? '',
+                'activityStatus': userData['activity_status'] ?? 'offline',
+                'interests': userData['interests'] is List
+                    ? List<String>.from(userData['interests'])
+                    : [],
+              };
+            })
+            .take(limit) // Ensure we don't exceed the requested limit
+            .toList();
+      } else {
+        developer.log(
+            'Random users fetch failed or returned no data: $response',
+            name: 'UserProfileProvider');
+      }
+      return [];
+    } catch (e) {
+      developer.log('Error fetching random users: $e',
+          name: 'UserProfileProvider', error: e);
+
+      // If the random endpoint doesn't exist, fall back to search with empty query
+      try {
+        developer.log('Falling back to search endpoint for random users',
+            name: 'UserProfileProvider');
+
+        final fallbackResponse = await ApiClient.get(
+          '/api/accounts/users/search/?limit=$limit',
+          token: token.accessToken,
+        );
+
+        if (fallbackResponse['success'] == true &&
+            fallbackResponse['data'] != null) {
+          var data = fallbackResponse['data'];
+
+          if (data is Map && data.containsKey('users')) {
+            final List<dynamic> usersData = data['users'] as List;
+            final currentUserId = _currentUserProfile?.account.id;
+
+            return usersData
+                .where((userData) {
+                  final account = userData['account'] ?? {};
+                  final userId = account['id'];
+                  return userId != currentUserId;
+                })
+                .map((userData) {
+                  final account = userData['account'] ?? {};
+                  return {
+                    'id': account['id'],
+                    'email': account['email'],
+                    'name':
+                        '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'
+                            .trim(),
+                    'profileImage': account['profile_picture'],
+                    'username': userData['username'],
+                    'bio': userData['bio'] ?? '',
+                    'location': userData['location'] ?? '',
+                    'website': userData['website'] ?? '',
+                    'is_verified': userData['is_verified'] ?? false,
+                    'followers': userData['followers_count'] ?? 0,
+                    'following': userData['following_count'] ?? 0,
+                    'posts': userData['posts_count'] ?? 0,
+                    'saved': userData['saved_posts_count'] ?? 0,
+                    'upvoted': userData['upvoted_posts_count'] ?? 0,
+                    'comments': userData['comments_count'] ?? 0,
+                    'honesty': userData['honesty_score'] ?? 0,
+                    'joinDate': userData['join_date'] ?? '',
+                    'activityStatus': userData['activity_status'] ?? 'offline',
+                    'interests': userData['interests'] is List
+                        ? List<String>.from(userData['interests'])
+                        : [],
+                  };
+                })
+                .take(limit)
+                .toList();
+          }
+        }
+      } catch (fallbackError) {
+        developer.log('Fallback to search endpoint also failed: $fallbackError',
+            name: 'UserProfileProvider', error: fallbackError);
+      }
+
+      return [];
+    }
+  }
+
   // Follow a user
   Future<bool> followUser(int userId) async {
     final token = _accountProvider.token;

@@ -678,33 +678,36 @@ class _PostDetailPageState extends State<PostDetailPage> {
     try {
       // Extract the relative path from the video URL
       String relativePath = '';
-      
+
       if (videoUrl.contains('attachments/video/')) {
         // Extract path after domain (e.g., /media/attachments/video/filename.mp4)
         int pathIndex = videoUrl.indexOf('attachments/video/');
         relativePath = videoUrl.substring(pathIndex);
-        
+
         // Convert to thumbnail path
-        relativePath = relativePath.replaceAll('attachments/video/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll(
+            'attachments/video/', 'attachments/thumbnails/');
         relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
-        
+
         // Construct full URL using ApiUrls.baseUrl, always including /media/
         String thumbnailUrl = '${ApiUrls.baseUrl}/media/$relativePath';
         print('🎥 Constructed server thumbnail URL: $thumbnailUrl');
         return thumbnailUrl;
-        
-      } else if (videoUrl.contains('attachments/image/') && videoUrl.endsWith('.mp4')) {
+      } else if (videoUrl.contains('attachments/image/') &&
+          videoUrl.endsWith('.mp4')) {
         // Handle videos that were incorrectly placed in image directory
         int pathIndex = videoUrl.indexOf('attachments/image/');
         relativePath = videoUrl.substring(pathIndex);
-        
+
         // Convert to thumbnail path
-        relativePath = relativePath.replaceAll('attachments/image/', 'attachments/thumbnails/');
+        relativePath = relativePath.replaceAll(
+            'attachments/image/', 'attachments/thumbnails/');
         relativePath = relativePath.replaceAll('.mp4', '_thumb.jpg');
-        
+
         // Construct full URL using ApiUrls.baseUrl without extra /media/
         String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
-        print('🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
+        print(
+            '🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
         return thumbnailUrl;
       }
     } catch (e) {
@@ -878,7 +881,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       // Only try client-side generation for local files to avoid server errors
       if (_isFilePath(processedVideoUrl)) {
         print('🎥 Attempting local file thumbnail generation');
-        
+
         final uint8list = await VideoThumbnail.thumbnailData(
           video: processedVideoUrl,
           imageFormat: ImageFormat.JPEG,
@@ -889,11 +892,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         );
 
         if (uint8list != null && uint8list.isNotEmpty) {
-          print('🎥 Success! Generated local thumbnail with ${uint8list.length} bytes');
+          print(
+              '🎥 Success! Generated local thumbnail with ${uint8list.length} bytes');
           return uint8list;
         }
       } else {
-        print('🎥 Skipping client-side generation for network video to avoid server errors');
+        print(
+            '🎥 Skipping client-side generation for network video to avoid server errors');
       }
 
       return null;
@@ -1209,6 +1214,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 900; // Breakpoint for wide screens
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1278,404 +1286,508 @@ class _PostDetailPageState extends State<PostDetailPage> {
               ),
             )
           : null,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Main post image/video - now clickable
-            Stack(
-              children: [
-                // Media with shimmer loading placeholder
-                SizedBox(
-                  height: 250,
-                  width: double.infinity,
-                  child: _buildMediaWidget(
-                    _getImageUrl(),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                // Dark gradient overlay at the bottom
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 100,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withAlpha(
-                              178), // Replaced withOpacity (0.7 * 255 = 178.5)
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                // Post details overlay
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  right: 16,
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: _navigateToUserProfile,
-                        child: CircleAvatar(
-                          backgroundImage:
-                              widget.post?.authorProfilePic != null &&
-                                      widget.post!.authorProfilePic!.isNotEmpty
-                                  ? NetworkImage(_getFixedImageUrl(
-                                      widget.post!.authorProfilePic!))
-                                  : null,
-                          radius: 18,
-                          child: (widget.post?.authorProfilePic == null ||
-                                  widget.post!.authorProfilePic!.isEmpty)
-                              ? const Icon(Icons.person)
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: _navigateToUserProfile,
-                                  child: Text(
-                                    // Use getDisplayName helper to respect isAnonymous flag
-                                    widget.post?.getDisplayName() ??
-                                        widget.authorName ??
-                                        "Anonymous",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                if (widget.post?.isAuthorVerified == true ||
-                                    widget.isVerified)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      Icons.verified,
-                                      size: 16,
-                                      color: ThemeConstants.primaryColor,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            Text(
-                              widget.post?.timePosted != null
-                                  ? TimeFormatter.getFormattedTime(
-                                      widget.post!.timePosted)
-                                  : widget.time,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: ThemeConstants.primaryColor,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              widget.post != null && widget.post!.distance > 0
-                                  ? _formatDistance(widget
-                                      .post!.distance) // Use meters directly
-                                  : _isCalculatingDistance
-                                      ? "Calculating..."
-                                      : "Unknown",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            // Post content
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
+      body: isWideScreen ? _buildWideScreenLayout() : _buildMobileLayout(),
+    );
+  }
+
+  // Build layout for mobile/tablet screens
+  Widget _buildMobileLayout() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildMainMediaSection(),
+          _buildPostContentSection(),
+          _buildLocationMapSection(),
+          _buildRelatedPostsSection(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // Build layout for wide screens (desktop/large tablets)
+  Widget _buildWideScreenLayout() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center, // Center everything
+        children: [
+          // Hero image section - centered with improved proportions
+          _buildMainMediaSection(),
+          const SizedBox(height: 32), // More space after hero image
+          // Two-column layout for content - centered
+          Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.title,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.description,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Event Status Section
-                  if (widget.post != null)
-                    EventStatusSection(
-                      post: widget.post!,
-                      onStatusUpdated: () => setState(() {}),
+                  // Left column - Main content (60%)
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildPostContentSection(),
+                        const SizedBox(height: 24),
+                      ],
                     ),
+                  ),
+                  const SizedBox(width: 24),
+                  // Right column - Map and related posts (40%)
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 16),
+                        _buildLocationMapSection(),
+                        const SizedBox(height: 16),
+                        if (widget.post != null &&
+                            (widget.post!.hasRelatedPosts ||
+                                _relatedPosts.isNotEmpty))
+                          _buildRelatedPostsSection(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
 
-                  const SizedBox(height: 16),
+  // Extract main media section into reusable widget
+  Widget _buildMainMediaSection() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 900;
 
-                  // Engagement metrics - Single row layout
-                  Row(
-                    children: [
-                      // Upvotes - Using arrow up instead of thumb up
-                      GestureDetector(
-                        onTap: widget.post != null && _isUserWithinRange()
-                            ? _handleUpvote
-                            : (widget.post != null && !_isUserWithinRange())
-                                ? () => _showDistanceRestrictionError()
-                                : null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _hasUpvoted
-                                  ? Icons.arrow_upward
-                                  : Icons.arrow_upward_outlined,
+    // For wide screens, use a more cinematic aspect ratio and better proportions
+    Widget mediaContainer = Container(
+      height: isWideScreen
+          ? (screenWidth * 0.4).clamp(350.0, 500.0)
+          : // Dynamic height based on screen width
+          250,
+      width: double.infinity,
+      constraints: isWideScreen
+          ? const BoxConstraints(maxWidth: 1400)
+          : // Wider max width for better proportion
+          null,
+      margin: isWideScreen
+          ? const EdgeInsets.symmetric(horizontal: 24)
+          : // Add margins on wide screens
+          EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: isWideScreen
+            ? BorderRadius.circular(16)
+            : // Rounded corners on wide screens
+            BorderRadius.zero,
+        child: _buildMediaWidget(
+          _getImageUrl(),
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+
+    return Stack(
+      children: [
+        // Centered container for wide screens
+        if (isWideScreen) Center(child: mediaContainer) else mediaContainer,
+        // Dark gradient overlay at the bottom
+        Positioned(
+          bottom: 0,
+          left: isWideScreen ? 24 : 0, // Adjust for margins on wide screens
+          right: isWideScreen ? 24 : 0,
+          height: 120,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: isWideScreen
+                  ? const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    )
+                  : BorderRadius.zero,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withAlpha(
+                      204), // Slightly darker for better text contrast
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Post details overlay
+        Positioned(
+          bottom: 16,
+          left: isWideScreen ? 40 : 16, // More padding on wide screens
+          right: isWideScreen ? 40 : 16,
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _navigateToUserProfile,
+                child: CircleAvatar(
+                  backgroundImage: widget.post?.authorProfilePic != null &&
+                          widget.post!.authorProfilePic!.isNotEmpty
+                      ? NetworkImage(
+                          _getFixedImageUrl(widget.post!.authorProfilePic!))
+                      : null,
+                  radius:
+                      isWideScreen ? 24 : 18, // Larger avatar on wide screens
+                  child: (widget.post?.authorProfilePic == null ||
+                          widget.post!.authorProfilePic!.isEmpty)
+                      ? Icon(Icons.person, size: isWideScreen ? 28 : 20)
+                      : null,
+                ),
+              ),
+              SizedBox(
+                  width:
+                      isWideScreen ? 16 : 12), // More spacing on wide screens
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: _navigateToUserProfile,
+                          child: Text(
+                            // Use getDisplayName helper to respect isAnonymous flag
+                            widget.post?.getDisplayName() ??
+                                widget.authorName ??
+                                "Anonymous",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: isWideScreen
+                                  ? 18
+                                  : 16, // Larger text on wide screens
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (widget.post?.isAuthorVerified == true ||
+                            widget.isVerified)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.verified,
+                              size: isWideScreen
+                                  ? 18
+                                  : 16, // Larger icon on wide screens
+                              color: ThemeConstants.primaryColor,
+                            ),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      widget.post?.timePosted != null
+                          ? TimeFormatter.getFormattedTime(
+                              widget.post!.timePosted)
+                          : widget.time,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: isWideScreen
+                            ? 14
+                            : 12, // Larger text on wide screens
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      isWideScreen ? 12 : 8, // More padding on wide screens
+                  vertical: isWideScreen ? 6 : 4,
+                ),
+                decoration: BoxDecoration(
+                  color: ThemeConstants.primaryColor,
+                  borderRadius: BorderRadius.circular(
+                      isWideScreen ? 20 : 16), // More rounded on wide screens
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      color: Colors.white,
+                      size:
+                          isWideScreen ? 16 : 14, // Larger icon on wide screens
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      widget.post != null && widget.post!.distance > 0
+                          ? _formatDistance(
+                              widget.post!.distance) // Use meters directly
+                          : _isCalculatingDistance
+                              ? "Calculating..."
+                              : "Unknown",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isWideScreen
+                            ? 14
+                            : 12, // Larger text on wide screens
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Extract post content section into reusable widget
+  Widget _buildPostContentSection() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.title,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.description,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 16),
+
+          // Event Status Section
+          if (widget.post != null)
+            EventStatusSection(
+              post: widget.post!,
+              onStatusUpdated: () => setState(() {}),
+            ),
+
+          const SizedBox(height: 16),
+
+          // Engagement metrics - Single row layout
+          Row(
+            children: [
+              // Upvotes - Using arrow up instead of thumb up
+              GestureDetector(
+                onTap: widget.post != null && _isUserWithinRange()
+                    ? _handleUpvote
+                    : (widget.post != null && !_isUserWithinRange())
+                        ? () => _showDistanceRestrictionError()
+                        : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _hasUpvoted
+                          ? Icons.arrow_upward
+                          : Icons.arrow_upward_outlined,
+                      color: _hasUpvoted
+                          ? ThemeConstants.primaryColor
+                          : (!_isUserWithinRange() && widget.post != null)
+                              ? Colors.grey.withOpacity(0.5)
+                              : Colors.grey,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 3),
+                    _isLoadingVote
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            '$_upvotes',
+                            style: TextStyle(
                               color: _hasUpvoted
                                   ? ThemeConstants.primaryColor
                                   : (!_isUserWithinRange() &&
                                           widget.post != null)
                                       ? Colors.grey.withOpacity(0.5)
                                       : Colors.grey,
-                              size: 18,
+                              fontSize: 13,
                             ),
-                            const SizedBox(width: 3),
-                            _isLoadingVote
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : Text(
-                                    '$_upvotes',
-                                    style: TextStyle(
-                                      color: _hasUpvoted
-                                          ? ThemeConstants.primaryColor
-                                          : (!_isUserWithinRange() &&
-                                                  widget.post != null)
-                                              ? Colors.grey.withOpacity(0.5)
-                                              : Colors.grey,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                          ],
-                        ),
-                      ),
+                          ),
+                  ],
+                ),
+              ),
 
-                      const SizedBox(width: 16),
+              const SizedBox(width: 16),
 
-                      // Downvotes - Using arrow down instead of thumb down
-                      GestureDetector(
-                        onTap: widget.post != null && _isUserWithinRange()
-                            ? _handleDownvote
-                            : (widget.post != null && !_isUserWithinRange())
-                                ? () => _showDistanceRestrictionError()
-                                : null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _hasDownvoted
-                                  ? Icons.arrow_downward
-                                  : Icons.arrow_downward_outlined,
+              // Downvotes - Using arrow down instead of thumb down
+              GestureDetector(
+                onTap: widget.post != null && _isUserWithinRange()
+                    ? _handleDownvote
+                    : (widget.post != null && !_isUserWithinRange())
+                        ? () => _showDistanceRestrictionError()
+                        : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _hasDownvoted
+                          ? Icons.arrow_downward
+                          : Icons.arrow_downward_outlined,
+                      color: _hasDownvoted
+                          ? Colors.redAccent
+                          : (!_isUserWithinRange() && widget.post != null)
+                              ? Colors.grey.withOpacity(0.5)
+                              : Colors.grey,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 3),
+                    _isLoadingVote
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            '$_downvotes',
+                            style: TextStyle(
                               color: _hasDownvoted
                                   ? Colors.redAccent
                                   : (!_isUserWithinRange() &&
                                           widget.post != null)
                                       ? Colors.grey.withOpacity(0.5)
                                       : Colors.grey,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 3),
-                            _isLoadingVote
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : Text(
-                                    '$_downvotes',
-                                    style: TextStyle(
-                                      color: _hasDownvoted
-                                          ? Colors.redAccent
-                                          : (!_isUserWithinRange() &&
-                                                  widget.post != null)
-                                              ? Colors.grey.withOpacity(0.5)
-                                              : Colors.grey,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // Comments count - now shows thread count
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.comment_outlined,
-                            color: Colors.grey,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${_relatedPosts.length}', // Show thread count instead of comments
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 13),
-                          ),
-                        ],
-                      ),
-
-                      const Spacer(),
-
-                      // Share, Honesty, and Save buttons
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Compact honesty rate indicator
-                          _buildMiniHonestyIndicator(),
-
-                          const SizedBox(width: 12),
-
-                          // Share button
-                          GestureDetector(
-                            onTap: () {
-                              // Share post functionality
-                              Share.share(
-                                'Check out this post: ${widget.post?.title ?? widget.title}',
-                              );
-                            },
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(
-                                  Icons.share_outlined,
-                                  color: Colors.grey,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 3),
-                                Text(
-                                  'Share',
-                                  style: TextStyle(
-                                      color: Colors.grey, fontSize: 13),
-                                ),
-                              ],
+                              fontSize: 13,
                             ),
                           ),
+                  ],
+                ),
+              ),
 
-                          const SizedBox(width: 12),
+              const SizedBox(width: 16),
 
-                          // Save button
-                          if (widget.post != null)
-                            GestureDetector(
-                              onTap: _isLoading ? null : _toggleSavePost,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _isLoading
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.grey,
-                                          ),
-                                        )
-                                      : Icon(
-                                          widget.post!.isSaved == true
-                                              ? Icons.bookmark
-                                              : Icons.bookmark_border,
-                                          color: widget.post!.isSaved == true
-                                              ? Colors.amber
-                                              : Colors.grey,
-                                          size: 18,
-                                        ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    widget.post!.isSaved == true
-                                        ? 'Unsave'
-                                        : 'Save',
-                                    style: TextStyle(
-                                      color: widget.post!.isSaved == true
-                                          ? Colors.amber
-                                          : Colors.grey,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+              // Comments count - now shows thread count
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.comment_outlined,
+                    color: Colors.grey,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${_relatedPosts.length}', // Show thread count instead of comments
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                 ],
               ),
-            ),
-            // Location map
-            Container(
-              height: 200,
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
+
+              const Spacer(),
+
+              // Share, Honesty, and Save buttons
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Compact honesty rate indicator
+                  _buildMiniHonestyIndicator(),
+
+                  const SizedBox(width: 12),
+
+                  // Share button
+                  GestureDetector(
+                    onTap: () {
+                      // Share post functionality
+                      Share.share(
+                        'Check out this post: ${widget.post?.title ?? widget.title}',
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(
+                          Icons.share_outlined,
+                          color: Colors.grey,
+                          size: 18,
+                        ),
+                        SizedBox(width: 3),
+                        Text(
+                          'Share',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // Save button
+                  if (widget.post != null)
+                    GestureDetector(
+                      onTap: _isLoading ? null : _toggleSavePost,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.grey,
+                                  ),
+                                )
+                              : Icon(
+                                  widget.post!.isSaved == true
+                                      ? Icons.bookmark
+                                      : Icons.bookmark_border,
+                                  color: widget.post!.isSaved == true
+                                      ? Colors.amber
+                                      : Colors.grey,
+                                  size: 18,
+                                ),
+                          const SizedBox(width: 3),
+                          Text(
+                            widget.post!.isSaved == true ? 'Unsave' : 'Save',
+                            style: TextStyle(
+                              color: widget.post!.isSaved == true
+                                  ? Colors.amber
+                                  : Colors.grey,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: IgnorePointer(
-                  ignoring: false, // Allow user interaction with map
-                  child: !_mapInitialized
-                      ? const Center(child: CircularProgressIndicator())
-                      : MapWidget(mapController: _mapController),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Related posts section
-            if (widget.post != null &&
-                (widget.post!.hasRelatedPosts || _relatedPosts.isNotEmpty))
-              _buildRelatedPostsSection(),
-            const SizedBox(height: 24),
-          ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Extract location map section into reusable widget
+  Widget _buildLocationMapSection() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 900;
+
+    return Container(
+      height: isWideScreen ? 300 : 200, // Taller on wide screens
+      width: double.infinity,
+      margin: EdgeInsets.symmetric(horizontal: isWideScreen ? 0 : 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: IgnorePointer(
+          ignoring: false, // Allow user interaction with map
+          child: !_mapInitialized
+              ? const Center(child: CircularProgressIndicator())
+              : MapWidget(mapController: _mapController),
         ),
       ),
     );

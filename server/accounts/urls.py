@@ -10,7 +10,7 @@ from .views import (
     # New Profile views
     UserProfileView, UserProfileUpdateView, UserProfileDetailView,
     UserFollowView, UserUnfollowView, UserFollowersView,
-    UserFollowingView, UserSearchView,
+    UserFollowingView, UserSearchView, UserRandomView,
 )
 
 urlpatterns = [
@@ -48,4 +48,5 @@ urlpatterns = [
     path('users/<int:user_id>/followers/', UserFollowersView.as_view(), name='user_followers'),
     path('users/<int:user_id>/following/', UserFollowingView.as_view(), name='user_following'),
     path('users/search/', UserSearchView.as_view(), name='user_search'),
+    path('users/random/', UserRandomView.as_view(), name='user_random'),
 ]
