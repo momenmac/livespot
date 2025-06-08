@@ -210,4 +210,61 @@ class EventStatusVote(models.Model):
         status = "ended" if self.voted_ended else "still happening"
         return f"{self.user.username} voted {self.post.title} as {status}"
 
+class CategoryInteraction(models.Model):
+    """Track user interactions with post categories for analytics - with aggregated counters"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='category_interactions')
+    category = models.CharField(
+        max_length=20,
+        choices=PostCategory.choices,
+        help_text="Category that was interacted with"
+    )
+    interaction_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('filter', 'Filter'),
+            ('view', 'View'),
+            ('click', 'Click'),
+        ],
+        default='filter',
+        help_text="Type of interaction with the category"
+    )
+    count = models.PositiveIntegerField(
+        default=1,
+        help_text="Number of times this interaction has occurred"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-last_updated']
+        unique_together = ('user', 'category', 'interaction_type')
+        
+    def __str__(self):
+        username = getattr(self.user, 'username', self.user.email)
+        return f"{username} {self.interaction_type} {self.category} category ({self.count}x)"
+    
+    @classmethod
+    def increment_interaction(cls, user, category, interaction_type='filter'):
+        """
+        Increment the count for a specific user-category-interaction_type combination.
+        Creates a new record if it doesn't exist.
+        """
+        try:
+            interaction, created = cls.objects.get_or_create(
+                user=user,
+                category=category,
+                interaction_type=interaction_type,
+                defaults={'count': 1}
+            )
+            
+            if not created:
+                # Record exists, increment the count
+                interaction.count += 1
+                interaction.save(update_fields=['count', 'last_updated'])
+                
+            return interaction
+        except Exception as e:
+            print(f"⚠️ Error incrementing category interaction: {e}")
+            return None
+
 

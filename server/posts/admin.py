@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, PostCoordinates, PostVote
+from .models import Post, PostCoordinates, PostVote, CategoryInteraction
 
 @admin.register(PostCoordinates)
 class PostCoordinatesAdmin(admin.ModelAdmin):
@@ -26,3 +26,15 @@ class PostVoteAdmin(admin.ModelAdmin):
     list_filter = ('is_upvote', 'created_at')
     search_fields = ('user__username', 'post__title')
     readonly_fields = ('created_at',)
+
+@admin.register(CategoryInteraction)
+class CategoryInteractionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'category', 'interaction_type', 'created_at')
+    list_filter = ('category', 'interaction_type', 'created_at')
+    search_fields = ('user__username', 'category')
+    readonly_fields = ('created_at',)
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        queryset = super().get_queryset(request)
+        return queryset.select_related('user')
