@@ -188,6 +188,50 @@ class PostsProvider with ChangeNotifier {
     }
   }
 
+  // Fetch recommended posts based on user location and preferences
+  Future<Map<String, dynamic>> fetchRecommendedPosts({
+    double? latitude,
+    double? longitude,
+    int radiusKm = 50,
+    int limit = 20,
+    String? date,
+  }) async {
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      // Get user location if not provided
+      if (latitude == null || longitude == null) {
+        final position = await _locationService.getCurrentPosition();
+        latitude = position.latitude;
+        longitude = position.longitude;
+      }
+
+      debugPrint('🎯 PostsProvider: Fetching recommendations for location: ($latitude, $longitude)');
+
+      final result = await _postsService.getRecommendedPosts(
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radiusKm,
+        limit: limit,
+        date: date,
+      );
+
+      _errorMessage = null;
+      return result;
+    } catch (e) {
+      _errorMessage = 'Failed to fetch recommended posts: $e';
+      debugPrint('❌ PostsProvider: Error fetching recommendations: $e');
+      return {
+        'posts': <Post>[],
+        'metadata': {},
+        'message': 'Failed to load recommendations'
+      };
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // Create a new post
   Future<Post?> createPost({
     required String title,

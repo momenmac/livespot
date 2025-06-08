@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/constants/theme_constants.dart';
+import 'package:flutter_application_2/constants/category_utils.dart';
 import 'package:flutter_application_2/models/post.dart';
 import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:flutter_application_2/ui/pages/home/components/all_news_page.dart';
@@ -38,6 +39,12 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
   bool _isLoadingMore = false;
   bool _isLoading = false;
+  
+  // Recommended posts state
+  List<Post> _recommendedPosts = [];
+  bool _isLoadingRecommended = false;
+  Map<String, dynamic> _recommendationMetadata = {};
+  String _recommendationMessage = '';
 
   String _getRandomImageUrl() {
     final random = math.Random();
@@ -51,6 +58,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _fetchPosts(refresh: true);
+        _fetchRecommendedPosts(); // Fetch recommendations
       }
     });
   }
@@ -62,69 +70,132 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _fetchPosts(refresh: true);
+        _fetchRecommendedPosts(); // Fetch recommendations on update
       }
     });
+  }
+
+  // Fetch recommended posts based on user location and preferences
+  Future<void> _fetchRecommendedPosts() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingRecommended = true;
+    });
+
+    try {
+      final provider = Provider.of<PostsProvider>(context, listen: false);
+      
+      // Format date as YYYY-MM-DD for API (same as regular posts)
+      final formattedDate = widget.selectedDate.toIso8601String().split('T').first;
+      
+      debugPrint('🎯 NewsFeedSection: Fetching recommendations for date: $formattedDate');
+      
+      final result = await provider.fetchRecommendedPosts(
+        radiusKm: 50, // 50km radius
+        limit: 10,    // Get 10 recommendations
+        date: formattedDate,
+      );
+
+      if (mounted) {
+        setState(() {
+          _recommendedPosts = List<Post>.from(result['posts'] ?? []);
+          _recommendationMetadata = Map<String, dynamic>.from(result['metadata'] ?? {});
+          _recommendationMessage = result['message'] ?? '';
+          _isLoadingRecommended = false;
+        });
+
+        debugPrint('🎯 NewsFeedSection: Loaded ${_recommendedPosts.length} recommended posts');
+        debugPrint('🎯 NewsFeedSection: Recommendation message: $_recommendationMessage');
+      }
+    } catch (e) {
+      debugPrint('❌ NewsFeedSection: Error fetching recommendations: $e');
+      if (mounted) {
+        setState(() {
+          _recommendedPosts = [];
+          _recommendationMetadata = {};
+          _recommendationMessage = 'Failed to load recommendations';
+          _isLoadingRecommended = false;
+        });
+      }
+    }
   }
 
   Future<void> _fetchPosts({bool refresh = false}) async {
     if (!mounted) return;
 
     debugPrint(
-        '🔥🔥🔥 NewsFeedSection._fetchPosts: Starting with refresh=$refresh 🔥🔥🔥');
+        '🎯🎯🎯 NewsFeedSection._fetchPosts: Starting RECOMMENDED posts fetch with refresh=$refresh 🎯🎯🎯');
 
     try {
       // Show loading state immediately
       debugPrint(
-          '🔥 _fetchPosts: BEFORE setState _isLoading=true (current: $_isLoading)');
+          '🎯 _fetchPosts: BEFORE setState _isLoading=true (current: $_isLoading)');
       setState(() {
         _isLoading = true;
       });
       debugPrint(
-          '🔥 _fetchPosts: AFTER setState _isLoading=true (current: $_isLoading)');
+          '🎯 _fetchPosts: AFTER setState _isLoading=true (current: $_isLoading)');
 
       // Format date as YYYY-MM-DD for API
       final formattedDate =
           widget.selectedDate.toIso8601String().split('T').first;
       debugPrint(
-          '🔥 NewsFeedSection._fetchPosts: Formatted date: $formattedDate');
+          '🎯 NewsFeedSection._fetchPosts: Formatted date: $formattedDate');
 
       final provider = Provider.of<PostsProvider>(context, listen: false);
       debugPrint(
-          '🔥 _fetchPosts: BEFORE provider.fetchPosts, provider.isLoading=${provider.isLoading}, provider.posts.length=${provider.posts.length}');
+          '🎯 _fetchPosts: BEFORE provider.fetchRecommendedPosts');
 
-      // Wait for fetch to complete and ensure we have data
-      final success =
-          await provider.fetchPosts(date: formattedDate, refresh: refresh);
+      // Use recommended posts instead of regular posts
+      final result = await provider.fetchRecommendedPosts(
+        radiusKm: 50, // 50km radius for local content
+        limit: 20,    // Get 20 recommendations
+        date: formattedDate,
+      );
+
       debugPrint(
-          '🔥 _fetchPosts: AFTER provider.fetchPosts, success=$success, provider.isLoading=${provider.isLoading}, provider.posts.length=${provider.posts.length}');
+          '🎯 _fetchPosts: AFTER provider.fetchRecommendedPosts, result: ${result.keys}');
 
       if (mounted) {
         debugPrint(
-            '🔥 _fetchPosts: BEFORE setState _isLoading=false (current: $_isLoading)');
+            '🎯 _fetchPosts: BEFORE setState _isLoading=false (current: $_isLoading)');
+        
+        // Extract posts from recommendation result
+        final List<Post> recommendedPosts = List<Post>.from(result['posts'] ?? []);
+        
         setState(() {
           _isLoading = false;
+          // Store recommended posts for display
+          _recommendedPosts = recommendedPosts;
+          _recommendationMetadata = Map<String, dynamic>.from(result['metadata'] ?? {});
+          _recommendationMessage = result['message'] ?? 'Recommendations loaded';
         });
+        
         debugPrint(
-            '🔥 _fetchPosts: AFTER setState _isLoading=false (current: $_isLoading)');
+            '🎯 _fetchPosts: AFTER setState _isLoading=false, loaded ${recommendedPosts.length} recommended posts');
+        debugPrint('🎯 _fetchPosts: Recommendation metadata: $_recommendationMetadata');
       }
 
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Failed to load news. Please try again.')),
-        );
+      // Show success message if we have recommendations
+      if (mounted && _recommendedPosts.isNotEmpty) {
+        debugPrint('🎯 _fetchPosts: Successfully loaded ${_recommendedPosts.length} recommended posts');
       }
+      // No snackbar for empty recommendations - handled by empty state UI
     } catch (e) {
       debugPrint('❌ NewsFeedSection._fetchPosts: Exception occurred: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _recommendedPosts = [];
+          _recommendationMetadata = {};
+          _recommendationMessage = 'Failed to load recommendations';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
       }
-      debugPrint('Error fetching posts: $e');
+      debugPrint('Error fetching recommended posts: $e');
     }
   }
 
@@ -211,6 +282,188 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
     }
   }
 
+  // Build recommended posts section
+  Widget _buildRecommendedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Recommended Posts Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.recommend,
+                color: ThemeConstants.primaryColor,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Recommended for You',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: ThemeConstants.primaryColor,
+                    ),
+              ),
+              const Spacer(),
+              if (_recommendationMetadata.isNotEmpty)
+                Tooltip(
+                  message: _recommendationMessage,
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: ThemeConstants.grey,
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Recommended Posts List
+        if (_isLoadingRecommended)
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          SizedBox(
+            height: 200,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _recommendedPosts.length,
+              itemBuilder: (context, index) {
+                return SizedBox(
+                  width: 200,
+                  child: _buildRecommendedPostCard(_recommendedPosts[index]),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Build recommended post card (compact version)
+  Widget _buildRecommendedPostCard(Post post) {
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: InkWell(
+          onTap: () => _navigateToPostDetail(post),
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image section with category badge overlay
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: Container(
+                      height: 100,
+                      width: double.infinity,
+                      child: _buildPostImage(post, height: 100),
+                    ),
+                  ),
+                  
+                  // Category badge positioned in top-left corner of image
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: CategoryUtils.getCategoryColor(post.category),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CategoryUtils.getCategoryIcon(post.category),
+                            color: Colors.white,
+                            size: 8,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            CategoryUtils.getCategoryDisplayName(post.category),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Content section
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      Text(
+                        post.title,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+
+                      // Location
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 10,
+                            color: ThemeConstants.grey,
+                          ),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Text(
+                              post.location.address ?? 'Unknown location',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 10,
+                                color: ThemeConstants.grey,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -222,11 +475,22 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'News Feed',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+              Row(
+                children: [
+                  Icon(
+                    Icons.recommend,
+                    color: ThemeConstants.primaryColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Recommended for You',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: ThemeConstants.primaryColor,
+                        ),
+                  ),
+                ],
               ),
               TextButton(
                 onPressed: _navigateToAllNews,
@@ -256,121 +520,19 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
           ),
         ),
 
-        // Posts content
-        Consumer<PostsProvider>(
-          builder: (context, postsProvider, child) {
-            // Debug print provider state with more details
-            debugPrint('🎯🎯🎯 NewsFeedSection Consumer BUILD START 🎯🎯🎯');
-            debugPrint('🎯 Local _isLoading=$_isLoading');
-            debugPrint('🎯 Provider isLoading=${postsProvider.isLoading}');
-            debugPrint(
-                '🎯 Provider posts.length=${postsProvider.posts.length}');
-            debugPrint(
-                '🎯 Provider errorMessage=${postsProvider.errorMessage}');
-            debugPrint('🎯 Provider hasMore=${postsProvider.hasMore}');
-
-            final posts = postsProvider.posts;
-            final hasError = postsProvider.errorMessage != null;
-
-            debugPrint('🎯 posts.isEmpty=${posts.isEmpty}');
-            debugPrint('🎯 hasError=$hasError');
-
-            // Show local loading state first
-            if (_isLoading) {
-              debugPrint(
-                  '🎯 CONDITION: _isLoading is true -> Showing local loading indicator');
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            // Show loading indicator for initial load or refresh
-            if (postsProvider.isLoading && posts.isNotEmpty) {
-              debugPrint(
-                  '🎯 CONDITION: provider.isLoading && posts.isNotEmpty -> Showing stack with loading overlay');
-              // Show loading indicator over existing content if we have posts
-              return Stack(
-                children: [
-                  // Existing posts with overlay
-                  Opacity(
-                    opacity: 0.6,
-                    child: _buildPostsList(posts),
-                  ),
-                  // Loading indicator
-                  const Center(child: CircularProgressIndicator()),
-                ],
-              );
-            }
-
-            // Show error if we have one and no posts
-            if (hasError && posts.isEmpty) {
-              debugPrint(
-                  '🎯 CONDITION: hasError && posts.isEmpty -> Showing error message');
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: ThemeConstants.grey),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error loading news: ${postsProvider.errorMessage}',
-                      style: const TextStyle(color: ThemeConstants.grey),
-                    ),
-                    const SizedBox(height: 24),
-                    TextButton.icon(
-                      onPressed: () => _fetchPosts(refresh: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            // Show no news message if we have no posts and aren't loading
-            if (posts.isEmpty) {
-              debugPrint(
-                  '🎯 CONDITION: posts.isEmpty -> Showing no news message');
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.article_outlined,
-                        size: 48, color: ThemeConstants.grey),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No news available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
-                      style: const TextStyle(color: ThemeConstants.grey),
-                    ),
-                    const SizedBox(height: 24),
-                    TextButton.icon(
-                      onPressed: () => _fetchPosts(refresh: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Refresh'),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            debugPrint(
-                '🎯 CONDITION: DEFAULT -> Showing posts list with ${posts.length} posts');
-            debugPrint('🎯🎯🎯 NewsFeedSection Consumer BUILD END 🎯🎯🎯');
-            return _buildPostsList(posts);
-          },
-        ),
+        // Recommended Posts content
+        _buildRecommendedPostsContent(),
       ],
     );
   }
 
   Widget _buildPostsList(List<Post> posts) {
-    // Sort posts by honesty score
-    final sortedPosts = List<Post>.from(posts)
-      ..sort((a, b) => b.honestyScore.compareTo(a.honestyScore));
-
-    // Extract featured and regular posts
-    final featuredPost = sortedPosts.isNotEmpty ? sortedPosts.first : null;
-    final regularPosts =
-        sortedPosts.length > 1 ? sortedPosts.sublist(1) : <Post>[];
+    // Preserve the backend's recommendation order - don't sort by honesty score
+    // The backend already provides posts in the optimal recommendation order
+    
+    // Extract featured and regular posts while preserving order
+    final featuredPost = posts.isNotEmpty ? posts.first : null;
+    final regularPosts = posts.length > 1 ? posts.sublist(1) : <Post>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,19 +635,18 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               ),
             ),
 
-            // Featured badge
+            // Category badge positioned in top-left corner
             Positioned(
               top: 16,
               left: 16,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: ThemeConstants.primaryColor,
-                  borderRadius: BorderRadius.circular(20),
+                  color: CategoryUtils.getCategoryColor(post.category),
+                  borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withAlpha(51), // 0.2 * 255 = 51
+                      color: Colors.black.withAlpha(51),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -494,18 +655,18 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.star,
+                    Icon(
+                      CategoryUtils.getCategoryIcon(post.category),
                       color: Colors.white,
-                      size: 16,
+                      size: 14,
                     ),
                     const SizedBox(width: 4),
-                    const Text(
-                      'FEATURED',
-                      style: TextStyle(
+                    Text(
+                      CategoryUtils.getCategoryDisplayName(post.category),
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -715,14 +876,57 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image - fixed height with better error handling
-              SizedBox(
-                height: 126, // Fixed height for image
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: () => _openMediaPreview(post),
-                  child: _buildImage(_getBestImageUrl(post)),
-                ),
+              // Image section with category badge overlay
+              Stack(
+                children: [
+                  SizedBox(
+                    height: 126, // Fixed height for image
+                    width: double.infinity,
+                    child: GestureDetector(
+                      onTap: () => _openMediaPreview(post),
+                      child: _buildImage(_getBestImageUrl(post)),
+                    ),
+                  ),
+                  
+                  // Category badge positioned in top-left corner of image
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: CategoryUtils.getCategoryColor(post.category),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CategoryUtils.getCategoryIcon(post.category),
+                            color: Colors.white,
+                            size: 10,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            CategoryUtils.getCategoryDisplayName(post.category),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               // Content - use Expanded to avoid overflow
@@ -850,6 +1054,102 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         ),
       ),
     );
+  }
+
+  // Helper method to format category name for display
+  String _formatCategoryName(String category) {
+    switch (category.toLowerCase()) {
+      case 'news':
+        return 'News';
+      case 'event':
+        return 'Event';
+      case 'alert':
+        return 'Alert';
+      case 'community':
+        return 'Community';
+      case 'emergency':
+        return 'Emergency';
+      case 'sports':
+        return 'Sports';
+      case 'culture':
+        return 'Culture';
+      case 'business':
+        return 'Business';
+      case 'politics':
+        return 'Politics';
+      case 'health':
+        return 'Health';
+      case 'education':
+        return 'Education';
+      case 'technology':
+        return 'Technology';
+      case 'entertainment':
+        return 'Entertainment';
+      case 'food':
+        return 'Food';
+      case 'travel':
+        return 'Travel';
+      case 'weather':
+        return 'Weather';
+      case 'traffic':
+        return 'Traffic';
+      case 'construction':
+        return 'Construction';
+      case 'security':
+        return 'Security';
+      case 'other':
+        return 'Other';
+      default:
+        return category.isNotEmpty 
+            ? category[0].toUpperCase() + category.substring(1)
+            : 'Other';
+    }
+  }
+
+  // Helper method to get category color
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'news':
+        return Colors.blue;
+      case 'event':
+        return Colors.purple;
+      case 'alert':
+        return Colors.orange;
+      case 'emergency':
+        return Colors.red;
+      case 'community':
+        return Colors.green;
+      case 'sports':
+        return Colors.teal;
+      case 'culture':
+        return Colors.indigo;
+      case 'business':
+        return Colors.brown;
+      case 'politics':
+        return Colors.deepPurple;
+      case 'health':
+        return Colors.pink;
+      case 'education':
+        return Colors.cyan;
+      case 'technology':
+        return Colors.blueGrey;
+      case 'entertainment':
+        return Colors.amber;
+      case 'food':
+        return Colors.deepOrange;
+      case 'travel':
+        return Colors.lightBlue;
+      case 'weather':
+        return Colors.lightGreen;
+      case 'traffic':
+        return Colors.yellow[700] ?? Colors.yellow;
+      case 'construction':
+        return Colors.grey[600] ?? Colors.grey;
+      case 'security':
+        return Colors.red[800] ?? Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   Color _getHonestyColor(int score) {
@@ -1270,5 +1570,71 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
     // Return random placeholder as fallback - never return null
     return _getRandomImageUrl();
+  }
+
+  // Build content for recommended posts instead of using Consumer
+  Widget _buildRecommendedPostsContent() {
+    debugPrint('🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD START 🎯🎯🎯');
+    debugPrint('🎯 Local _isLoading=$_isLoading');
+    debugPrint('🎯 Local _isLoadingRecommended=$_isLoadingRecommended');
+    debugPrint('🎯 Recommended posts.length=${_recommendedPosts.length}');
+    debugPrint('🎯 Recommendation message: $_recommendationMessage');
+
+    // Show local loading state first
+    if (_isLoading || _isLoadingRecommended) {
+      debugPrint('🎯 CONDITION: _isLoading or _isLoadingRecommended is true -> Showing loading indicator');
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show no news message if we have no posts and aren't loading
+    if (_recommendedPosts.isEmpty) {
+      debugPrint('🎯 CONDITION: _recommendedPosts.isEmpty -> Showing no recommendations message');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.recommend_outlined,
+                size: 48, color: ThemeConstants.grey),
+            const SizedBox(height: 16),
+            Text(
+              'No posts available for ${widget.selectedDate.toLocal().toString().split(' ')[0]}',
+              style: const TextStyle(color: ThemeConstants.grey),
+              textAlign: TextAlign.center,
+            ),
+            if (_recommendationMessage.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _recommendationMessage,
+                style: const TextStyle(color: ThemeConstants.grey, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 24),
+            TextButton.icon(
+              onPressed: () => _fetchPosts(refresh: true),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    debugPrint('🎯 CONDITION: DEFAULT -> Showing recommended posts list with ${_recommendedPosts.length} posts');
+    debugPrint('🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD END 🎯🎯🎯');
+    return _buildPostsList(_recommendedPosts);
+  }
+
+  // Build post image widget - handles different media types
+  Widget _buildPostImage(Post post, {double? height}) {
+    final String imageUrl = _getBestImageUrl(post);
+    
+    // Check if it's a video file
+    if (_isVideoFile(imageUrl)) {
+      return _buildVideoThumbnail(imageUrl, fit: BoxFit.cover);
+    }
+    
+    // Otherwise build regular image
+    return _buildImage(imageUrl, fit: BoxFit.cover);
   }
 }

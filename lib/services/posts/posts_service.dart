@@ -166,6 +166,78 @@ class PostsService {
     }
   }
 
+  // Get recommended posts based on user location and preferences
+  Future<Map<String, dynamic>> getRecommendedPosts({
+    required double latitude,
+    required double longitude,
+    int radiusKm = 50,
+    int limit = 20,
+    String? date,
+  }) async {
+    try {
+      final queryParams = {
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+        'radius': radiusKm.toString(),
+        'limit': limit.toString(),
+      };
+
+      // Add date filter if provided
+      if (date != null) {
+        queryParams['date'] = date;
+      }
+
+      final url = Uri.parse('$baseUrl/api/posts/recommended/')
+          .replace(queryParameters: queryParams);
+      final headers = await _getHeaders();
+
+      debugPrint('🎯 PostsService: Requesting recommendations from: $url');
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final dynamic decodedBody = json.decode(responseBody);
+
+        debugPrint('🎯 PostsService: Recommendation response status: ${response.statusCode}');
+
+        if (decodedBody is Map) {
+          // Handle the nested response structure from the recommendation API
+          final Map<String, dynamic> responseData = decodedBody['success'] == true 
+              ? decodedBody['data'] ?? {} 
+              : decodedBody;
+          
+          final List<dynamic> postsData = responseData['posts'] ?? [];
+          final Map<String, dynamic> metadata = responseData['recommendation_info'] ?? {};
+          final String message = 'Recommendations loaded';
+
+          final List<Post> posts = postsData.map((json) => Post.fromJson(json)).toList();
+
+          debugPrint('🎯 PostsService: Parsed ${posts.length} recommended posts');
+          debugPrint('🎯 PostsService: Recommendation metadata: $metadata');
+
+          return {
+            'posts': posts,
+            'metadata': metadata,
+            'message': message,
+          };
+        } else {
+          debugPrint('Unexpected recommendation response format: ${response.body.substring(0, 100)}...');
+          return {
+            'posts': <Post>[],
+            'metadata': {},
+            'message': 'Invalid response format',
+          };
+        }
+      } else {
+        throw Exception('Failed to load recommended posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error getting recommended posts: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
   // Create a new post
   Future<Post> createPost({
     required String title,
