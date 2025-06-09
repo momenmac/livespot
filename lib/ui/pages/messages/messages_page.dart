@@ -7,8 +7,7 @@ import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/widgets/conversation_list.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
-// Add this import for RecommendedRoomsSection
-import 'package:flutter_application_2/ui/pages/messages/recommended_rooms_section.dart';
+
 // Add this import for ApiUrls
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 // Add this import for SafeNetworkImage
@@ -243,11 +242,6 @@ class _MessagesPageState extends State<MessagesPage>
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // Recommended rooms section as sliver
-                const SliverToBoxAdapter(
-                  child: RecommendedRoomsSection(),
-                ),
-
                 // Conversation list as expandable sliver
                 SliverFillRemaining(
                   hasScrollBody: true,

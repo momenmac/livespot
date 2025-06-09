@@ -236,3 +236,28 @@ def save_user_profile(sender, instance, created, **kwargs):
                 create_user_profile(sender, instance, True, **kwargs)
         except Exception as e:
             logging.getLogger(__name__).error(f"Error saving profile for user {instance.email}: {e}")
+
+class VerificationRequest(models.Model):
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+    
+    STATUS_CHOICES = [
+        (PENDING, 'Pending'),
+        (APPROVED, 'Approved'),
+        (REJECTED, 'Rejected'),
+    ]
+    
+    user = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='verification_requests')
+    reason = models.TextField(help_text='Reason for requesting verification')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    admin_notes = models.TextField(blank=True, help_text='Admin notes for the verification request')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_by = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_verifications')
+    
+    class Meta:
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"Verification request by {self.user.email} - {self.status}"

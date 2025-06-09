@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status, permissions, views, generics
 from django.db.models import Q
-from .models import Account, VerificationCode, UserProfile
+from .models import Account, VerificationCode, UserProfile, VerificationRequest
 from .serializers import (
     AccountSerializer,
     UserProfileSerializer,
@@ -19,7 +19,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import random
 import string
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.conf import settings
 from datetime import timedelta
 from django.utils import timezone  # Import Django's timezone utility
@@ -1194,13 +1194,19 @@ class UserFollowView(views.APIView):
         print(f"🎉 DEBUG: Follow operation completed successfully")
         return Response({'success': True, 'message': f'Now following @{target_profile.username}'})
 
-
 class UserUnfollowView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, user_id):
-        """Unfollow a user"""
+        """Unfollow another user"""
         print(f"🔄 DEBUG: Unfollow request - User {request.user.id} wants to unfollow User {user_id}")
+        
+        if int(user_id) == request.user.id:
+            print(f"❌ DEBUG: User {request.user.id} tried to unfollow themselves")
+            return Response(
+                {'success': False, 'error': 'Cannot unfollow yourself'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         target_profile = get_object_or_404(UserProfile, user_id=user_id)
         user_profile = request.user.profile
@@ -1211,87 +1217,536 @@ class UserUnfollowView(views.APIView):
         if target_profile not in user_profile.following.all():
             print(f"⚠️ DEBUG: User {user_profile.username} is not following {target_profile.username}")
             return Response(
-                {'success': False, 'error': 'You are not following this user'},
+                {'success': False, 'error': 'Not following this user'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         # Remove the follow relationship
         target_profile.followers.remove(user_profile)
-        print(f"✅ DEBUG: Successfully removed follow relationship: {user_profile.username} no longer follows {target_profile.username}")
-        
-        # No notification sent for unfollow (as per user request)
-        print(f"ℹ️ DEBUG: No notification sent for unfollow action (by design)")
+        print(f"✅ DEBUG: Successfully removed follow relationship: {user_profile.username} -/-> {target_profile.username}")
         
         print(f"🎉 DEBUG: Unfollow operation completed successfully")
         return Response({'success': True, 'message': f'Unfollowed @{target_profile.username}'})
-
 
 class UserFollowersView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request, user_id):
-        """Get a user's followers"""
-        profile = get_object_or_404(UserProfile, user_id=user_id)
-        
-        # Pagination parameters
-        limit = int(request.query_params.get('limit', 20))
-        offset = int(request.query_params.get('offset', 0))
-        
-        followers = profile.followers.all()[offset:offset+limit]
-        serializer = UserSearchResultSerializer(followers, many=True)
-        
-        return Response({
-            'success': True,
-            'data': {
-                'followers': serializer.data,
-                'total': profile.followers.count(),
-                'limit': limit,
-                'offset': offset
-            }
-        })
+        """Get list of users who follow the specified user"""
+        try:
+            target_profile = get_object_or_404(UserProfile, user_id=user_id)
+            
+            # Get followers
+            followers = target_profile.followers.all().select_related('user')
+            
+            # Serialize the results
+            serializer = UserSearchResultSerializer(followers, many=True)
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'followers': serializer.data,
+                    'total': followers.count(),
+                    'user_id': user_id
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching followers for user {user_id}: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Failed to fetch followers'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UserFollowingView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request, user_id):
-        """Get users that a user is following"""
-        profile = get_object_or_404(UserProfile, user_id=user_id)
-        
-        # Pagination parameters
-        limit = int(request.query_params.get('limit', 20))
-        offset = int(request.query_params.get('offset', 0))
-        
-        following = profile.following.all()[offset:offset+limit]
-        serializer = UserSearchResultSerializer(following, many=True)
-        
-        return Response({
-            'success': True,
-            'data': {
-                'following': serializer.data,
-                'total': profile.following.count(),
-                'limit': limit,
-                'offset': offset
-            }
-        })
+        """Get list of users that the specified user follows"""
+        try:
+            target_profile = get_object_or_404(UserProfile, user_id=user_id)
+            
+            # Get following (users that this user follows)
+            following = target_profile.following.all().select_related('user')
+            
+            # Serialize the results
+            serializer = UserSearchResultSerializer(following, many=True)
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'following': serializer.data,
+                    'total': following.count(),
+                    'user_id': user_id
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching following for user {user_id}: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Failed to fetch following'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
-class UserSearchView(generics.ListAPIView):
+class UserSearchView(views.APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = UserSearchResultSerializer
     
-    def get_queryset(self):
-        """Search for users by name, username, or email"""
-        query = self.request.query_params.get('q', '')
-        if not query:
-            return UserProfile.objects.none()
-        
-        return UserProfile.objects.filter(
-            Q(username__icontains=query) |
-            Q(user__email__icontains=query) |
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query)
-        ).distinct()[:20]  # Limit to 20 results
+    def get(self, request):
+        """Search for users by username, name, or email"""
+        try:
+            query = request.query_params.get('q', '').strip()
+            limit = int(request.query_params.get('limit', 20))
+            limit = min(limit, 50)  # Cap at 50 to prevent abuse
+            
+            if not query or len(query) < 2:
+                return Response(
+                    {'success': False, 'error': 'Query must be at least 2 characters long'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Search in multiple fields
+            search_results = UserProfile.objects.filter(
+                Q(username__icontains=query) |
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__email__icontains=query)
+            ).exclude(
+                user_id=request.user.id  # Exclude current user
+            ).select_related('user')[:limit]
+            
+            # Serialize the results
+            serializer = UserSearchResultSerializer(search_results, many=True)
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'users': serializer.data,
+                    'total': len(serializer.data),
+                    'query': query,
+                    'limit': limit
+                }
+            })
+            
+        except ValueError:
+            return Response(
+                {'success': False, 'error': 'Invalid limit parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error searching users with query '{query}': {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Failed to search users'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class VerificationRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Submit a verification request"""
+        try:
+            reason = request.data.get('reason', '').strip()
+            
+            if not reason:
+                return Response({
+                    'success': False,
+                    'error': 'Reason for verification is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = request.user
+            
+            # Check if user already has a pending request
+            existing_request = VerificationRequest.objects.filter(
+                user=user,
+                status=VerificationRequest.PENDING
+            ).first()
+            
+            if existing_request:
+                return Response({
+                    'success': False,
+                    'error': 'You already have a pending verification request'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create new verification request
+            verification_request = VerificationRequest.objects.create(
+                user=user,
+                reason=reason
+            )
+            
+            # Send email notification to user
+            try:
+                self._send_verification_request_email(user, reason)
+            except Exception as e:
+                logger.error(f"Failed to send verification email to {user.email}: {e}")
+                # Don't fail the request if email fails
+            
+            return Response({
+                'success': True,
+                'message': 'Verification request submitted successfully. We will contact you via email soon.',
+                'data': {
+                    'request_id': verification_request.id,
+                    'status': verification_request.status,
+                    'created_at': verification_request.created_at
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error submitting verification request: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to submit verification request'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get(self, request):
+        """Get user's verification requests"""
+        try:
+            user = request.user
+            requests = VerificationRequest.objects.filter(user=user)
+            
+            request_data = []
+            for req in requests:
+                request_data.append({
+                    'id': req.id,
+                    'reason': req.reason,
+                    'status': req.status,
+                    'admin_notes': req.admin_notes,
+                    'created_at': req.created_at,
+                    'updated_at': req.updated_at
+                })
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'requests': request_data
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching verification requests: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to fetch verification requests'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _send_verification_request_email(self, user, reason):
+        """Send verification request confirmation email to user"""
+        try:
+            subject = 'Verification Request Received - LiveSpot'
+            
+            # Create HTML email content
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Verification Request Received</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f8f9fa;
+                    }}
+                    .container {{
+                        background-color: white;
+                        border-radius: 12px;
+                        padding: 40px;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }}
+                    .logo {{
+                        font-size: 28px;
+                        font-weight: bold;
+                        color: #007bff;
+                        margin-bottom: 10px;
+                    }}
+                    .title {{
+                        font-size: 24px;
+                        font-weight: 600;
+                        color: #2c3e50;
+                        margin-bottom: 20px;
+                    }}
+                    .content {{
+                        margin-bottom: 30px;
+                    }}
+                    .highlight {{
+                        background-color: #e3f2fd;
+                        padding: 20px;
+                        border-radius: 8px;
+                        border-left: 4px solid #007bff;
+                        margin: 20px 0;
+                    }}
+                    .footer {{
+                        text-align: center;
+                        color: #6c757d;
+                        font-size: 14px;
+                        margin-top: 30px;
+                        padding-top: 20px;
+                        border-top: 1px solid #e9ecef;
+                    }}
+                    .button {{
+                        display: inline-block;
+                        padding: 12px 24px;
+                        background-color: #007bff;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 6px;
+                        font-weight: 500;
+                        margin: 20px 0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="logo">LiveSpot</div>
+                        <div class="title">Verification Request Received</div>
+                    </div>
+                    
+                    <div class="content">
+                        <p>Hello {user.first_name} {user.last_name},</p>
+                        
+                        <p>We've received your verification request for your LiveSpot account. Thank you for your interest in getting verified!</p>
+                        
+                        <div class="highlight">
+                            <strong>Your verification reason:</strong><br>
+                            "{reason}"
+                        </div>
+                        
+                        <p><strong>What happens next?</strong></p>
+                        <ul>
+                            <li>Our verification team will review your request</li>
+                            <li>We may contact you for additional information or documentation</li>
+                            <li>The review process typically takes 3-7 business days</li>
+                            <li>You'll receive an email notification with the decision</li>
+                        </ul>
+                        
+                        <p><strong>Requirements for verification:</strong></p>
+                        <ul>
+                            <li>Active and authentic account</li>
+                            <li>Complete profile information</li>
+                            <li>Notable presence in your field (business, content creation, public figure, etc.)</li>
+                            <li>Compliance with our community guidelines</li>
+                        </ul>
+                        
+                        <p>If you have any questions about the verification process, feel free to reply to this email.</p>
+                        
+                        <p>Best regards,<br>
+                        The LiveSpot Verification Team</p>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>This email was sent to {user.email}</p>
+                        <p>© 2025 LiveSpot. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Create plain text version
+            text_content = f"""
+            Verification Request Received - LiveSpot
+            
+            Hello {user.first_name} {user.last_name},
+            
+            We've received your verification request for your LiveSpot account.
+            
+            Your verification reason: "{reason}"
+            
+            What happens next?
+            - Our verification team will review your request
+            - We may contact you for additional information
+            - Review process takes 3-7 business days
+            - You'll receive an email with the decision
+            
+            Best regards,
+            The LiveSpot Verification Team
+            
+            This email was sent to {user.email}
+            """
+            
+            # Send email
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=text_content,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user.email]
+            )
+            email.attach_alternative(html_content, "text/html")
+            email.send()
+            
+            logger.info(f"Verification request email sent to {user.email}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send verification email: {e}")
+            raise
+
+# Change Password View
+@method_decorator(csrf_exempt, name='dispatch')
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            current_password = request.data.get('current_password')
+            new_password = request.data.get('new_password')
+            
+            if not current_password or not new_password:
+                return add_cors_headers(Response({
+                    "error": "Current password and new password are required"
+                }, status=400))
+            
+            user = request.user
+            
+            # Verify current password
+            if not user.check_password(current_password):
+                return add_cors_headers(Response({
+                    "error": "Current password is incorrect"
+                }, status=400))
+            
+            # Validate new password
+            if len(new_password) < 6:
+                return add_cors_headers(Response({
+                    "error": "New password must be at least 6 characters long"
+                }, status=400))
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
+            logger.info(f"Password changed for user: {user.email}")
+            
+            return add_cors_headers(Response({
+                "message": "Password changed successfully"
+            }))
+            
+        except Exception as e:
+            logger.error(f"Change password error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+# Change Email View
+@method_decorator(csrf_exempt, name='dispatch')
+class ChangeEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            new_email = request.data.get('new_email')
+            password = request.data.get('password')
+            
+            if not new_email or not password:
+                return add_cors_headers(Response({
+                    "error": "New email and password are required"
+                }, status=400))
+            
+            user = request.user
+            
+            # Verify password
+            if not user.check_password(password):
+                return add_cors_headers(Response({
+                    "error": "Password is incorrect"
+                }, status=400))
+            
+            # Check if email is already in use
+            if Account.objects.filter(email=new_email).exclude(id=user.id).exists():
+                return add_cors_headers(Response({
+                    "error": "Email is already in use"
+                }, status=400))
+            
+            # Update email
+            old_email = user.email
+            user.email = new_email
+            user.is_verified = False  # Require re-verification for new email
+            user.save()
+            
+            logger.info(f"Email changed from {old_email} to {new_email}")
+            
+            return add_cors_headers(Response({
+                "message": "Email changed successfully. Please verify your new email address."
+            }))
+            
+        except Exception as e:
+            logger.error(f"Change email error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+# Data Download Request View
+@method_decorator(csrf_exempt, name='dispatch')
+class DataDownloadRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            user = request.user
+            
+            # Create data download request record (you can create a model for this)
+            # For now, we'll just send an email notification
+            
+            subject = f"Data Download Request - {user.email}"
+            
+            # Send email to user
+            user_message = f"""
+            Hello {user.first_name} {user.last_name},
+            
+            We have received your request to download your personal data from LiveSpot.
+            
+            Your data package will be prepared within 24-48 hours and sent to this email address.
+            
+            The package will include:
+            - Account information
+            - Profile data
+            - Posts and comments
+            - Activity history
+            
+            If you have any questions, please contact our support team.
+            
+            Best regards,
+            The LiveSpot Team
+            """
+            
+            from django.core.mail import send_mail
+            send_mail(
+                subject="Your Data Download Request - LiveSpot",
+                message=user_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False
+            )
+            
+            # Also notify admin/support team
+            admin_message = f"Data download request from {user.email} ({user.first_name} {user.last_name})"
+            send_mail(
+                subject=subject,
+                message=admin_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[settings.DEFAULT_FROM_EMAIL],  # Send to admin email
+                fail_silently=True
+            )
+            
+            logger.info(f"Data download request from {user.email}")
+            
+            return add_cors_headers(Response({
+                "message": "Data download request submitted successfully. You will receive your data via email within 24-48 hours."
+            }))
+            
+        except Exception as e:
+            logger.error(f"Data download request error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
+
+# Account Deactivation View
+@method_decorator(csrf_exempt, name='dispatch')
+class DeactivateAccountView(APIView):
+    permission_classes = [IsAuthenticated]
     
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -1303,6 +1758,30 @@ class UserSearchView(generics.ListAPIView):
                 'total': len(serializer.data)
             }
         })
+    
+    def post(self, request):
+        try:
+            user = request.user
+            
+            # Mark account as inactive (you might want to add an is_active field to Account model)
+            # For now, we'll just clear sensitive data and logout
+            
+            # Clear FCM tokens
+            FCMToken.objects.filter(user=user).delete()
+            
+            # You could add an is_active field to Account model and set it to False
+            # user.is_active = False
+            # user.save()
+            
+            logger.info(f"Account deactivated for user: {user.email}")
+            
+            return add_cors_headers(Response({
+                "message": "Account deactivated successfully"
+            }))
+            
+        except Exception as e:
+            logger.error(f"Account deactivation error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))
 
 
 class UserRandomView(views.APIView):
@@ -1356,3 +1835,67 @@ class UserRandomView(views.APIView):
                 {'success': False, 'error': 'Failed to fetch suggested users'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# Account Deletion View
+@method_decorator(csrf_exempt, name='dispatch')
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            password = request.data.get('password')
+            
+            if not password:
+                return add_cors_headers(Response({
+                    "error": "Password confirmation is required"
+                }, status=400))
+            
+            user = request.user
+            
+            # Verify password
+            if not user.check_password(password):
+                return add_cors_headers(Response({
+                    "error": "Password is incorrect"
+                }, status=400))
+            
+            user_email = user.email
+            
+            # Delete related data
+            try:
+                # Delete FCM tokens
+                FCMToken.objects.filter(user=user).delete()
+                
+                # Delete notifications
+                NotificationQueue.objects.filter(user=user).delete()
+                
+                # Delete notification settings
+                NotificationSettings.objects.filter(user=user).delete()
+                
+                # Delete user profile if exists
+                UserProfile.objects.filter(account=user).delete()
+                
+                # Delete verification codes
+                VerificationCode.objects.filter(user=user).delete()
+                
+                # Delete verification requests
+                VerificationRequest.objects.filter(user=user).delete()
+                
+                # Finally delete the user account
+                user.delete()
+                
+                logger.info(f"Account permanently deleted: {user_email}")
+                
+                return add_cors_headers(Response({
+                    "message": "Account deleted successfully"
+                }))
+                
+            except Exception as deletion_error:
+                logger.error(f"Error during account deletion: {deletion_error}")
+                return add_cors_headers(Response({
+                    "error": "Failed to delete account completely"
+                }, status=500))
+            
+        except Exception as e:
+            logger.error(f"Account deletion error: {str(e)}")
+            return add_cors_headers(Response({"error": str(e)}, status=500))

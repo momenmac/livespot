@@ -723,6 +723,142 @@ class AuthService {
     }
   }
 
+  // Change password
+  Future<Map<String, dynamic>> changePassword({
+    required String token,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      print('🔐 Changing password...');
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.changePassword),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+        body: json.encode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      );
+
+      return response.toMap();
+    } catch (e) {
+      print('🔐 Change password error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Change email
+  Future<Map<String, dynamic>> changeEmail({
+    required String token,
+    required String newEmail,
+    required String password,
+  }) async {
+    try {
+      print('📧 Changing email to: $newEmail');
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.changeEmail),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+        body: json.encode({
+          'new_email': newEmail,
+          'password': password,
+        }),
+      );
+
+      return response.toMap();
+    } catch (e) {
+      print('📧 Change email error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Request data download
+  Future<Map<String, dynamic>> requestDataDownload({
+    required String token,
+  }) async {
+    try {
+      print('💾 Requesting data download...');
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.dataDownloadRequest),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+      );
+
+      return response.toMap();
+    } catch (e) {
+      print('💾 Data download request error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Deactivate account
+  Future<Map<String, dynamic>> deactivateAccount({
+    required String token,
+  }) async {
+    try {
+      print('⏸️ Deactivating account...');
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.deactivateAccount),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+      );
+
+      return response.toMap();
+    } catch (e) {
+      print('⏸️ Deactivate account error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Delete account
+  Future<Map<String, dynamic>> deleteAccount({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      print('🗑️ Deleting account...');
+
+      final response = await _makeAuthRequest(
+        url: Uri.parse(ApiUrls.deleteAccount),
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        token: token,
+        body: json.encode({
+          'password': password,
+        }),
+      );
+
+      return response.toMap();
+    } catch (e) {
+      print('🗑️ Delete account error: ${e.toString()}');
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   void dispose() {
     _client.close();
   }

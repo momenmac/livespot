@@ -1,2 +1,0 @@
-/Users/momen_mac/Desktop/flutter_application/android/app/.cxx/RelWithDebInfo/6t6h1h1c/arm64-v8a/CMakeFiles/edit_cache.dir
-/Users/momen_mac/Desktop/flutter_application/android/app/.cxx/RelWithDebInfo/6t6h1h1c/arm64-v8a/CMakeFiles/rebuild_cache.dir
