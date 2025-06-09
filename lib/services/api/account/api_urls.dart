@@ -47,6 +47,19 @@ class ApiUrls {
       '$baseUrl/api/accounts/verify-reset-code/';
   static String get resetPassword => '$baseUrl/api/accounts/reset-password/';
 
+  // Verification request endpoint
+  static String get verificationRequest =>
+      '$baseUrl/api/accounts/verification-request/';
+
+  // Account management endpoints
+  static String get changePassword => '$baseUrl/api/accounts/change-password/';
+  static String get changeEmail => '$baseUrl/api/accounts/change-email/';
+  static String get dataDownloadRequest =>
+      '$baseUrl/api/accounts/data-download-request/';
+  static String get deactivateAccount =>
+      '$baseUrl/api/accounts/deactivate-account/';
+  static String get deleteAccount => '$baseUrl/api/accounts/delete-account/';
+
   // Posts endpoints
   static String get posts => '$baseUrl/api/posts/';
   static String get nearbyPosts => '$baseUrl/api/posts/nearby/';

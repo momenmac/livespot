@@ -473,23 +473,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
               const SizedBox(height: 24),
 
-              // Testing section
-              _buildSectionHeader('Testing'),
-              _buildSettingsCard([
-                ListTile(
-                  leading: const Icon(Icons.bug_report, color: Colors.blue),
-                  title: const Text('Notification Test Page'),
-                  subtitle: const Text(
-                      'Test notification functionality and settings'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/notification-test');
-                  },
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-
               // System settings link
               _buildSectionHeader('System'),
               _buildSettingsCard([

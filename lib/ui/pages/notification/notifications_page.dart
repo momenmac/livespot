@@ -7,7 +7,11 @@ import 'package:flutter_application_2/services/api/notification_api_service.dart
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart';
 import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
+import 'package:flutter_application_2/ui/pages/home/components/post_detail/post_detail_page.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import 'notification_filter.dart';
 import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 
@@ -29,6 +33,7 @@ class _NotificationsPageState extends State<NotificationsPage>
   List<NotificationModel> notifications = [];
   bool _isLoading = true;
   bool _isLoadingMore = false; // Separate state for pagination loading
+  bool _isRefreshing = false;
   String? _errorMessage;
   int _currentPage = 1;
   bool _hasMoreData = true;
@@ -269,7 +274,15 @@ class _NotificationsPageState extends State<NotificationsPage>
   }
 
   Future<void> _refreshNotifications() async {
+    setState(() {
+      _isRefreshing = true;
+    });
+
     await _loadNotifications();
+
+    setState(() {
+      _isRefreshing = false;
+    });
   }
 
   Future<void> _markAsRead(NotificationModel notification) async {
@@ -359,6 +372,527 @@ class _NotificationsPageState extends State<NotificationsPage>
         type == 'friend_request_accepted' ||
         type == 'new_follower' ||
         type == 'unfollowed';
+  }
+
+  bool _isPostRelatedNotification(String type) {
+    return type == 'still_happening' ||
+        type == 'still_there' ||
+        type == 'new_event' ||
+        type == 'event_update';
+  }
+
+  Future<void> _navigateToPostDetail(
+      Map<String, dynamic> notificationData) async {
+    debugPrint('=== POST NAVIGATION DEBUG ===');
+    debugPrint('Notification data received: $notificationData');
+
+    // Extract post ID from notification data
+    int? postId;
+
+    try {
+      // Try different possible field names for post ID
+      if (notificationData.containsKey('post_id')) {
+        postId = notificationData['post_id'] is String
+            ? int.parse(notificationData['post_id'])
+            : notificationData['post_id'] as int?;
+        debugPrint('Found post_id: $postId');
+      } else if (notificationData.containsKey('postId')) {
+        postId = notificationData['postId'] is String
+            ? int.parse(notificationData['postId'])
+            : notificationData['postId'] as int?;
+        debugPrint('Found postId: $postId');
+      } else if (notificationData.containsKey('id')) {
+        postId = notificationData['id'] is String
+            ? int.parse(notificationData['id'])
+            : notificationData['id'] as int?;
+        debugPrint('Found id: $postId');
+      }
+
+      debugPrint('Extracted post ID: $postId');
+      debugPrint(
+          'All notification data keys: ${notificationData.keys.toList()}');
+
+      if (postId == null) {
+        debugPrint('No post ID found in notification data: $notificationData');
+        // Show error to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot find post ID in notification data'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Loading post...'),
+            ],
+          ),
+        ),
+      );
+
+      // Fetch post details using PostsProvider
+      final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+      final post = await postsProvider.fetchPostDetails(postId);
+
+      // Dismiss loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (post != null && mounted) {
+        // Navigate to PostDetailPage with the fetched post data
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostDetailPage(
+              title: post.title,
+              description: post.content,
+              imageUrl: post.imageUrl,
+              location: post.location.address ??
+                  '${post.location.latitude}, ${post.location.longitude}',
+              time: post.createdAt.toString(),
+              honesty: post.honestyScore,
+              upvotes: post.upvotes,
+              comments: 0, // Comments count not available in Post model
+              isVerified: post.isVerifiedLocation,
+              post: post,
+              authorName: post.authorName,
+              downvotes: post.downvotes,
+            ),
+          ),
+        );
+      } else if (mounted) {
+        // Show error message if post not found
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Post not found or no longer available'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Dismiss loading dialog if still showing
+      if (mounted) Navigator.pop(context);
+
+      debugPrint('Error navigating to post detail: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading post: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Helper method to extract thumbnail URL from notification data
+  String? _extractThumbnailUrl(Map<String, dynamic> notificationData) {
+    // Try different possible field names for thumbnail/image
+    if (notificationData.containsKey('thumbnail_url')) {
+      return notificationData['thumbnail_url'] as String?;
+    }
+    if (notificationData.containsKey('image_url')) {
+      return notificationData['image_url'] as String?;
+    }
+    if (notificationData.containsKey('post_image_url')) {
+      return notificationData['post_image_url'] as String?;
+    }
+    if (notificationData.containsKey('post_image')) {
+      return notificationData['post_image'] as String?;
+    }
+    if (notificationData.containsKey('image')) {
+      return notificationData['image'] as String?;
+    }
+    // Check if there's a post object with image
+    if (notificationData.containsKey('post') &&
+        notificationData['post'] is Map) {
+      final post = notificationData['post'] as Map<String, dynamic>;
+      if (post.containsKey('image_url')) {
+        return post['image_url'] as String?;
+      }
+      if (post.containsKey('imageUrl')) {
+        return post['imageUrl'] as String?;
+      }
+    }
+    return null;
+  }
+
+  // Build action buttons for post-related notifications
+  Widget _buildNotificationActionButtons(NotificationModel notification) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          // Still Happening button
+          Expanded(
+            child: FutureBuilder<bool>(
+              future: _checkUserProximityToPost(notification),
+              builder: (context, snapshot) {
+                final isNearPost = snapshot.data ?? false;
+                final isEnded = _isPostEnded(notification);
+                final isEnabled = isNearPost && !isEnded;
+
+                debugPrint(
+                    '🔘 Still Happening button: isNearPost=$isNearPost, isEnded=$isEnded, isEnabled=$isEnabled');
+
+                return ElevatedButton.icon(
+                  onPressed: isEnabled
+                      ? () => _handleStillHappeningAction(notification)
+                      : null,
+                  icon: Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: isEnabled
+                        ? Colors.white
+                        : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                  ),
+                  label: Text(
+                    'Still Happening',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isEnabled
+                          ? Colors.white
+                          : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isEnabled
+                        ? Colors.green
+                        : (isDark ? Colors.grey[850] : Colors.grey[300]),
+                    foregroundColor: isEnabled
+                        ? Colors.white
+                        : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 32),
+                    elevation: isEnabled ? 2 : 0,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Ended button
+          Expanded(
+            child: FutureBuilder<bool>(
+              future: _checkUserProximityToPost(notification),
+              builder: (context, snapshot) {
+                final isNearPost = snapshot.data ?? false;
+                final isEnded = _isPostEnded(notification);
+                final isEnabled = isNearPost && !isEnded;
+
+                debugPrint(
+                    '🔘 Ended button: isNearPost=$isNearPost, isEnded=$isEnded, isEnabled=$isEnabled');
+
+                return ElevatedButton.icon(
+                  onPressed:
+                      isEnabled ? () => _handleEndedAction(notification) : null,
+                  icon: Icon(
+                    Icons.cancel,
+                    size: 16,
+                    color: isEnabled
+                        ? Colors.white
+                        : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                  ),
+                  label: Text(
+                    'Ended',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isEnabled
+                          ? Colors.white
+                          : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isEnabled
+                        ? Colors.red
+                        : (isDark ? Colors.grey[850] : Colors.grey[300]),
+                    foregroundColor: isEnabled
+                        ? Colors.white
+                        : (isDark ? Colors.grey[600] : Colors.grey[500]),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 32),
+                    elevation: isEnabled ? 2 : 0,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Check if user is near the post location
+  Future<bool> _checkUserProximityToPost(NotificationModel notification) async {
+    try {
+      // Extract post coordinates from notification data
+      final notificationData = notification.data;
+      double? postLat, postLng;
+
+      // Try to get coordinates from different possible fields
+      if (notificationData.containsKey('latitude') &&
+          notificationData.containsKey('longitude')) {
+        postLat = double.tryParse(notificationData['latitude'].toString());
+        postLng = double.tryParse(notificationData['longitude'].toString());
+      } else if (notificationData.containsKey('lat') &&
+          notificationData.containsKey('lng')) {
+        postLat = double.tryParse(notificationData['lat'].toString());
+        postLng = double.tryParse(notificationData['lng'].toString());
+      } else if (notificationData.containsKey('post') &&
+          notificationData['post'] is Map) {
+        final post = notificationData['post'] as Map<String, dynamic>;
+        postLat = double.tryParse(post['latitude'].toString());
+        postLng = double.tryParse(post['longitude'].toString());
+      }
+
+      if (postLat == null || postLng == null) {
+        debugPrint(
+            '❌ Proximity check: Cannot determine post location - DISABLING buttons');
+        // Return false when coordinates are not available (disabled state)
+        return false;
+      }
+
+      try {
+        // Get user's current location
+        final userPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.best,
+          timeLimit: const Duration(seconds: 10),
+        );
+        final distance = Geolocator.distanceBetween(
+          userPosition.latitude,
+          userPosition.longitude,
+          postLat,
+          postLng,
+        );
+
+        final isNear = distance <= 100; // 100 meters for production
+        debugPrint(
+            '📍 Proximity check: Distance = ${distance.toStringAsFixed(2)}m, isNear = $isNear');
+
+        return isNear;
+      } catch (locationError) {
+        debugPrint(
+            '❌ Proximity check: Location error - DISABLING buttons: $locationError');
+        // Return false when location access fails (disabled state)
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Proximity check: General error - DISABLING buttons: $e');
+      // Return false when any error occurs (disabled state)
+      return false;
+    }
+  }
+
+  // Check if the post has ended
+  bool _isPostEnded(NotificationModel notification) {
+    // Check if the notification data indicates the post has ended
+    final notificationData = notification.data;
+
+    if (notificationData.containsKey('is_ended')) {
+      final isEnded = notificationData['is_ended'] == true;
+      debugPrint('🔚 Post ended check: is_ended = $isEnded');
+      return isEnded;
+    }
+
+    if (notificationData.containsKey('status')) {
+      final status = notificationData['status'];
+      final isEnded = status == 'ended';
+      debugPrint('🔚 Post ended check: status = $status, isEnded = $isEnded');
+      return isEnded;
+    }
+
+    if (notificationData.containsKey('post') &&
+        notificationData['post'] is Map) {
+      final post = notificationData['post'] as Map<String, dynamic>;
+      if (post.containsKey('is_ended')) {
+        final isEnded = post['is_ended'] == true;
+        debugPrint('🔚 Post ended check: post.is_ended = $isEnded');
+        return isEnded;
+      }
+      if (post.containsKey('status')) {
+        final status = post['status'];
+        final isEnded = status == 'ended';
+        debugPrint(
+            '🔚 Post ended check: post.status = $status, isEnded = $isEnded');
+        return isEnded;
+      }
+    }
+
+    // Check if event has been running for more than 24 hours (auto-expire)
+    if (notificationData.containsKey('created_at')) {
+      try {
+        final createdAt =
+            DateTime.tryParse(notificationData['created_at'].toString());
+        if (createdAt != null) {
+          final now = DateTime.now();
+          final duration = now.difference(createdAt);
+          final isExpired = duration.inHours > 24;
+          debugPrint(
+              '🔚 Post ended check: Auto-expire after 24h - created ${duration.inHours}h ago, isExpired = $isExpired');
+          if (isExpired) return true;
+        }
+      } catch (e) {
+        debugPrint('❌ Error checking auto-expire: $e');
+      }
+    }
+
+    // Default to not ended but log it
+    debugPrint(
+        '🔚 Post ended check: No end indicator found, assuming NOT ended');
+    return false;
+  }
+
+  // Handle "Still Happening" action
+  Future<void> _handleStillHappeningAction(
+      NotificationModel notification) async {
+    try {
+      // Extract post ID
+      int? postId = _extractPostId(notification.data);
+      if (postId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot find post ID'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Confirming...'),
+            ],
+          ),
+        ),
+      );
+
+      // Call API to confirm "still happening"
+      // Note: You'll need to implement this in your API service
+      // await NotificationApiService.confirmStillHappening(postId);
+
+      if (mounted) Navigator.pop(context); // Dismiss loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Confirmed: Still Happening'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Dismiss loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Handle "Ended" action
+  Future<void> _handleEndedAction(NotificationModel notification) async {
+    try {
+      // Extract post ID
+      int? postId = _extractPostId(notification.data);
+      if (postId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot find post ID'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Reporting...'),
+            ],
+          ),
+        ),
+      );
+
+      // Call API to report "ended"
+      // Note: You'll need to implement this in your API service
+      // await NotificationApiService.reportEnded(postId);
+
+      if (mounted) Navigator.pop(context); // Dismiss loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reported: Event Ended'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Dismiss loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Helper to extract post ID from notification data
+  int? _extractPostId(Map<String, dynamic> notificationData) {
+    if (notificationData.containsKey('post_id')) {
+      return notificationData['post_id'] is String
+          ? int.tryParse(notificationData['post_id'])
+          : notificationData['post_id'] as int?;
+    }
+    if (notificationData.containsKey('postId')) {
+      return notificationData['postId'] is String
+          ? int.tryParse(notificationData['postId'])
+          : notificationData['postId'] as int?;
+    }
+    if (notificationData.containsKey('id')) {
+      return notificationData['id'] is String
+          ? int.tryParse(notificationData['id'])
+          : notificationData['id'] as int?;
+    }
+    if (notificationData.containsKey('post') &&
+        notificationData['post'] is Map) {
+      final post = notificationData['post'] as Map<String, dynamic>;
+      if (post.containsKey('id')) {
+        return post['id'] is String
+            ? int.tryParse(post['id'])
+            : post['id'] as int?;
+      }
+    }
+    return null;
   }
 
   Future<void> _checkNotificationStatus() async {
@@ -532,6 +1066,15 @@ class _NotificationsPageState extends State<NotificationsPage>
                 onTap: () {
                   Navigator.pop(context);
                   _navigateToUserProfile(notification.data);
+                },
+              ),
+            if (_isPostRelatedNotification(notification.type))
+              ListTile(
+                leading: const Icon(Icons.article),
+                title: const Text('View post'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _navigateToPostDetail(notification.data);
                 },
               ),
             ListTile(
@@ -734,94 +1277,109 @@ class _NotificationsPageState extends State<NotificationsPage>
       groupedNotifications[dateHeader]!.add(notification);
     }
 
-    return RefreshIndicator(
-      onRefresh: _refreshNotifications,
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: groupedNotifications.length +
-            (_isLoadingMore || (_isLoading && notifications.isEmpty) ? 1 : 0) +
-            (!_hasMoreData && notifications.isNotEmpty ? 1 : 0),
-        itemBuilder: (context, index) {
-          // Show end reached message
-          if (!_hasMoreData &&
-              notifications.isNotEmpty &&
-              index == groupedNotifications.length + (_isLoadingMore ? 1 : 0)) {
-            return Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'You\'re all caught up!',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // Show loading indicator at the end
-          if (index >= groupedNotifications.length) {
-            if (_isLoadingMore) {
-              return Container(
-                padding: const EdgeInsets.all(20),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Loading more notifications...',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              );
-            } else {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-          }
-
-          final dateHeader = groupedNotifications.keys.elementAt(index);
-          final notificationsForDate = groupedNotifications[dateHeader]!;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  dateHeader,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: _refreshNotifications,
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: groupedNotifications.length +
+                (_isLoadingMore || (_isLoading && notifications.isEmpty)
+                    ? 1
+                    : 0) +
+                (!_hasMoreData && notifications.isNotEmpty ? 1 : 0),
+            itemBuilder: (context, index) {
+              // Show end reached message
+              if (!_hasMoreData &&
+                  notifications.isNotEmpty &&
+                  index ==
+                      groupedNotifications.length + (_isLoadingMore ? 1 : 0)) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 16,
+                        color: Colors.grey[600],
                       ),
-                ),
-              ),
-              ...notificationsForDate.map((notification) =>
-                  _buildNotificationItem(notification, isDark)),
-            ],
-          );
-        },
-      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'You\'re all caught up!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // Show loading indicator at the end
+              if (index >= groupedNotifications.length) {
+                if (_isLoadingMore) {
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Loading more notifications...',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+              }
+
+              final dateHeader = groupedNotifications.keys.elementAt(index);
+              final notificationsForDate = groupedNotifications[dateHeader]!;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      dateHeader,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  ...notificationsForDate.map((notification) =>
+                      _buildNotificationItem(notification, isDark)),
+                ],
+              );
+            },
+          ),
+        ),
+        // Show refresh indicator overlay
+        if (_isRefreshing)
+          Container(
+            color: Colors.black.withOpacity(0.1),
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+      ],
     );
   }
 
@@ -832,11 +1390,18 @@ class _NotificationsPageState extends State<NotificationsPage>
     final icon = notification.icon ?? Icons.notifications;
     final isFollowNotification =
         _isFollowRelatedNotification(notification.type);
+    final isPostRelated = _isPostRelatedNotification(notification.type);
 
-    // Get user avatar from notification - imageUrl is already processed in conversion
-    String? avatarUrl = notification.imageUrl;
-    if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      avatarUrl = _getFixedImageUrl(avatarUrl);
+    // Get thumbnail or avatar URL
+    String? imageUrl = notification.imageUrl;
+    String? thumbnailUrl = _extractThumbnailUrl(notification.data);
+
+    // Use thumbnail if available for post-related notifications, otherwise use avatar
+    String? displayImageUrl =
+        isPostRelated && thumbnailUrl != null ? thumbnailUrl : imageUrl;
+
+    if (displayImageUrl != null && displayImageUrl.isNotEmpty) {
+      displayImageUrl = _getFixedImageUrl(displayImageUrl);
     }
 
     return Container(
@@ -869,15 +1434,13 @@ class _NotificationsPageState extends State<NotificationsPage>
         ),
         confirmDismiss: (direction) async {
           if (direction == DismissDirection.startToEnd) {
-            // Mark as read/unread
             if (isRead) {
               _markAsUnread(notification);
             } else {
               _markAsRead(notification);
             }
-            return false; // Don't dismiss
+            return false;
           } else {
-            // Delete - show confirmation
             return await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
@@ -911,107 +1474,164 @@ class _NotificationsPageState extends State<NotificationsPage>
                 ? Colors.transparent
                 : Theme.of(context).colorScheme.primary.withOpacity(0.1),
           ),
-          child: ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: GestureDetector(
-              onTap: isFollowNotification
-                  ? () => _navigateToUserProfile(notification.data)
-                  : null,
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: isRead
-                        ? Colors.grey.withOpacity(0.3)
-                        : Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withOpacity(0.2),
-                    radius: 24,
-                    backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                        ? NetworkImage(avatarUrl)
-                        : null,
-                    child: (avatarUrl == null || avatarUrl.isEmpty)
-                        ? Icon(
-                            icon,
-                            color: isRead
-                                ? Colors.grey
-                                : _getIconColor(notification.type, context),
-                            size: 20,
-                          )
-                        : null,
-                  ),
-                  // Show follow icon overlay for follow notifications
-                  if (isFollowNotification &&
-                      avatarUrl != null &&
-                      avatarUrl.isNotEmpty)
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 16,
-                        height: 16,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: GestureDetector(
+                  onTap: isFollowNotification
+                      ? () {
+                          debugPrint('Avatar tap - navigating to user profile');
+                          _navigateToUserProfile(notification.data);
+                        }
+                      : isPostRelated
+                          ? () {
+                              debugPrint(
+                                  'Avatar tap - navigating to post detail');
+                              _navigateToPostDetail(notification.data);
+                            }
+                          : null,
+                  child: Stack(
+                    children: [
+                      // Use Container with ClipRRect for better thumbnail display
+                      Container(
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: _getIconColor(notification.type, context),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1),
+                          borderRadius:
+                              BorderRadius.circular(isPostRelated ? 8 : 24),
+                          color: isRead
+                              ? Colors.grey.withOpacity(0.3)
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.2),
                         ),
-                        child: Icon(
-                          icon,
-                          size: 10,
-                          color: Colors.white,
+                        child: ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(isPostRelated ? 8 : 24),
+                          child: (displayImageUrl != null &&
+                                  displayImageUrl.isNotEmpty)
+                              ? Image.network(
+                                  displayImageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    // Fallback to icon if image fails to load
+                                    return Icon(
+                                      icon,
+                                      color: isRead
+                                          ? Colors.grey
+                                          : _getIconColor(
+                                              notification.type, context),
+                                      size: 20,
+                                    );
+                                  },
+                                )
+                              : Icon(
+                                  icon,
+                                  color: isRead
+                                      ? Colors.grey
+                                      : _getIconColor(
+                                          notification.type, context),
+                                  size: 20,
+                                ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            title: notification.title.isNotEmpty
-                ? Text(
-                    notification.title,
-                    style: TextStyle(
-                      fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
-                      fontSize: 14, // Reduced from default size
-                      color: isRead ? Colors.grey : null,
-                    ),
-                  )
-                : null,
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message,
-                  style: TextStyle(
-                    color: isRead ? Colors.grey : null,
-                    fontWeight: isRead ? FontWeight.normal : FontWeight.w500,
+                      // Show notification type icon overlay
+                      if (isFollowNotification &&
+                          displayImageUrl != null &&
+                          displayImageUrl.isNotEmpty)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: _getIconColor(notification.type, context),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1),
+                            ),
+                            child: Icon(
+                              icon,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDateTime(dateTime),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
+                title: notification.title.isNotEmpty
+                    ? Text(
+                        notification.title,
+                        style: TextStyle(
+                          fontWeight:
+                              isRead ? FontWeight.normal : FontWeight.w600,
+                          fontSize: 14,
+                          color: isRead ? Colors.grey : null,
+                        ),
+                      )
+                    : null,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: TextStyle(
+                        color: isRead ? Colors.grey : null,
+                        fontWeight:
+                            isRead ? FontWeight.normal : FontWeight.w500,
                       ),
-                ),
-              ],
-            ),
-            trailing: !isRead
-                ? Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  )
-                : null,
-            onTap: () {
-              _markAsRead(notification);
-              if (isFollowNotification) {
-                _navigateToUserProfile(notification.data);
-              }
-            },
-            onLongPress: () => _showNotificationOptions(notification),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDateTime(dateTime),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey,
+                          ),
+                    ),
+                  ],
+                ),
+                trailing: !isRead
+                    ? Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      )
+                    : null,
+                onTap: () {
+                  // Debug logging for notification taps
+                  debugPrint('=== NOTIFICATION TAP DEBUG ===');
+                  debugPrint('Notification type: ${notification.type}');
+                  debugPrint('Notification data: ${notification.data}');
+                  debugPrint('Is follow notification: $isFollowNotification');
+                  debugPrint('Is post related: $isPostRelated');
+                  debugPrint(
+                      'Notification message: ${notification.message ?? notification.body}');
+                  debugPrint('==============================');
+
+                  _markAsRead(notification);
+                  if (isFollowNotification) {
+                    debugPrint('Navigating to user profile');
+                    _navigateToUserProfile(notification.data);
+                  } else if (isPostRelated) {
+                    debugPrint('Navigating to post detail');
+                    _navigateToPostDetail(notification.data);
+                  } else {
+                    debugPrint(
+                        'No navigation action for this notification type');
+                  }
+                },
+                onLongPress: () => _showNotificationOptions(notification),
+              ),
+              // Add action buttons for post-related notifications
+              if (isPostRelated) _buildNotificationActionButtons(notification),
+            ],
           ),
         ),
       ),

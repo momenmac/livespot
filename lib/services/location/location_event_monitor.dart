@@ -28,7 +28,7 @@ class LocationEventMonitor with WidgetsBindingObserver {
   // Configurable parameters
   double _proximityThresholdMeters = 200; // Default: 200 meters
   int _monitoringIntervalSeconds = 60; // Default: check every 60 seconds
-  int _minimumTimeBetweenNotificationsMinutes = 60; // Default: 60 minutes
+  final int _minimumTimeBetweenNotificationsMinutes = 60; // Default: 60 minutes
 
   // Event cache (to avoid duplicate checks)
   final Map<String, DateTime> _lastNotificationForEvent = {};
@@ -342,8 +342,7 @@ class LocationEventMonitor with WidgetsBindingObserver {
     }
 
     // Make sure position updates are flowing
-    if (_positionStreamSubscription == null) {
-      _positionStreamSubscription = _locationService
+    _positionStreamSubscription ??= _locationService
           .getPositionStream(
             accuracy: LocationAccuracy.high,
             distanceFilter: 20,
@@ -352,7 +351,6 @@ class LocationEventMonitor with WidgetsBindingObserver {
             _onPositionUpdate,
             onError: (error) => debugPrint('⚠️ Position stream error: $error'),
           );
-    }
 
     // Check for events right away
     _checkNearbyEvents();

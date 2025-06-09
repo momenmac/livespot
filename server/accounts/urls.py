@@ -11,6 +11,11 @@ from .views import (
     UserProfileView, UserProfileUpdateView, UserProfileDetailView,
     UserFollowView, UserUnfollowView, UserFollowersView,
     UserFollowingView, UserSearchView, UserRandomView,
+    VerificationRequestView,
+    
+    # Account management views
+    ChangePasswordView, ChangeEmailView, DataDownloadRequestView,
+    DeactivateAccountView, DeleteAccountView,
 )
 
 urlpatterns = [
@@ -49,4 +54,14 @@ urlpatterns = [
     path('users/<int:user_id>/following/', UserFollowingView.as_view(), name='user_following'),
     path('users/search/', UserSearchView.as_view(), name='user_search'),
     path('users/random/', UserRandomView.as_view(), name='user_random'),
+    
+    # Verification requests
+    path('verification-request/', VerificationRequestView.as_view(), name='verification_request'),
+    
+    # Account management endpoints
+    path('change-password/', ChangePasswordView.as_view(), name='change_password'),
+    path('change-email/', ChangeEmailView.as_view(), name='change_email'),
+    path('data-download-request/', DataDownloadRequestView.as_view(), name='data_download_request'),
+    path('deactivate-account/', DeactivateAccountView.as_view(), name='deactivate_account'),
+    path('delete-account/', DeleteAccountView.as_view(), name='delete_account'),
 ]

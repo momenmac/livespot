@@ -812,4 +812,168 @@ class AccountProvider extends ChangeNotifier {
       _debouncedNotify();
     }
   }
+
+  // Change password
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _isLoading = true;
+    _debouncedNotify();
+
+    try {
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
+      final result = await _authService.changePassword(
+        token: accessToken,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+      if (result['success']) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('🔐 Change password error: ${e.toString()}');
+      return false;
+    } finally {
+      _isLoading = false;
+      _debouncedNotify();
+    }
+  }
+
+  // Change email
+  Future<bool> changeEmail({
+    required String newEmail,
+    required String password,
+  }) async {
+    _isLoading = true;
+    _debouncedNotify();
+
+    try {
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
+      final result = await _authService.changeEmail(
+        token: accessToken,
+        newEmail: newEmail,
+        password: password,
+      );
+
+      if (result['success']) {
+        // Refresh user profile to get updated email
+        await _fetchUserProfile();
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('📧 Change email error: ${e.toString()}');
+      return false;
+    } finally {
+      _isLoading = false;
+      _debouncedNotify();
+    }
+  }
+
+  // Request data download
+  Future<bool> requestDataDownload() async {
+    _isLoading = true;
+    _debouncedNotify();
+
+    try {
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
+      final result = await _authService.requestDataDownload(
+        token: accessToken,
+      );
+
+      if (result['success']) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('💾 Data download request error: ${e.toString()}');
+      return false;
+    } finally {
+      _isLoading = false;
+      _debouncedNotify();
+    }
+  }
+
+  // Deactivate account
+  Future<bool> deactivateAccount() async {
+    _isLoading = true;
+    _debouncedNotify();
+
+    try {
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
+      final result = await _authService.deactivateAccount(
+        token: accessToken,
+      );
+
+      if (result['success']) {
+        // After successful deactivation, perform logout
+        await logout();
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('⏸️ Deactivate account error: ${e.toString()}');
+      return false;
+    } finally {
+      _isLoading = false;
+      _debouncedNotify();
+    }
+  }
+
+  // Delete account
+  Future<bool> deleteAccount({
+    required String password,
+  }) async {
+    _isLoading = true;
+    _debouncedNotify();
+
+    try {
+      final accessToken = await _tokenManager.getValidAccessToken();
+      if (accessToken == null) {
+        return false;
+      }
+
+      final result = await _authService.deleteAccount(
+        token: accessToken,
+        password: password,
+      );
+
+      if (result['success']) {
+        // After successful deletion, perform logout and clear all data
+        await logout();
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('🗑️ Delete account error: ${e.toString()}');
+      return false;
+    } finally {
+      _isLoading = false;
+      _debouncedNotify();
+    }
+  }
 }
