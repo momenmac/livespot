@@ -52,3 +52,45 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/app/build/
+/android/build/
+
+# Android CMake build artifacts
+android/app/.cxx/
+android/app/.cmake/
+android/.gradle/
+android/app/build/
+**/android/app/.cxx/
+**/android/app/.cmake/
+
+# Flutter build artifacts
+**/build/
+
+# Additional Android build files
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Android Studio
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+
+# Logs
+*.log
