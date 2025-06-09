@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -56,8 +57,8 @@ class Post(models.Model):
         related_name='posts'
     )
     is_anonymous = models.BooleanField(default=False)  # New field to mark post as anonymous
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)  # Changed to allow custom timestamps
+    updated_at = models.DateTimeField(null=True, blank=True)  # Remove auto_now to manually control
     upvotes = models.IntegerField(default=0)
     downvotes = models.IntegerField(default=0)
     honesty_score = models.IntegerField(default=100)
@@ -79,6 +80,18 @@ class Post(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        # If this is a new post (no id yet), set updated_at = created_at
+        if not self.pk and not self.updated_at:
+            # Make sure created_at is timezone-aware
+            if self.created_at and timezone.is_naive(self.created_at):
+                self.created_at = timezone.make_aware(self.created_at, timezone.utc)
+            self.updated_at = self.created_at or timezone.now()
+        elif not self.updated_at:
+            # For existing posts without updated_at, set it to created_at
+            self.updated_at = self.created_at or timezone.now()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         # Ensure proper Unicode handling for Arabic text

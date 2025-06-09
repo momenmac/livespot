@@ -298,19 +298,47 @@ class _MessagesPageState extends State<MessagesPage>
 
   // Method to start a conversation with AI assistant
   void _startAIConversation(BuildContext context) {
-    ResponsiveSnackBar.showInfo(
-      context: context,
-      message: "Starting conversation with AI Assistant...",
-    );
+    try {
+      // Get the AI conversation from the controller
+      if (_controller.isAIConversationInitialized) {
+        final aiConversation = _controller.aiConversation;
+        if (aiConversation != null) {
+          // Use the existing controller which already has the AI conversation initialized
+          _controller.selectConversation(aiConversation);
 
-    // TODO: Navigate to AI chat interface
-    // For example:
-    // Navigator.push(
-    //   context,
-    //   MaterialPageRoute(
-    //     builder: (context) => AIChatPage(),
-    //   ),
-    // );
+          // Navigate to chat detail page with AI conversation
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatDetailPage(
+                controller: _controller,
+                conversation: aiConversation,
+              ),
+            ),
+          ).then((_) {
+            // Refresh conversations when returning from AI chat
+            if (mounted) {
+              _loadMessages();
+            }
+          });
+        } else {
+          ResponsiveSnackBar.showError(
+            context: context,
+            message: "AI Assistant is not available",
+          );
+        }
+      } else {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "AI Assistant is initializing...",
+        );
+      }
+    } catch (e) {
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Failed to start AI conversation: $e",
+      );
+    }
   }
 
   void _showFilterOptions(BuildContext context) {

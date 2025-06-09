@@ -10,16 +10,19 @@ import 'package:flutter_application_2/services/messaging/message_event_bus.dart'
 import 'package:flutter_application_2/ui/pages/messages/models/conversation.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/message.dart';
 import 'package:flutter_application_2/ui/pages/messages/models/user.dart';
+import 'package:flutter_application_2/ui/pages/messages/models/ai_conversation.dart';
+import 'package:flutter_application_2/services/ai/gemini_ai_service.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_application_2/services/api/attachments/attachments_api.dart'
     as import_api;
-import 'package:flutter_application_2/models/user_profile.dart'; // Add import for UserProfile class
 import 'package:flutter_application_2/services/notifications/message_notification_service.dart'; // Add import for message notifications
+import 'package:flutter_application_2/services/location/location_cache_service.dart'; // Add import for enhanced RAG location context
 
 enum FilterMode {
   all,
@@ -30,8 +33,11 @@ enum FilterMode {
 
 class MessagesController extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GeminiAIService _aiService = GeminiAIService();
+  final LocationCacheService _locationCacheService = LocationCacheService();
 
   final AccountProvider accountProvider = AccountProvider();
+  final PostsProvider? _postsProvider; // Add this field
 
   String get currentUserId {
     final user = accountProvider.currentUser;
@@ -48,8 +54,17 @@ class MessagesController extends ChangeNotifier {
   String _searchQuery = '';
   FilterMode _filterMode = FilterMode.all;
 
+  // AI conversation management
+  AIConversation? _aiConversation;
+  bool _isAIConversationInitialized = false;
+
   Message? _replyToMessage;
   Message? get replyToMessage => _replyToMessage;
+
+  void setReplyToMessage(Message? message) {
+    _replyToMessage = message;
+    notifyListeners();
+  }
 
   Message? _editingMessage;
   Message? get editingMessage => _editingMessage;
@@ -72,6 +87,19 @@ class MessagesController extends ChangeNotifier {
   bool get isSearchMode => _isSearchMode;
   FilterMode get filterMode => _filterMode;
 
+  // AI conversation getters
+  bool get isAIConversationInitialized => _isAIConversationInitialized;
+  AIConversation? get aiConversation => _aiConversation;
+
+  // Check if AI is currently typing
+  bool isAITyping(Conversation conversation) {
+    if (!isAIConversation(conversation)) return false;
+
+    // You can add more sophisticated typing detection here
+    // For now, we'll rely on the Firestore typing indicator
+    return false; // This will be updated by the stream listener
+  }
+
   final TextEditingController searchController = TextEditingController();
   final TextEditingController messageController = TextEditingController();
   final ScrollController listScrollController = ScrollController();
@@ -89,14 +117,20 @@ class MessagesController extends ChangeNotifier {
   final Map<String, bool> _typingUsers = {};
   Map<String, bool> get typingUsers => _typingUsers;
 
-  // Throttle for typing indicator updates
-  DateTime? _lastTypingNotification;
-  Timer? _typingTimer;
+  // Throttle for typing indicator updates (removed unused fields)
 
-  MessagesController() {
+  MessagesController({PostsProvider? postsProvider})
+      : _postsProvider = postsProvider {
     searchController.addListener(_onSearchChanged);
     _initFirebaseListeners();
     ensureMessageControllerReferences();
+
+    // Initialize the AI service with providers
+    _aiService.initialize(
+      postsProvider: _postsProvider,
+      accountProvider: accountProvider,
+      locationCacheService: _locationCacheService,
+    );
   }
 
   void _onSearchChanged() {
@@ -339,9 +373,106 @@ class MessagesController extends ChangeNotifier {
     _subscriptions.clear();
   }
 
+  // Initialize AI conversation
+  Future<void> _initializeAIConversation() async {
+    if (_isAIConversationInitialized) return;
+
+    try {
+      debugPrint('[AI] Initializing AI conversation...');
+
+      // Initialize the GeminiAIService with providers
+      final aiService = GeminiAIService();
+      aiService.initialize(
+        postsProvider: _postsProvider,
+        accountProvider: accountProvider,
+      );
+
+      // Create AI conversation with current user ID
+      _aiConversation = AIConversation(
+        currentUserId: currentUserId,
+      );
+
+      // Ensure the AI conversation document exists in Firestore
+      await _ensureAIConversationInFirestore();
+
+      // Add AI conversation to the list and ensure it's at the top
+      _conversations.removeWhere(
+          (c) => isAIConversation(c)); // Remove any existing AI conversation
+      _conversations.insert(0, _aiConversation!); // Add at the beginning
+
+      _isAIConversationInitialized = true;
+
+      // Apply filters to update the display
+      _applyFilters();
+      notifyListeners();
+
+      debugPrint(
+          '[AI] AI conversation initialized successfully and positioned at top');
+    } catch (e) {
+      debugPrint('[AI] Error initializing AI conversation: $e');
+    }
+  }
+
+  /// Ensure the AI conversation document exists in Firestore
+  Future<void> _ensureAIConversationInFirestore() async {
+    if (_aiConversation == null) return;
+
+    try {
+      final conversationRef =
+          _firestore.collection('conversations').doc(_aiConversation!.id);
+      final conversationDoc = await conversationRef.get();
+
+      if (!conversationDoc.exists) {
+        debugPrint('[AI] Creating AI conversation document in Firestore');
+
+        // Create the conversation document
+        await conversationRef.set({
+          'participants': [currentUserId, GeminiAIService().aiAssistantId],
+          'lastMessage': {
+            'content': _aiConversation!.lastMessage.content,
+            'senderId': _aiConversation!.lastMessage.senderId,
+            'timestamp': _aiConversation!.lastMessage.timestamp,
+            'messageType': _aiConversation!.lastMessage.messageType.name,
+          },
+          'isGroup': false,
+          'isArchived': false,
+          'isMuted': false,
+          'unreadCount': 0,
+          'createdAt': DateTime.now(),
+          'updatedAt': DateTime.now(),
+        });
+
+        // Create the initial welcome message in the messages subcollection
+        await conversationRef
+            .collection('messages')
+            .doc(_aiConversation!.lastMessage.id)
+            .set({
+          'id': _aiConversation!.lastMessage.id,
+          'conversationId': _aiConversation!.id,
+          'senderId': _aiConversation!.lastMessage.senderId,
+          'senderName': _aiConversation!.lastMessage.senderName,
+          'content': _aiConversation!.lastMessage.content,
+          'timestamp': _aiConversation!.lastMessage.timestamp,
+          'messageType': _aiConversation!.lastMessage.messageType.name,
+          'status': _aiConversation!.lastMessage.status.name,
+          'isRead': false,
+        });
+
+        debugPrint('[AI] AI conversation document created successfully');
+      } else {
+        debugPrint('[AI] AI conversation document already exists');
+      }
+    } catch (e) {
+      debugPrint('[AI] Error ensuring AI conversation in Firestore: $e');
+    }
+  }
+
   // Load conversations with proper handling of per-user read status
   Future<void> loadConversations() async {
     try {
+      // Initialize AI conversation first
+      await _initializeAIConversation();
+
       final users = await _fetchAllUsers();
       final snapshot = await _firestore
           .collection('conversations')
@@ -399,7 +530,7 @@ class MessagesController extends ChangeNotifier {
               // consider it unread
               conversation.unreadCount = 1;
             } else {
-              // Current user's own messages are always read
+              // Current user's own messages are always read to them
               conversation.unreadCount = 0;
             }
           } catch (e) {
@@ -413,6 +544,10 @@ class MessagesController extends ChangeNotifier {
 
       _conversations = conversationsData;
       _applyFilters();
+
+      // Ensure AI conversation is at the top after loading all conversations
+      refreshAIConversationPosition();
+
       notifyListeners();
       return;
     } catch (e) {
@@ -421,6 +556,123 @@ class MessagesController extends ChangeNotifier {
       _applyFilters();
     }
     ensureMessageControllerReferences();
+  }
+
+  // Send message to AI assistant
+  Future<void> sendAIMessage(String content) async {
+    // Initialize AI conversation if not already done
+    if (_aiConversation == null || !_isAIConversationInitialized) {
+      debugPrint('[AI] Initializing AI conversation for message sending...');
+      await _initializeAIConversation();
+    }
+
+    if (_aiConversation == null || !_isAIConversationInitialized) {
+      debugPrint('[AI] Failed to initialize AI conversation');
+      return;
+    }
+
+    try {
+      debugPrint('[AI] Sending message to AI: $content');
+
+      final messageId = const Uuid().v4();
+      final timestamp = DateTime.now();
+
+      // Create user message
+      final userMessage = Message(
+        id: messageId,
+        senderId: currentUserId,
+        senderName: accountProvider.currentUser?.firstName ?? 'You',
+        content: content,
+        timestamp: timestamp,
+        messageType: MessageType.text,
+        conversationId: _aiConversation!.id,
+        status: MessageStatus.sending,
+        isRead: true,
+      );
+
+      // Mark as sent instantly for AI chat
+      userMessage.status = MessageStatus.sent;
+
+      // Add user message to conversation and update UI immediately
+      _aiConversation!.messages.insert(0, userMessage);
+      _aiConversation!.lastMessage = userMessage;
+      notifyListeners();
+
+      // Save user message to Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .collection('messages')
+          .doc(messageId)
+          .set(userMessage.toJson());
+
+      // Update message status to sent
+      userMessage.status = MessageStatus.sent;
+      notifyListeners();
+
+      debugPrint('[AI] User message saved to Firestore');
+
+      // Show AI typing indicator by updating Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .update({
+        'typingUsers.${GeminiAIService().aiAssistantId}': true,
+      });
+
+      // Get AI response with RAG enhancement
+      final aiResponse = await _aiConversation!.generateAIResponse(content);
+
+      // Hide AI typing indicator
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .update({
+        'typingUsers.${GeminiAIService().aiAssistantId}': FieldValue.delete(),
+      });
+
+      // Save AI response to Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .collection('messages')
+          .doc(aiResponse.id)
+          .set(aiResponse.toJson());
+
+      // Mark AI response as read immediately (user is in the chat)
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .collection('messages')
+          .doc(aiResponse.id)
+          .update({'isRead': true});
+
+      // Update conversation lastMessage in Firestore
+      await _firestore
+          .collection('conversations')
+          .doc(_aiConversation!.id)
+          .update({
+        'lastMessage': aiResponse.toJson(),
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+        'unreadCount': 0, // Reset unread count since user is actively chatting
+      });
+
+      debugPrint('[AI] AI response saved to Firestore');
+    } catch (e) {
+      debugPrint('[AI] Error sending message to AI: $e');
+
+      // Make sure to hide typing indicator even if there's an error
+      try {
+        await _firestore
+            .collection('conversations')
+            .doc(_aiConversation!.id)
+            .update({
+          'typingUsers.${GeminiAIService().aiAssistantId}': FieldValue.delete(),
+        });
+      } catch (cleanupError) {
+        debugPrint('[AI] Error cleaning up typing indicator: $cleanupError');
+      }
+    }
   }
 
   List<Conversation> _generateMockConversations() {
@@ -650,9 +902,10 @@ class MessagesController extends ChangeNotifier {
       // First check if the message is already marked as read
       if (message.status == MessageStatus.read) return true;
 
-      // Get read statuses for all other participants
+      // Get read statuses for all other participants (excluding AI)
       final otherParticipants = _selectedConversation!.participants
-          .where((p) => p.id != currentUserId)
+          .where((p) =>
+              p.id != currentUserId && p.id != GeminiAIService().aiAssistantId)
           .toList();
 
       // If there are no other participants, return false
@@ -1043,26 +1296,136 @@ class MessagesController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateConversation(Conversation conversation) async {
+  // Method to check if a conversation is with AI assistant
+  bool isAIConversation(Conversation conversation) {
+    return conversation.participants.any(
+        (participant) => participant.id == GeminiAIService().aiAssistantId);
+  }
+
+  // Apply filters to conversations
+  void _applyFilters() {
+    _filteredConversations.clear();
+
+    for (final conversation in _conversations) {
+      bool shouldInclude = true;
+
+      // Apply search filter
+      if (_isSearchMode && _searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final conversationName = isAIConversation(conversation)
+            ? 'ai assistant'
+            : conversation.isGroup
+                ? conversation.groupName?.toLowerCase() ?? ''
+                : conversation.participants
+                    .where((p) => p.id != currentUserId)
+                    .map((p) => p.name.toLowerCase())
+                    .join(' ');
+
+        if (!conversationName.contains(query) &&
+            !conversation.lastMessage.content.toLowerCase().contains(query)) {
+          shouldInclude = false;
+        }
+      }
+
+      // Apply filter mode
+      switch (_filterMode) {
+        case FilterMode.unread:
+          if (conversation.unreadCount == 0) shouldInclude = false;
+          break;
+        case FilterMode.archived:
+          if (!conversation.isArchived) shouldInclude = false;
+          break;
+        case FilterMode.groups:
+          if (!conversation.isGroup) shouldInclude = false;
+          break;
+        case FilterMode.all:
+          // No additional filtering
+          break;
+      }
+
+      if (shouldInclude) {
+        _filteredConversations.add(conversation);
+      }
+    }
+
+    // Sort conversations: AI conversations first (pinned), then by last message timestamp
+    _filteredConversations.sort((a, b) {
+      // Check if either conversation is AI and pinned
+      final aIsAIPinned = isAIConversation(a) && a.isPinned;
+      final bIsAIPinned = isAIConversation(b) && b.isPinned;
+
+      // If one is AI pinned and the other isn't, AI goes first
+      if (aIsAIPinned && !bIsAIPinned) return -1;
+      if (!aIsAIPinned && bIsAIPinned) return 1;
+
+      // If both are pinned or both are regular, sort by timestamp
+      return b.lastMessage.timestamp.compareTo(a.lastMessage.timestamp);
+    });
+  }
+
+  // Toggle search mode
+  void toggleSearchMode() {
+    _isSearchMode = !_isSearchMode;
+    if (!_isSearchMode) {
+      _searchQuery = '';
+      searchController.clear();
+    }
+    _applyFilters();
+    notifyListeners();
+  }
+
+  // Set filter mode
+  void setFilterMode(FilterMode mode) {
+    _filterMode = mode;
+    _applyFilters();
+    notifyListeners();
+  }
+
+  // Select conversation
+  void selectConversation(Conversation conversation) {
+    _selectedConversation = conversation;
+    notifyListeners();
+  }
+
+  // Stop typing indicator
+  void _stopTypingIndicator() {
+    if (_selectedConversation == null) return;
+
     try {
-      // Update conversation in Firestore
+      _firestore
+          .collection('conversations')
+          .doc(_selectedConversation!.id)
+          .update({
+        'typingUsers.$currentUserId': FieldValue.delete(),
+      });
+    } catch (e) {
+      debugPrint('[TypingIndicator] Error stopping typing indicator: $e');
+    }
+  }
+
+  // Ensure message controller references
+  void ensureMessageControllerReferences() {
+    // This method ensures all messages have proper controller references
+    // Implementation can be added if needed for message-specific functionality
+  }
+
+  // Update conversation
+  void updateConversation(Conversation conversation) async {
+    try {
       await _firestore.collection('conversations').doc(conversation.id).update({
         'isMuted': conversation.isMuted,
         'isArchived': conversation.isArchived,
       });
 
-      // Update in local list
       final index = _conversations.indexWhere((c) => c.id == conversation.id);
       if (index != -1) {
         _conversations[index] = conversation;
       }
 
-      // Update selected conversation if needed
       if (_selectedConversation?.id == conversation.id) {
         _selectedConversation = conversation;
       }
 
-      // Reapply filters to update UI
       _applyFilters();
       notifyListeners();
     } catch (e) {
@@ -1547,597 +1910,360 @@ class MessagesController extends ChangeNotifier {
     print('scrollToMessage called for $messageId');
   }
 
-  void _applyFilters() {
-    if (_searchQuery.isNotEmpty) {
-      _filteredConversations = _conversations.where((conversation) {
-        final participantNames = conversation.participants
-            .map((p) => p.name.toLowerCase())
-            .join(' ');
-        final groupName = conversation.groupName?.toLowerCase() ?? '';
-        final lastMessageContent =
-            conversation.lastMessage.content.toLowerCase();
+  // RAG-powered methods for enhanced AI capabilities
 
-        return participantNames.contains(_searchQuery.toLowerCase()) ||
-            groupName.contains(_searchQuery.toLowerCase()) ||
-            lastMessageContent.contains(_searchQuery.toLowerCase());
-      }).toList();
-    } else {
-      switch (_filterMode) {
-        case FilterMode.unread:
-          _filteredConversations =
-              _conversations.where((c) => c.unreadCount > 0).toList();
-          break;
-        case FilterMode.archived:
-          _filteredConversations =
-              _conversations.where((c) => c.isArchived).toList();
-          break;
-        case FilterMode.groups:
-          _filteredConversations =
-              _conversations.where((c) => c.isGroup).toList();
-          break;
-        case FilterMode.all:
-          _filteredConversations =
-              _conversations.where((c) => !c.isArchived).toList();
-          break;
+  /// Get AI recommendations based on user query and context
+  Future<String?> getAIRecommendations({String? query}) async {
+    try {
+      return await _aiService.getEnhancedRecommendations(specificQuery: query);
+    } catch (e) {
+      debugPrint('[RAG] Error getting AI recommendations: $e');
+      return null;
+    }
+  }
+
+  /// Perform smart search with AI-powered result interpretation
+  Future<String?> performSmartSearch(String query) async {
+    try {
+      return await _aiService.performSmartSearch(query);
+    } catch (e) {
+      debugPrint('[RAG] Error performing smart search: $e');
+      return null;
+    }
+  }
+
+  /// Get trending insights from AI analysis
+  Future<String?> getTrendingInsights() async {
+    try {
+      // Use a generic query to get trending insights
+      final recommendations = await _aiService.getEnhancedRecommendations(
+          specificQuery: "What are the current trends and popular topics?");
+
+      return recommendations;
+    } catch (e) {
+      debugPrint('[RAG] Error getting trending insights: $e');
+      return null;
+    }
+  }
+
+  /// Send a context-aware AI message with RAG enhancement
+  Future<void> sendEnhancedAIMessage(String content,
+      {Map<String, dynamic>? context}) async {
+    try {
+      // Initialize AI conversation if not already done
+      if (_aiConversation == null || !_isAIConversationInitialized) {
+        await _initializeAIConversation();
       }
+
+      if (_aiConversation == null || !_isAIConversationInitialized) {
+        debugPrint(
+            '[RAG] Failed to initialize AI conversation for enhanced message');
+        return;
+      }
+
+      // Create enhanced message with context
+      String enhancedContent = content;
+
+      // Add location context if available
+      if (_locationCacheService.cachedPosition != null) {
+        final location = _locationCacheService.cachedPosition!;
+        enhancedContent +=
+            "\n[Location Context: ${location.latitude}, ${location.longitude}]";
+      }
+
+      // Add user preferences context if available
+      if (accountProvider.currentUser != null) {
+        final user = accountProvider.currentUser!;
+        enhancedContent += "\n[User: ${user.firstName}]";
+      }
+
+      // Add additional context if provided
+      if (context != null) {
+        enhancedContent += "\n[Context: ${context.toString()}]";
+      }
+
+      debugPrint('[RAG] Sending enhanced AI message with context');
+      await sendAIMessage(enhancedContent);
+    } catch (e) {
+      debugPrint('[RAG] Error sending enhanced AI message: $e');
+      // Fallback to regular AI message
+      await sendAIMessage(content);
+    }
+  }
+
+  /// Get location-based recommendations
+  Future<String?> getLocationBasedRecommendations() async {
+    try {
+      if (_locationCacheService.cachedPosition == null) {
+        return "I'd love to give you location-based recommendations, but I need your location first. Please enable location services.";
+      }
+
+      final location = _locationCacheService.cachedPosition!;
+      final query =
+          "events and places near latitude ${location.latitude}, longitude ${location.longitude}";
+
+      return await _aiService.getEnhancedRecommendations(specificQuery: query);
+    } catch (e) {
+      debugPrint('[RAG] Error getting location-based recommendations: $e');
+      return null;
+    }
+  }
+
+  /// Get personalized content based on user interaction history
+  Future<String?> getPersonalizedContent() async {
+    try {
+      final userId = accountProvider.currentUser?.id;
+      if (userId == null) {
+        return await _aiService.getEnhancedRecommendations();
+      }
+
+      final query = "personalized recommendations for user interests";
+      return await _aiService.getEnhancedRecommendations(specificQuery: query);
+    } catch (e) {
+      debugPrint('[RAG] Error getting personalized content: $e');
+      return null;
+    }
+  }
+
+  /// Quick action to discover posts by category
+  Future<String?> discoverPostsByCategory(String category) async {
+    try {
+      final query = "posts and events in category: $category";
+      return await performSmartSearch(query);
+    } catch (e) {
+      debugPrint('[RAG] Error discovering posts by category: $e');
+      return null;
+    }
+  }
+
+  /// Get conversation context for better AI responses
+  Future<String> _getConversationContext() async {
+    if (_selectedConversation == null ||
+        _selectedConversation!.messages.isEmpty) {
+      return "";
     }
 
-    _filteredConversations.sort(
-        (a, b) => b.lastMessage.timestamp.compareTo(a.lastMessage.timestamp));
+    // Get last few messages for context (max 5)
+    final recentMessages = _selectedConversation!.messages.take(5).toList();
+    final contextParts = <String>[];
 
-    notifyListeners();
-  }
-
-  void toggleSearchMode() {
-    _isSearchMode = !_isSearchMode;
-    if (!_isSearchMode) {
-      searchController.clear();
-      _searchQuery = '';
-      _applyFilters();
-    }
-    notifyListeners();
-  }
-
-  void setFilterMode(FilterMode mode) {
-    _filterMode = mode;
-    _applyFilters();
-  }
-
-  // Modified to properly handle read receipts when selecting conversation
-  void selectConversation(Conversation conversation) {
-    if (_isDisposed) return; // Don't do anything if disposed
-
-    if (_selectedConversation != null) {
-      final prevIndex =
-          _conversations.indexWhere((c) => c.id == _selectedConversation!.id);
-      if (prevIndex != -1) {
-        _conversations[prevIndex] = _selectedConversation!;
-      }
+    for (final message in recentMessages.reversed) {
+      final sender = message.senderId == currentUserId ? "User" : "AI";
+      contextParts.add("$sender: ${message.content}");
     }
 
-    final index = _conversations.indexWhere((c) => c.id == conversation.id);
-    if (index != -1) {
-      _selectedConversation = _conversations[index];
-    } else {
-      _selectedConversation = conversation;
+    return "Previous conversation:\n${contextParts.join('\n')}\n---\n";
+  }
+
+  /// Enhanced method to handle AI conversation with full RAG context
+  Future<String> generateContextAwareResponse(String userMessage) async {
+    try {
+      // Get conversation ID (use AI conversation ID or selected conversation ID)
+      String? conversationId;
+      if (_aiConversation != null) {
+        conversationId = _aiConversation!.id;
+      } else if (_selectedConversation != null) {
+        conversationId = _selectedConversation!.id;
+      }
+
+      // Gather all available context
+      final conversationContext = await _getConversationContext();
+      final locationContext = _locationCacheService.cachedPosition != null
+          ? "User location: ${_locationCacheService.cachedPosition!.latitude}, ${_locationCacheService.cachedPosition!.longitude}\n"
+          : "";
+
+      final userContext = accountProvider.currentUser != null
+          ? "User: ${accountProvider.currentUser!.firstName}\n"
+          : "";
+
+      // Combine all context
+      final fullContext = "$conversationContext$locationContext$userContext";
+      final enhancedMessage = "$fullContext\nUser message: $userMessage";
+
+      // Generate response using the AI service with conversation ID for memory
+      return await _aiService.generateResponse(
+        enhancedMessage,
+        conversationId: conversationId,
+      );
+    } catch (e) {
+      debugPrint('[RAG] Error generating context-aware response: $e');
+      return "I apologize, but I'm having trouble processing your request right now. Please try again.";
     }
-
-    // We don't auto-mark as read here because ChatDetailPage will take care of that
-    // This allows the badge to persist until explicitly read in the chat
-
-    // Set up timer to periodically check for read receipts once conversation is selected
-    _setupReadReceiptChecking();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isDisposed && messageScrollController.hasClients) {
-        messageScrollController.animateTo(
-          0.0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-
-    _subscribeToTypingIndicators();
-
-    notifyListeners();
   }
 
-  // Set up periodic checking of read receipts
-  Timer? _readReceiptTimer;
-  void _setupReadReceiptChecking() {
-    // Cancel any existing timer
-    _readReceiptTimer?.cancel();
-
-    // Start a new periodic timer
-    _readReceiptTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_selectedConversation != null && !_isDisposed) {
-        updateReadReceiptsForAllMessages();
-      }
-    });
-  }
-
-  void clearSelection() {
-    _selectedConversation = null;
-  }
-
-  void clearSelectedConversationUI() {
-    if (_selectedConversation != null) {
-      final index =
-          _conversations.indexWhere((c) => c.id == _selectedConversation!.id);
-      if (index != -1) {
-        _conversations[index] = _selectedConversation!;
-      }
-    }
-
-    notifyListeners();
-  }
-
-  void setReplyToMessage(Message message) {
-    _replyToMessage = message;
-    notifyListeners();
-  }
-
-  void cancelReply() {
-    _replyToMessage = null;
-    notifyListeners();
-  }
-
+  // Message editing methods
   void setEditingMessage(Message? message) {
     _editingMessage = message;
-    // Prefill the message controller with the content to edit
-    if (message != null) {
-      // Special handling for web platforms to ensure proper focus and selection
-      messageController.text = message.content;
-
-      // Use a small delay to ensure the text field gets proper focus on web
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (!_isDisposed) {
-          // Set cursor position at the end with proper selection
-          messageController.selection = TextSelection.fromPosition(
-            TextPosition(offset: messageController.text.length),
-          );
-
-          // Request focus on the field if needed
-          FocusManager.instance.primaryFocus?.unfocus();
-
-          // Force a refresh to ensure UI updates correctly
-          notifyListeners();
-        }
-      });
-    }
     notifyListeners();
   }
 
-  void cancelEditing() {
-    _editingMessage = null;
-    messageController.clear();
-    notifyListeners();
-  }
-
-  // Add the updateMessage method to handle editing
-  Future<void> updateMessage(Message message, String newContent) async {
+  Future<void> updateMessage(String messageId, String newContent) async {
     if (_selectedConversation == null) return;
 
     try {
-      // Get a reference to the message document in Firestore
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(_selectedConversation!.id)
-          .collection('messages')
-          .doc(message.id);
-
-      debugPrint(
-          "Updating message ${message.id} with new content: $newContent");
-
-      // First update our local message immediately for a responsive UI
-      final index = _selectedConversation!.messages
-          .indexWhere((msg) => msg.id == message.id);
-
-      if (index != -1) {
-        // Create a new message with updated properties
-        _selectedConversation!.messages[index] =
-            _selectedConversation!.messages[index].copyWith(
-          content: newContent,
-          isEdited: true,
-        );
-        // Force UI update right away
-        notifyListeners();
+      // Find the message in the conversation
+      final messageIndex = _selectedConversation!.messages
+          .indexWhere((msg) => msg.id == messageId);
+      if (messageIndex == -1) {
+        debugPrint('[updateMessage] Message not found: $messageId');
+        return;
       }
 
-      // Update the message in Firestore
-      await messageRef.update({
-        'content': newContent,
-        'isEdited': true, // Mark the message as edited
-      }).catchError((e) {
-        debugPrint("Error updating message in Firestore: $e");
-        // Revert the local change if Firestore update fails
-        if (index != -1) {
-          _selectedConversation!.messages[index] = message;
-          notifyListeners();
-        }
-        return Future.error(e);
-      });
+      final message = _selectedConversation!.messages[messageIndex];
 
-      // Clear the editing state
-      cancelEditing();
+      // Update the message content
+      message.content = newContent.trim();
+      message.isEdited = true;
+      message.editedAt = DateTime.now();
 
-      // Show a debug print to verify this code is running
-      debugPrint(
-          "✅ Message successfully updated with isEdited=true: ${message.id}");
-    } catch (e) {
-      debugPrint("❌ Error updating message: $e");
-      // Make sure editing is canceled even if there was an error
-      cancelEditing();
-      rethrow;
-    }
-  }
-
-  void ensureMessageControllerReferences() {
-    if (_isDisposed) return; // Don't do anything if already disposed
-    // Controller references are no longer needed as per updated architecture
-  }
-
-  // Handle typing indicator
-  void startTypingIndicator() {
-    if (_selectedConversation == null) return;
-
-    final now = DateTime.now();
-    final shouldSendUpdate = _lastTypingNotification == null ||
-        now.difference(_lastTypingNotification!).inSeconds >= 3;
-
-    if (shouldSendUpdate) {
-      _lastTypingNotification = now;
-
-      // Send typing status to Firestore
-      _firestore
-          .collection('conversations')
-          .doc(_selectedConversation!.id)
-          .collection('typing')
-          .doc(currentUserId)
-          .set({
-        'userId': currentUserId,
-        'isTyping': true,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-
-    // Reset the typing timer
-    _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 5), _stopTypingIndicator);
-  }
-
-  void _stopTypingIndicator() {
-    _typingTimer?.cancel();
-    _typingTimer = null;
-
-    if (_selectedConversation != null) {
-      // Update Firestore to show user stopped typing
-      _firestore
-          .collection('conversations')
-          .doc(_selectedConversation!.id)
-          .collection('typing')
-          .doc(currentUserId)
-          .set({
-        'userId': currentUserId,
-        'isTyping': false,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-  }
-
-  // Subscribe to typing indicators from other users
-  void _subscribeToTypingIndicators() {
-    if (_selectedConversation == null) return;
-
-    final typingStream = _firestore
-        .collection('conversations')
-        .doc(_selectedConversation!.id)
-        .collection('typing')
-        .snapshots();
-
-    final subscription = typingStream.listen((snapshot) {
-      _typingUsers.clear();
-
-      for (final doc in snapshot.docs) {
-        final userId = doc.data()['userId'] as String;
-        final isTyping = doc.data()['isTyping'] as bool;
-
-        // Only add users who are not the current user and are typing
-        if (userId != currentUserId && isTyping) {
-          _typingUsers[userId] = isTyping;
-        }
-      }
-
-      notifyListeners();
-    });
-
-    _subscriptions.add(subscription);
-  }
-
-  // Resets unread count for a specific conversation
-  void resetUnreadCount(String conversationId) {
-    final index = _conversations.indexWhere((c) => c.id == conversationId);
-    if (index != -1) {
-      final updatedConversation =
-          _conversations[index].copyWith(unreadCount: 0);
-      _conversations[index] = updatedConversation;
-
-      // If this is the selected conversation, update that too
-      if (_selectedConversation?.id == conversationId) {
-        _selectedConversation = updatedConversation;
-      }
-
-      notifyListeners();
-    }
-  }
-
-  // Check if a message has been read by all participants
-  bool isMessageReadByAll(Message message) {
-    // If this isn't from the current user, we don't care about read receipts
-    if (message.senderId != currentUserId) return false;
-
-    if (_selectedConversation == null) return false;
-
-    // First check message status - if it's already marked as read, return true
-    if (message.status == MessageStatus.read) return true;
-
-    // For one-on-one conversations, if the message is delivered and the other person has read something,
-    // we can infer this message has been read
-    if (_selectedConversation!.participants.length == 2 &&
-        message.status == MessageStatus.delivered) {
-      // Find the last message from other participant
-      final otherParticipantId = _selectedConversation!.participants
-          .firstWhere((user) => user.id != currentUserId)
-          .id;
-
-      // If the other user has sent a message after this one, we can assume they've read this message
-      final newerMessages = _selectedConversation!.messages
-          .where((msg) =>
-              msg.senderId == otherParticipantId &&
-              msg.timestamp.isAfter(message.timestamp))
-          .toList();
-
-      return newerMessages.isNotEmpty;
-    }
-
-    return false;
-  }
-
-  @override
-  void notifyListeners() {
-    if (!_isDisposed) {
-      super.notifyListeners();
-    }
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-
-    // Cancel timers
-    _typingTimer?.cancel();
-    _readReceiptTimer?.cancel();
-
-    // Clean up controllers
-    try {
-      searchController.removeListener(_onSearchChanged);
-      searchController.dispose();
-    } catch (e) {
-      // Ignore errors during disposal
-    }
-
-    try {
-      messageController.dispose();
-    } catch (e) {
-      // Ignore errors during disposal
-    }
-
-    try {
-      listScrollController.dispose();
-    } catch (e) {
-      // Ignore errors during disposal
-    }
-
-    try {
-      messageScrollController.dispose();
-    } catch (e) {
-      // Ignore errors during disposal
-    }
-
-    // Stop any typing indicators when disposing
-    try {
-      _stopTypingIndicator();
-    } catch (e) {
-      // Ignore errors during disposal
-    }
-
-    // Cancel all subscriptions
-    for (final subscription in _subscriptions) {
-      try {
-        subscription.cancel();
-      } catch (e) {
-        // Ignore errors during cancellation
-      }
-    }
-    _subscriptions.clear();
-
-    // Use try-catch when calling the super method
-    try {
-      super.dispose();
-    } catch (e) {
-      // Ignore errors during super.dispose()
-    }
-  }
-
-  // Call this when user is typing a message
-  void onMessageTyping(String text) {
-    // Only trigger typing indicator if there's actual text
-    if (text.isNotEmpty) {
-      startTypingIndicator();
-    } else {
-      _stopTypingIndicator();
-    }
-  }
-
-  // Create or get a conversation with a user
-  Future<Conversation?> createOrGetConversation(UserProfile userProfile) async {
-    try {
-      final String otherUserId = userProfile.account.id.toString();
-
-      // Check if current user id is valid
-      if (currentUserId.isEmpty) {
-        debugPrint('[createOrGetConversation] Current user ID is empty');
-        return null;
-      }
-
-      // First check if conversation already exists
-      final querySnapshot = await _firestore
-          .collection('conversations')
-          .where('participants', arrayContains: currentUserId)
-          .get();
-
-      // Search for existing conversation with this user
-      for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final List<dynamic> participants = data['participants'] ?? [];
-
-        // Check if this is a one-on-one conversation with the target user
-        if (participants.length == 2 &&
-            participants.contains(otherUserId) &&
-            participants.contains(currentUserId)) {
-          debugPrint(
-              '[createOrGetConversation] Found existing conversation: ${doc.id}');
-
-          // Load all users to properly populate the conversation
-          final users = await _fetchAllUsers();
-
-          // Create and return the conversation object
-          return Conversation.fromFirestore(data, users);
-        }
-      }
-
-      // No existing conversation found, create a new one
-      debugPrint(
-          '[createOrGetConversation] Creating new conversation with user: ${userProfile.username}');
-
-      // Generate a unique ID for the conversation
-      final String conversationId =
-          _firestore.collection('conversations').doc().id;
-
-      // Create a user object for the other participant
-      final otherUser = User(
-        id: otherUserId,
-        name: userProfile.fullName,
-        avatarUrl: userProfile.profilePictureUrl,
-      );
-
-      // Create a user object for the current user
-      final currentUser = User(
-        id: currentUserId,
-        name: accountProvider.currentUser?.firstName ?? 'You',
-        avatarUrl: accountProvider.currentUser?.profilePictureUrl ?? '',
-      );
-
-      // Create an initial message
-      final messageId = const Uuid().v4();
-      final now = DateTime.now();
-      final message = Message(
-        id: messageId,
-        senderId: currentUserId,
-        senderName: currentUser.name,
-        content: 'Started a conversation',
-        timestamp: now,
-        conversationId: conversationId,
-        status: MessageStatus.sent,
-        messageType: MessageType.system, // Mark as a system message
-        isRead: true,
-      );
-
-      // Create conversation document
-      final conversationData = {
-        'id': conversationId,
-        'participants': [currentUserId, otherUserId],
-        'participantDetails': [
-          {
-            'id': currentUserId,
-            'name': currentUser.name,
-            'avatarUrl': currentUser.avatarUrl,
-          },
-          {
-            'id': otherUserId,
-            'name': otherUser.name,
-            'avatarUrl': otherUser.avatarUrl,
-          },
-        ],
-        'lastMessage': message.toJson(),
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isMuted': false,
-        'isArchived': false,
-        'isGroup': false,
-      };
-
-      // Create the conversation in Firestore
+      // Update in Firestore
       await _firestore
           .collection('conversations')
-          .doc(conversationId)
-          .set(conversationData);
-
-      // Add the initial message to the conversation
-      await _firestore
-          .collection('conversations')
-          .doc(conversationId)
+          .doc(_selectedConversation!.id)
           .collection('messages')
           .doc(messageId)
-          .set(message.toJson());
-
-      // Set read status for both participants
-      await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('readStatus')
-          .doc(currentUserId)
-          .set({
-        'userId': currentUserId,
-        'isRead': true,
-        'lastReadTimestamp': FieldValue.serverTimestamp(),
+          .update({
+        'content': newContent.trim(),
+        'isEdited': true,
+        'editedAt': FieldValue.serverTimestamp(),
       });
 
-      await _firestore
+      // If this is the last message, update the conversation's lastMessage
+      if (_selectedConversation!.lastMessage.id == messageId) {
+        _selectedConversation!.lastMessage = message;
+
+        await _firestore
+            .collection('conversations')
+            .doc(_selectedConversation!.id)
+            .update({
+          'lastMessage': message.toJson(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Clear editing state
+      _editingMessage = null;
+
+      debugPrint('[updateMessage] Message updated successfully: $messageId');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[updateMessage] Error updating message: $e');
+      // Clear editing state even on error
+      _editingMessage = null;
+      notifyListeners();
+    }
+  }
+
+  /// Handle typing indicator - called when user is typing in message input
+  void onMessageTyping(String text) {
+    if (_selectedConversation == null) return;
+
+    final bool isTyping = text.trim().isNotEmpty;
+
+    try {
+      // Update typing status in Firestore
+      _firestore
           .collection('conversations')
-          .doc(conversationId)
-          .collection('readStatus')
-          .doc(otherUserId)
-          .set({
-        'userId': otherUserId,
-        'isRead': false,
-        'lastReadTimestamp': FieldValue.serverTimestamp(),
+          .doc(_selectedConversation!.id)
+          .update({
+        'typingUsers.$currentUserId': isTyping ? true : FieldValue.delete(),
       });
 
-      // Create and return the new conversation object
-      final newConversation = Conversation(
-        id: conversationId,
-        participants: [currentUser, otherUser],
-        lastMessage: message,
-        messages: [message],
-        isMuted: false,
-        isArchived: false,
-        unreadCount: 0,
-        isGroup: false,
-        groupName: null,
-      );
+      debugPrint(
+          '[Typing] Updated typing status for $currentUserId: $isTyping');
+    } catch (e) {
+      debugPrint('[Typing] Error updating typing status: $e');
+    }
+  }
 
-      // Add to the conversations list
-      _conversations.add(newConversation);
+  /// Clear AI conversation history and reset context
+  Future<void> clearAIConversationHistory(Conversation conversation) async {
+    if (!isAIConversation(conversation)) return;
+
+    try {
+      // Clear conversation memory in AI service
+      _aiService.clearConversationMemory(conversation.id);
+
+      // Delete all messages except the initial welcome message
+      final messagesRef = _firestore
+          .collection('conversations')
+          .doc(conversation.id)
+          .collection('messages');
+
+      final messagesSnapshot = await messagesRef.get();
+
+      // Create a batch to delete messages
+      final batch = _firestore.batch();
+
+      for (final doc in messagesSnapshot.docs) {
+        // Keep the initial welcome message, delete everything else
+        if (!doc.id.startsWith('ai_initial_')) {
+          batch.delete(doc.reference);
+        }
+      }
+
+      await batch.commit();
+
+      // Reset the conversation to initial state
+      if (_aiConversation != null) {
+        // Clear local messages except initial
+        _aiConversation!.messages
+            .removeWhere((msg) => !msg.id.startsWith('ai_initial_'));
+
+        // Reset last message to initial welcome
+        if (_aiConversation!.messages.isNotEmpty) {
+          _aiConversation!.lastMessage = _aiConversation!.messages.first;
+        }
+
+        // Update Firestore conversation document
+        await _firestore
+            .collection('conversations')
+            .doc(_aiConversation!.id)
+            .update({
+          'lastMessage': _aiConversation!.lastMessage.toJson(),
+          'lastMessageTimestamp': FieldValue.serverTimestamp(),
+          'unreadCount': 0,
+        });
+      }
+
+      // Update the conversation in the local list
+      final index = _conversations.indexWhere((c) => c.id == conversation.id);
+      if (index != -1) {
+        _conversations[index] = _aiConversation!;
+      }
+
       _applyFilters();
       notifyListeners();
 
-      return newConversation;
+      debugPrint('[AI] Conversation history cleared successfully');
     } catch (e) {
-      debugPrint('[createOrGetConversation] Error: $e');
-      return null;
+      debugPrint('[AI] Error clearing conversation history: $e');
+    }
+  }
+
+  /// Ensure AI conversation is visible and at the top of the list
+  void ensureAIConversationVisible() {
+    if (_aiConversation != null) {
+      // Remove existing AI conversation from list if present
+      _conversations.removeWhere((c) => isAIConversation(c));
+
+      // Add AI conversation at the beginning
+      _conversations.insert(0, _aiConversation!);
+
+      // Apply filters to update the visible list
+      _applyFilters();
+      notifyListeners();
+
+      debugPrint('[AI] AI conversation ensured at top of list');
+    }
+  }
+
+  /// Force refresh AI conversation to ensure it stays pinned
+  void refreshAIConversationPosition() {
+    if (!_isAIConversationInitialized || _aiConversation == null) {
+      _initializeAIConversation();
+    } else {
+      ensureAIConversationVisible();
     }
   }
 }

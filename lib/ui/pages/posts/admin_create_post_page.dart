@@ -7,6 +7,8 @@ import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -21,6 +23,13 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
   bool _isLoadingLocation = false;
   Position? _currentPosition;
   String? _currentAddress;
+
+  // Enhanced admin features
+  Position? _selectedCustomLocation;
+  String? _selectedCustomAddress;
+  DateTime? _selectedDateTime;
+  bool _useCustomLocation = false;
+  bool _useCustomDateTime = false;
 
   @override
   void initState() {
@@ -309,8 +318,9 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
           builder: (context) => MediaPreviewPage(
             mediaPath: mediaPath,
             mediaType: mediaType,
-            position: _currentPosition,
-            address: _currentAddress,
+            position: _getEffectivePosition(),
+            address: _getEffectiveAddress(),
+            customDateTime: _useCustomDateTime ? _selectedDateTime : null,
           ),
         ),
       );
@@ -336,8 +346,9 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
         builder: (context) => MediaPreviewPage(
           mediaPath: selectedFile.path,
           mediaType: mediaType,
-          position: _currentPosition,
-          address: _currentAddress,
+          position: _getEffectivePosition(),
+          address: _getEffectiveAddress(),
+          customDateTime: _useCustomDateTime ? _selectedDateTime : null,
         ),
       ),
     );
@@ -600,6 +611,62 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
     }
   }
 
+  // Enhanced admin features
+  Future<void> _showLocationPicker() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _LocationPickerDialog(
+        initialPosition: _selectedCustomLocation ?? _currentPosition,
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedCustomLocation = result['position'];
+        _selectedCustomAddress = result['address'];
+        _useCustomLocation = true;
+      });
+    }
+  }
+
+  Future<void> _showDateTimePicker() async {
+    final now = DateTime.now();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateTime ?? now,
+      firstDate: DateTime(2020),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+
+    if (selectedDate != null && mounted) {
+      final selectedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? now),
+      );
+
+      if (selectedTime != null) {
+        setState(() {
+          _selectedDateTime = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+            selectedTime.hour,
+            selectedTime.minute,
+          );
+          _useCustomDateTime = true;
+        });
+      }
+    }
+  }
+
+  Position _getEffectivePosition() {
+    return _useCustomLocation ? _selectedCustomLocation! : _currentPosition!;
+  }
+
+  String? _getEffectiveAddress() {
+    return _useCustomLocation ? _selectedCustomAddress : _currentAddress;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -617,7 +684,7 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,6 +798,153 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
                 ),
               ),
 
+              const SizedBox(height: 24),
+
+              // Enhanced Admin Controls
+              if (_currentPosition != null) ...[
+                // Custom Location Section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _useCustomLocation
+                          ? Colors.blue.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _useCustomLocation ? Icons.map : Icons.my_location,
+                            color:
+                                _useCustomLocation ? Colors.blue : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _useCustomLocation
+                                  ? 'Custom Location'
+                                  : 'Current Location',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _showLocationPicker,
+                            child: const Text('Select Location'),
+                          ),
+                        ],
+                      ),
+                      if (_getEffectiveAddress() != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _getEffectiveAddress()!,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                      if (_useCustomLocation) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _useCustomLocation = false;
+                              _selectedCustomLocation = null;
+                              _selectedCustomAddress = null;
+                            });
+                          },
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Use Current Location'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Custom Date/Time Section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _useCustomDateTime
+                          ? Colors.purple.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _useCustomDateTime
+                                ? Icons.schedule
+                                : Icons.access_time,
+                            color: _useCustomDateTime
+                                ? Colors.purple
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _useCustomDateTime
+                                  ? 'Custom Date & Time'
+                                  : 'Current Date & Time',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _showDateTimePicker,
+                            child: const Text('Select Date/Time'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _useCustomDateTime && _selectedDateTime != null
+                            ? '${_selectedDateTime!.day}/${_selectedDateTime!.month}/${_selectedDateTime!.year} at ${_selectedDateTime!.hour.toString().padLeft(2, '0')}:${_selectedDateTime!.minute.toString().padLeft(2, '0')}'
+                            : 'Now',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (_useCustomDateTime) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _useCustomDateTime = false;
+                              _selectedDateTime = null;
+                            });
+                          },
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Use Current Time'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 32),
 
               // Media Selection Section
@@ -756,36 +970,32 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
               const SizedBox(height: 24),
 
               // Media Options
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildMediaOption(
-                      icon: Icons.camera_alt,
-                      title: 'Camera',
-                      subtitle: 'Take a new photo or video',
-                      onTap: _currentPosition != null ? _openCamera : null,
-                      color: Colors.blue,
-                    ),
-                    _buildMediaOption(
-                      icon: Icons.photo_library,
-                      title: 'Gallery Photos',
-                      subtitle: 'Choose from your photo library',
-                      onTap: _currentPosition != null
-                          ? _pickImageFromGallery
-                          : null,
-                      color: Colors.green,
-                    ),
-                    _buildMediaOption(
-                      icon: Icons.video_library,
-                      title: 'Gallery Videos',
-                      subtitle: 'Choose from your video library',
-                      onTap: _currentPosition != null
-                          ? _pickVideoFromGallery
-                          : null,
-                      color: Colors.purple,
-                    ),
-                  ],
-                ),
+              Column(
+                children: [
+                  _buildMediaOption(
+                    icon: Icons.camera_alt,
+                    title: 'Camera',
+                    subtitle: 'Take a new photo or video',
+                    onTap: _currentPosition != null ? _openCamera : null,
+                    color: Colors.blue,
+                  ),
+                  _buildMediaOption(
+                    icon: Icons.photo_library,
+                    title: 'Gallery Photos',
+                    subtitle: 'Choose from your photo library',
+                    onTap:
+                        _currentPosition != null ? _pickImageFromGallery : null,
+                    color: Colors.green,
+                  ),
+                  _buildMediaOption(
+                    icon: Icons.video_library,
+                    title: 'Gallery Videos',
+                    subtitle: 'Choose from your video library',
+                    onTap:
+                        _currentPosition != null ? _pickVideoFromGallery : null,
+                    color: Colors.purple,
+                  ),
+                ],
               ),
 
               // Alternative: Quick Attachment Button
@@ -819,6 +1029,227 @@ class _AdminCreatePostPageState extends State<AdminCreatePostPage> {
       ),
     );
   }
+}
 
-  // ...existing code...
+/// Location picker dialog widget
+class _LocationPickerDialog extends StatefulWidget {
+  final Position? initialPosition;
+
+  const _LocationPickerDialog({this.initialPosition});
+
+  @override
+  State<_LocationPickerDialog> createState() => _LocationPickerDialogState();
+}
+
+class _LocationPickerDialogState extends State<_LocationPickerDialog> {
+  late MapController _mapController;
+  LatLng? _selectedLocation;
+  String? _selectedAddress;
+  bool _isLoadingAddress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    if (widget.initialPosition != null) {
+      _selectedLocation = LatLng(
+        widget.initialPosition!.latitude,
+        widget.initialPosition!.longitude,
+      );
+      _getAddressFromLatLng(_selectedLocation!);
+    }
+  }
+
+  Future<void> _getAddressFromLatLng(LatLng location) async {
+    setState(() => _isLoadingAddress = true);
+
+    try {
+      // Try primary geocoding service first
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude,
+        location.longitude,
+      );
+
+      if (placemarks.isNotEmpty && mounted) {
+        final place = placemarks.first;
+        final addressComponents = <String>[];
+
+        if (place.street != null && place.street!.isNotEmpty) {
+          addressComponents.add(place.street!);
+        }
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          addressComponents.add(place.locality!);
+        }
+        if (place.administrativeArea != null &&
+            place.administrativeArea!.isNotEmpty) {
+          addressComponents.add(place.administrativeArea!);
+        }
+
+        _selectedAddress = addressComponents.isNotEmpty
+            ? addressComponents.take(3).join(', ')
+            : 'Selected location';
+
+        setState(() {});
+        return;
+      }
+    } catch (e) {
+      print('DEBUG: Primary geocoding failed: $e');
+    }
+
+    // Fallback to coordinate display if geocoding fails
+    try {
+      _selectedAddress =
+          'Location: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}';
+      setState(() {});
+    } finally {
+      setState(() => _isLoadingAddress = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Select Location',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+
+            // Map
+            Expanded(
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _selectedLocation ??
+                      const LatLng(31.5017, 34.4668), // Jerusalem default
+                  initialZoom: 13.0,
+                  onTap: (tapPosition, point) {
+                    setState(() {
+                      _selectedLocation = point;
+                    });
+                    _getAddressFromLatLng(point);
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.app',
+                  ),
+                  if (_selectedLocation != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedLocation!,
+                          child: const Icon(
+                            Icons.location_pin,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+
+            // Address display and confirm button
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  if (_isLoadingAddress)
+                    const LinearProgressIndicator()
+                  else if (_selectedAddress != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _selectedAddress!,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _selectedLocation != null
+                              ? () {
+                                  Navigator.pop(context, {
+                                    'position': Position(
+                                      latitude: _selectedLocation!.latitude,
+                                      longitude: _selectedLocation!.longitude,
+                                      timestamp: DateTime.now(),
+                                      accuracy: 0,
+                                      altitude: 0,
+                                      altitudeAccuracy: 0,
+                                      heading: 0,
+                                      headingAccuracy: 0,
+                                      speed: 0,
+                                      speedAccuracy: 0,
+                                    ),
+                                    'address': _selectedAddress,
+                                  });
+                                }
+                              : null,
+                          child: const Text('Confirm'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
@@ -16,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_application_2/ui/pages/messages/image_preview_page.dart'; // Import for image preview
 import 'package:flutter_application_2/services/permissions/permission_service.dart'; // Import the permission service
 import 'package:flutter_application_2/ui/profile/other_user_profile_page.dart'; // Import for user profile
+import 'package:flutter_application_2/services/ai/gemini_ai_service.dart'; // Import for AI service
 
 class ChatDetailPage extends StatefulWidget {
   final MessagesController controller;
@@ -57,27 +56,16 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   final List<AnimationController> _dotControllers = [];
   final List<Animation<double>> _dotAnimations = [];
 
-  // Animation controllers specifically for the typing indicator dots
-  late List<AnimationController> _typingDotControllers;
-  late List<Animation<double>> _typingDotAnimations;
-
   // ValueNotifier to control visibility of the scroll-to-bottom button
   final ValueNotifier<bool> _showScrollToBottomButton = ValueNotifier(false);
 
   // Add this to the class variables section
-  List<GlobalKey<_AnimatedDotState>> _dotKeys = [];
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller;
     _scrollController = ScrollController();
-
-    // Initialize the dot animation keys
-    _dotKeys = List.generate(3, (_) => GlobalKey<_AnimatedDotState>());
-
-    // Initialize the typing indicator animations
-    _initTypingDotAnimations();
 
     // Initially hide the scroll-to-bottom button
     _showScrollToBottomButton.value = false;
@@ -106,35 +94,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         _updateReadReceipts();
       });
     });
-  }
-
-  void _initTypingDotAnimations() {
-    // Create persistent animation controllers for the dots
-    _typingDotControllers = List.generate(3, (index) {
-      final controller = AnimationController(
-        vsync: this,
-        duration: Duration(milliseconds: 600),
-      );
-
-      // Start with staggered delays
-      Future.delayed(Duration(milliseconds: index * 200), () {
-        if (mounted && !controller.isAnimating) {
-          controller.repeat(reverse: true);
-        }
-      });
-
-      return controller;
-    });
-
-    // Create animations for each dot
-    _typingDotAnimations = _typingDotControllers.map((controller) {
-      return Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-          parent: controller,
-          curve: Curves.easeInOut,
-        ),
-      );
-    }).toList();
   }
 
   // More comprehensive handling of message read status
@@ -197,37 +156,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     }
   }
 
-  void _initTypingAnimations() {
-    // Clean up any existing controllers first
-    _disposeTypingAnimations();
-
-    // Create 3 dot animations with staggered delays
-    for (int i = 0; i < 3; i++) {
-      final controller = AnimationController(
-        vsync: this, // Using "this" which implements TickerProviderStateMixin
-        duration: const Duration(milliseconds: 600),
-      );
-
-      // Create a curved animation
-      final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-          parent: controller,
-          curve: Curves.easeInOut,
-        ),
-      );
-
-      _dotControllers.add(controller);
-      _dotAnimations.add(animation);
-
-      // Start the animation with a staggered delay
-      Future.delayed(Duration(milliseconds: i * 120), () {
-        if (mounted) {
-          controller.repeat(reverse: true);
-        }
-      });
-    }
-  }
-
   void _disposeTypingAnimations() {
     for (final controller in _dotControllers) {
       controller.dispose();
@@ -238,11 +166,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 
   @override
   void dispose() {
-    // Dispose typing dot controllers
-    for (final controller in _typingDotControllers) {
-      controller.dispose();
-    }
-
     _disposeTypingAnimations();
     _messageController.dispose();
     _scrollController.dispose();
@@ -382,14 +305,39 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       if (mounted && snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
         if (data.containsKey('typingUsers') && data['typingUsers'] != null) {
-          final typingUsers = List<String>.from(data['typingUsers'] ?? []);
+          final typingUsersMap =
+              Map<String, dynamic>.from(data['typingUsers'] ?? {});
           final currentUserId = _controller.currentUserId;
+
+          // Check if AI is typing (for AI conversations)
+          final isAIChat = _controller.isAIConversation(widget.conversation);
+          final aiAssistantId = GeminiAIService().aiAssistantId;
+
           setState(() {
-            isTyping = typingUsers.any((id) =>
-                id != currentUserId &&
-                widget.conversation.participants.any((u) => u.id == id));
+            if (isAIChat) {
+              // For AI conversations, check if AI assistant is typing
+              isTyping = typingUsersMap.containsKey(aiAssistantId) &&
+                  typingUsersMap[aiAssistantId] == true;
+            } else {
+              // For regular conversations, check if any other user is typing
+              isTyping = typingUsersMap.keys.any((id) =>
+                  id != currentUserId &&
+                  typingUsersMap[id] == true &&
+                  widget.conversation.participants.any((u) => u.id == id));
+            }
+          });
+        } else {
+          setState(() {
+            isTyping = false;
           });
         }
+      }
+    }).onError((error) {
+      debugPrint('[ChatDetail] Error listening for typing: $error');
+      if (mounted) {
+        setState(() {
+          isTyping = false;
+        });
       }
     });
   }
@@ -487,21 +435,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
   }
 
   // Track scroll position to show/hide the scroll-to-bottom button
-  void _updateScrollToBottomButtonVisibility() {
-    if (!mounted || !_scrollController.hasClients) return;
-
-    final position = _scrollController.position;
-
-    // For reversed lists, we're at the bottom when pixels value is close to 0
-    // We're away from bottom if scrolled up more than 200 pixels
-    final isAwayFromBottom = position.pixels > 200;
-
-    // Only update if the value is changing to avoid unnecessary rebuilds
-    if (_showScrollToBottomButton.value != isAwayFromBottom) {
-      _showScrollToBottomButton.value = isAwayFromBottom;
-    }
-  }
-
   // Optimized scroll-to-bottom that prevents unwanted jumping
   void _scrollToBottom({bool animated = true}) {
     // Skip if widget is no longer mounted or scroll controller isn't attached
@@ -553,15 +486,28 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       if (_controller.editingMessage != null) {
         // Update the existing message
         await _controller.updateMessage(
-          _controller.editingMessage!,
+          _controller.editingMessage!.id,
           text,
         );
       } else {
-        // Send a new message
-        await _controller.sendMessage(
-          text,
-          replyTo: _replyToMessage,
-        );
+        // Check if this is an AI conversation and send accordingly
+        debugPrint(
+            '[ChatDetail] Checking AI conversation for ID: ${widget.conversation.id}');
+        debugPrint(
+            '[ChatDetail] isAIConversation result: ${_controller.isAIConversation(widget.conversation)}');
+
+        if (_controller.isAIConversation(widget.conversation)) {
+          // Send message to AI assistant
+          debugPrint('[ChatDetail] Sending AI message: $text');
+          await _controller.sendAIMessage(text);
+        } else {
+          // Send regular message
+          debugPrint('[ChatDetail] Sending regular message: $text');
+          await _controller.sendMessage(
+            text,
+            replyTo: _replyToMessage,
+          );
+        }
       }
 
       setState(() {
@@ -791,7 +737,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
         'name': otherParticipant.name,
         'profileImage': otherParticipant.avatarUrl,
         'isOnline': otherParticipant.isOnline,
-        'email': '', // This is intentionally empty as we don't have email in chat User model
+        'email':
+            '', // This is intentionally empty as we don't have email in chat User model
       };
 
       // Close loading dialog
@@ -808,7 +755,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       // Show error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not load profile: $e')),
@@ -826,37 +773,51 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       orElse: () => widget.conversation.participants.first,
     );
 
-    // Fix and validate the avatar URL
-    final validAvatarUrl =
-        _getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name);
+    // Check if this is an AI conversation
+    final isAIChat = _controller.isAIConversation(widget.conversation);
 
     return Scaffold(
       resizeToAvoidBottomInset: true, // Ensure keyboard pushes up the view
       appBar: AppBar(
         title: Row(
           children: [
-            // Make the avatar clickable
+            // Make the avatar clickable (except for AI)
             GestureDetector(
-              onTap: () => _navigateToUserProfile(otherParticipant),
+              onTap: isAIChat
+                  ? null
+                  : () => _navigateToUserProfile(otherParticipant),
               child: CircleAvatar(
-                backgroundImage: validAvatarUrl.isNotEmpty
-                    ? NetworkImage(validAvatarUrl)
+                backgroundColor: isAIChat 
+                    ? (isDarkMode ? Colors.grey[800] : Colors.grey[200])
                     : null,
-                child: validAvatarUrl.isEmpty
-                    ? Text(otherParticipant.name.isNotEmpty
-                        ? otherParticipant.name[0].toUpperCase()
-                        : '?')
+                backgroundImage: !isAIChat && _getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name).isNotEmpty
+                    ? NetworkImage(_getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name))
                     : null,
+                child: isAIChat
+                    ? Icon(
+                        Icons.smart_toy,
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                        size: 24,
+                      )
+                    : (_getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name).isEmpty
+                        ? Text(otherParticipant.name.isNotEmpty
+                            ? otherParticipant.name[0].toUpperCase()
+                            : '?')
+                        : null),
               ),
             ),
             const SizedBox(width: 8),
-            // Make the username clickable
+            // Make the username clickable (except for AI)
             Expanded(
               child: GestureDetector(
-                onTap: () => _navigateToUserProfile(otherParticipant),
+                onTap: isAIChat
+                    ? null
+                    : () => _navigateToUserProfile(otherParticipant),
                 child: Text(
-                  otherParticipant.name,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  isAIChat ? 'AI Assistant' : otherParticipant.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: isAIChat ? Theme.of(context).primaryColor : null,
+                      ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -868,7 +829,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
             onSelected: (value) {
               switch (value) {
                 case 'profile':
-                  _navigateToUserProfile(otherParticipant);
+                  if (!isAIChat) {
+                    _navigateToUserProfile(otherParticipant);
+                  }
                   break;
                 case 'delete':
                   _confirmDeleteConversation();
@@ -882,21 +845,22 @@ class _ChatDetailPageState extends State<ChatDetailPage>
               }
             },
             itemBuilder: (context) => [
-              // View profile option
-              PopupMenuItem(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.person,
-                      color: ThemeConstants.primaryColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text('View Profile'),
-                  ],
+              // View profile option (only for non-AI conversations)
+              if (!isAIChat)
+                PopupMenuItem(
+                  value: 'profile',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.person,
+                        color: ThemeConstants.primaryColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Text('View Profile'),
+                    ],
+                  ),
                 ),
-              ),
-              
+
               // Mute/Unmute option
               PopupMenuItem(
                 value: 'mute',
@@ -913,7 +877,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ],
                 ),
               ),
-              
+
               // Archive/Unarchive option
               PopupMenuItem(
                 value: 'archive',
@@ -932,7 +896,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ],
                 ),
               ),
-              
+
               // Delete option
               const PopupMenuItem(
                 value: 'delete',
@@ -1070,10 +1034,11 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 12.0),
                         decoration: BoxDecoration(
-                          color: isDarkMode 
-                              ? Colors.grey.withOpacity(0.2) 
+                          color: isDarkMode
+                              ? Colors.grey.withOpacity(0.2)
                               : Colors.grey.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -1081,7 +1046,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                           mainAxisSize: MainAxisSize.min,
                           children: List.generate(3, (index) {
                             return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 2.0),
                               child: _AnimatedDot(index: index),
                             );
                           }),
@@ -1111,7 +1077,8 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                       if (_controller.editingMessage != null)
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           margin: const EdgeInsets.only(bottom: 4),
                           decoration: BoxDecoration(
                             color: ThemeConstants.primaryColor.withOpacity(0.1),
@@ -1119,17 +1086,15 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                               top: Radius.circular(16),
                             ),
                             border: Border.all(
-                              color: ThemeConstants.primaryColor.withOpacity(0.3),
+                              color:
+                                  ThemeConstants.primaryColor.withOpacity(0.3),
                               width: 1,
                             ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.edit, 
-                                size: 16, 
-                                color: ThemeConstants.primaryColor
-                              ),
+                              const Icon(Icons.edit,
+                                  size: 16, color: ThemeConstants.primaryColor),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -1737,156 +1702,6 @@ class _ChatDetailPageState extends State<ChatDetailPage>
     );
   }
 
-  Widget _buildDateSeparator(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    String label;
-    if (date == today) {
-      label = "Today";
-    } else if (date == yesterday) {
-      label = "Yesterday";
-    } else {
-      label = DateFormat('MMMM d, yyyy').format(date);
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTypingIndicator(bool isTyping) {
-    if (!isTyping || !mounted) return const SizedBox.shrink();
-
-    // Check if we need to initialize animations
-    if (_dotAnimations.isEmpty && mounted) {
-      // The animations might have been disposed, reinitialize them if needed
-      _initTypingAnimations();
-    }
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(right: 80),
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildBouncingDot(0),
-            const SizedBox(width: 4.0),
-            _buildBouncingDot(1),
-            const SizedBox(width: 4.0),
-            _buildBouncingDot(2),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBouncingDot(int index) {
-    // Make sure we have enough animations initialized
-    if (_dotAnimations.isEmpty || index >= _dotAnimations.length) {
-      // Return an empty widget if the animations aren't ready yet
-      return const SizedBox(width: 8.0, height: 8.0);
-    }
-
-    // Safety check to prevent errors with disposed controllers
-    if (!mounted) {
-      return Container(
-        width: 8.0,
-        height: 8.0,
-        decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor.withOpacity(0.6),
-          shape: BoxShape.circle,
-        ),
-      );
-    }
-
-    return AnimatedBuilder(
-      animation: _dotAnimations[index],
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, -4.0 * _dotAnimations[index].value),
-          child: Container(
-            width: 8.0,
-            height: 8.0,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Cross-platform animated dot that works consistently on web and mobile
-  Widget _buildAnimatedDot(int index) {
-    return AnimatedBuilder(
-      // Use a continuous animation controller that doesn't stop
-      animation: _typingDotAnimations[index],
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, -6.0 * sin(pi * 2 * index / 3)),
-          child: Container(
-            width: 8.0,
-            height: 8.0,
-            decoration: BoxDecoration(
-              color: ThemeConstants.primaryColor,
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Simple animated dot for typing indicator that works on all platforms
-  Widget _buildDot(int index) {
-    // Use a pulsating dot animation that works consistently on web and mobile
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.5, end: 1.0),
-      duration: Duration(milliseconds: 600 + (index * 100)), 
-      curve: Curves.easeInOut,
-      builder: (context, value, child) {
-        return Container(
-          width: 6.0,
-          height: 6.0,
-          margin: EdgeInsets.only(bottom: value * 8.0 - 4.0), // Animated margin for bouncing effect
-          decoration: BoxDecoration(
-            color: ThemeConstants.primaryColor.withOpacity(value * 0.7),
-            shape: BoxShape.circle,
-          ),
-        );
-      },
-      // Make the animation repeat
-      onEnd: () {
-        if (mounted) {
-          setState(() {});  // Trigger rebuild to restart animation
-        }
-      },
-    );
-  }
-
   // Helper for explaining message status
   void _showMessageStatusInfo(BuildContext context) {
     showDialog(
@@ -1936,17 +1751,18 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 // Specialized widget for continuous dot animation that never stops
 class _AnimatedDot extends StatefulWidget {
   final int index;
-  
+
   const _AnimatedDot({required this.index});
-  
+
   @override
   State<_AnimatedDot> createState() => _AnimatedDotState();
 }
 
-class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderStateMixin {
+class _AnimatedDotState extends State<_AnimatedDot>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  
+
   @override
   void initState() {
     super.initState();
@@ -1955,7 +1771,7 @@ class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderSta
       duration: Duration(milliseconds: 600 + (widget.index * 200)),
       vsync: this,
     );
-    
+
     // Create a curved animation
     _animation = Tween<double>(begin: -5, end: 5).animate(
       CurvedAnimation(
@@ -1963,7 +1779,7 @@ class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderSta
         curve: Curves.easeInOut,
       ),
     );
-    
+
     // Start the animation with a slight delay based on index
     Future.delayed(Duration(milliseconds: widget.index * 160), () {
       if (mounted) {
@@ -1971,13 +1787,13 @@ class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderSta
       }
     });
   }
-  
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(

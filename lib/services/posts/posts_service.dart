@@ -199,21 +199,26 @@ class PostsService {
         final String responseBody = utf8.decode(response.bodyBytes);
         final dynamic decodedBody = json.decode(responseBody);
 
-        debugPrint('🎯 PostsService: Recommendation response status: ${response.statusCode}');
+        debugPrint(
+            '🎯 PostsService: Recommendation response status: ${response.statusCode}');
 
         if (decodedBody is Map) {
           // Handle the nested response structure from the recommendation API
-          final Map<String, dynamic> responseData = decodedBody['success'] == true 
-              ? decodedBody['data'] ?? {} 
-              : decodedBody;
-          
+          final Map<String, dynamic> responseData =
+              decodedBody['success'] == true
+                  ? decodedBody['data'] ?? {}
+                  : decodedBody;
+
           final List<dynamic> postsData = responseData['posts'] ?? [];
-          final Map<String, dynamic> metadata = responseData['recommendation_info'] ?? {};
+          final Map<String, dynamic> metadata =
+              responseData['recommendation_info'] ?? {};
           final String message = 'Recommendations loaded';
 
-          final List<Post> posts = postsData.map((json) => Post.fromJson(json)).toList();
+          final List<Post> posts =
+              postsData.map((json) => Post.fromJson(json)).toList();
 
-          debugPrint('🎯 PostsService: Parsed ${posts.length} recommended posts');
+          debugPrint(
+              '🎯 PostsService: Parsed ${posts.length} recommended posts');
           debugPrint('🎯 PostsService: Recommendation metadata: $metadata');
 
           return {
@@ -222,7 +227,8 @@ class PostsService {
             'message': message,
           };
         } else {
-          debugPrint('Unexpected recommendation response format: ${response.body.substring(0, 100)}...');
+          debugPrint(
+              'Unexpected recommendation response format: ${response.body.substring(0, 100)}...');
           return {
             'posts': <Post>[],
             'metadata': {},
@@ -230,7 +236,8 @@ class PostsService {
           };
         }
       } else {
-        throw Exception('Failed to load recommended posts: ${response.statusCode}');
+        throw Exception(
+            'Failed to load recommended posts: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('Error getting recommended posts: $e');
@@ -251,6 +258,7 @@ class PostsService {
     int? threadId,
     bool isAnonymous = false, // Added isAnonymous parameter
     String? eventStatus, // Added eventStatus parameter
+    DateTime? createdAt, // Added optional created_at parameter
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/posts/');
@@ -272,6 +280,8 @@ class PostsService {
         if (threadId != null) 'thread': threadId,
         if (eventStatus != null)
           'event_status': eventStatus, // Add event status to request payload
+        if (createdAt != null)
+          'created_at': createdAt.toIso8601String(), // Add optional timestamp
       };
 
       final response = await http.post(
@@ -1055,6 +1065,7 @@ class PostsService {
     required List<String> mediaUrls,
     List<String> tags = const [],
     bool isAnonymous = false,
+    DateTime? createdAt, // Added optional created_at parameter
   }) async {
     try {
       // Create location data
@@ -1075,6 +1086,8 @@ class PostsService {
         'is_anonymous': isAnonymous,
         'related_post':
             relatedToPostId, // This is the key field linking to the original post
+        if (createdAt != null)
+          'created_at': createdAt.toIso8601String(), // Add optional timestamp
       };
 
       // Get headers with content type

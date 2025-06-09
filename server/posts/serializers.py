@@ -37,7 +37,7 @@ class PostSerializer(serializers.ModelSerializer):
             'is_happening', 'is_ended', 'ended_votes_count', 
             'happening_votes_count', 'user_status_vote'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'upvotes', 
+        read_only_fields = ['id', 'updated_at', 'upvotes', 
                            'downvotes', 'honesty_score', 'user_vote', 
                            'is_saved', 'related_posts_count', 'is_happening',
                            'is_ended', 'ended_votes_count', 'happening_votes_count',
@@ -77,6 +77,23 @@ class PostSerializer(serializers.ModelSerializer):
                 print(f"🔍 PostSerializer.create: Invalid event_status '{event_status}', defaulting to 'happening'")
         else:
             print(f"🔍 PostSerializer.create: No event_status provided, status field will be default")
+        
+        # Handle custom created_at datetime (for admin users)
+        custom_created_at = validated_data.get('created_at')
+        if custom_created_at:
+            # Ensure the datetime is timezone-aware
+            if timezone.is_naive(custom_created_at):
+                # Convert naive datetime to UTC
+                custom_created_at = timezone.make_aware(custom_created_at, timezone.utc)
+                validated_data['created_at'] = custom_created_at
+            print(f"🔍 PostSerializer.create: Using custom created_at: {custom_created_at}")
+        else:
+            # Use current UTC time if no custom datetime provided
+            validated_data['created_at'] = timezone.now()
+            print(f"🔍 PostSerializer.create: Using current time: {validated_data['created_at']}")
+        
+        # Set updated_at = created_at for new posts
+        validated_data['updated_at'] = validated_data['created_at']
         
         print(f"🔍 PostSerializer.create: Final validated_data before creating post: {validated_data}")
         

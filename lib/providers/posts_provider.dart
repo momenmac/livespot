@@ -207,7 +207,8 @@ class PostsProvider with ChangeNotifier {
         longitude = position.longitude;
       }
 
-      debugPrint('🎯 PostsProvider: Fetching recommendations for location: ($latitude, $longitude)');
+      debugPrint(
+          '🎯 PostsProvider: Fetching recommendations for location: ($latitude, $longitude)');
 
       final result = await _postsService.getRecommendedPosts(
         latitude: latitude,
@@ -244,6 +245,7 @@ class PostsProvider with ChangeNotifier {
     List<String> tags = const [],
     bool isAnonymous = false, // New parameter
     String? eventStatus, // Added eventStatus parameter
+    DateTime? createdAt, // Added optional created_at parameter
   }) async {
     try {
       _setLoading(true);
@@ -260,6 +262,7 @@ class PostsProvider with ChangeNotifier {
         isAnonymous: isAnonymous, // Pass the parameter to the service
         eventStatus:
             eventStatus, // Pass the eventStatus parameter to the service
+        createdAt: createdAt, // Pass the optional timestamp to the service
       );
 
       // Add the new post to the beginning of our list
@@ -507,6 +510,7 @@ class PostsProvider with ChangeNotifier {
     required Position? position,
     required String? address,
     required bool isAnonymous,
+    DateTime? createdAt, // Added optional created_at parameter
   }) async {
     try {
       _setLoading(true);
@@ -532,6 +536,7 @@ class PostsProvider with ChangeNotifier {
         mediaUrls: [mediaUrl],
         tags: tags,
         isAnonymous: isAnonymous,
+        createdAt: createdAt, // Pass the optional timestamp
       );
 
       return post;
@@ -930,6 +935,7 @@ class PostsProvider with ChangeNotifier {
     required bool isAnonymous,
     required List<String> mediaUrls,
     required int relatedToPostId,
+    DateTime? createdAt, // Added optional created_at parameter
   }) async {
     try {
       final Map<String, dynamic> postData = {
@@ -944,6 +950,8 @@ class PostsProvider with ChangeNotifier {
         },
         'media_urls': mediaUrls,
         'related_post': relatedToPostId,
+        if (createdAt != null)
+          'created_at': createdAt.toIso8601String(), // Add optional timestamp
       };
 
       final url = Uri.parse(ApiUrls.posts);

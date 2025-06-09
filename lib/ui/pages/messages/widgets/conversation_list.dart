@@ -225,8 +225,10 @@ class ConversationList extends StatelessWidget {
 
         return Dismissible(
           key: Key(conversation.id),
-          // Allow swipes in both directions
-          direction: DismissDirection.horizontal,
+          // Disable swipe actions for AI conversations
+          direction: controller.isAIConversation(conversation)
+              ? DismissDirection.none
+              : DismissDirection.horizontal,
 
           // Background for left-to-right swipe (mark read/unread)
           background: Container(
@@ -343,77 +345,123 @@ class ConversationList extends StatelessWidget {
       builder: (context) {
         final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-        // Create list of actions
-        final List<ActionItem> actions = [
-          // Mute/Unmute action
-          ActionItem(
-            icon: conversation.isMuted ? Icons.volume_up : Icons.volume_off,
-            label: conversation.isMuted ? TextStrings.unmute : TextStrings.mute,
-            color: ThemeConstants.primaryColor,
-            onTap: () {
-              controller.toggleMute(conversation);
-              Navigator.pop(context);
-            },
-          ),
+        // Create list of actions - different for AI conversations
+        final List<ActionItem> actions = [];
 
-          // Mark as read/unread
-          ActionItem(
-            icon: conversation.unreadCount > 0
-                ? Icons.done_all
-                : Icons.mark_email_unread,
-            label: conversation.unreadCount > 0
-                ? TextStrings.markAsRead
-                : TextStrings.markAsUnread,
-            color: ThemeConstants.green,
-            onTap: () {
-              if (conversation.unreadCount > 0) {
-                controller.markConversationAsRead(conversation);
-              } else {
-                controller.markConversationAsUnread(conversation);
-              }
-              Navigator.pop(context);
+        if (controller.isAIConversation(conversation)) {
+          // Limited actions for AI conversations
+          actions.addAll([
+            // Mark as read/unread (AI conversations can still be marked read/unread)
+            ActionItem(
+              icon: conversation.unreadCount > 0
+                  ? Icons.done_all
+                  : Icons.mark_email_unread,
+              label: conversation.unreadCount > 0
+                  ? TextStrings.markAsRead
+                  : TextStrings.markAsUnread,
+              color: ThemeConstants.green,
+              onTap: () {
+                if (conversation.unreadCount > 0) {
+                  controller.markConversationAsRead(conversation);
+                } else {
+                  controller.markConversationAsUnread(conversation);
+                }
+                Navigator.pop(context);
 
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: conversation.unreadCount > 0
-                    ? TextStrings.markedAsRead
-                    : TextStrings.markedAsUnread,
-              );
-            },
-          ),
+                ResponsiveSnackBar.showInfo(
+                  context: context,
+                  message: conversation.unreadCount > 0
+                      ? TextStrings.markedAsRead
+                      : TextStrings.markedAsUnread,
+                );
+              },
+            ),
 
-          // Archive/Unarchive action
-          ActionItem(
-            icon: conversation.isArchived ? Icons.unarchive : Icons.archive,
-            label: conversation.isArchived
-                ? TextStrings.unarchive
-                : TextStrings.archive,
-            color: ThemeConstants.orange,
-            onTap: () {
-              controller.toggleArchive(conversation);
-              Navigator.pop(context);
+            // AI-specific action - Clear conversation history
+            ActionItem(
+              icon: Icons.refresh,
+              label: 'Clear History',
+              color: ThemeConstants.orange,
+              onTap: () {
+                Navigator.pop(context);
+                _showClearHistoryDialog(context, conversation);
+              },
+            ),
+          ]);
+        } else {
+          // Regular actions for normal conversations
+          actions.addAll([
+            // Mute/Unmute action
+            ActionItem(
+              icon: conversation.isMuted ? Icons.volume_up : Icons.volume_off,
+              label:
+                  conversation.isMuted ? TextStrings.unmute : TextStrings.mute,
+              color: ThemeConstants.primaryColor,
+              onTap: () {
+                controller.toggleMute(conversation);
+                Navigator.pop(context);
+              },
+            ),
 
-              // Show a snackbar confirmation
-              ResponsiveSnackBar.showInfo(
-                context: context,
-                message: conversation.isArchived
-                    ? TextStrings.conversationUnarchived
-                    : TextStrings.conversationArchived,
-              );
-            },
-          ),
+            // Mark as read/unread
+            ActionItem(
+              icon: conversation.unreadCount > 0
+                  ? Icons.done_all
+                  : Icons.mark_email_unread,
+              label: conversation.unreadCount > 0
+                  ? TextStrings.markAsRead
+                  : TextStrings.markAsUnread,
+              color: ThemeConstants.green,
+              onTap: () {
+                if (conversation.unreadCount > 0) {
+                  controller.markConversationAsRead(conversation);
+                } else {
+                  controller.markConversationAsUnread(conversation);
+                }
+                Navigator.pop(context);
 
-          // Delete action
-          ActionItem(
-            icon: Icons.delete_outline,
-            label: TextStrings.delete,
-            color: ThemeConstants.red,
-            onTap: () {
-              Navigator.pop(context);
-              _confirmDeleteConversation(context, conversation);
-            },
-          ),
-        ];
+                ResponsiveSnackBar.showInfo(
+                  context: context,
+                  message: conversation.unreadCount > 0
+                      ? TextStrings.markedAsRead
+                      : TextStrings.markedAsUnread,
+                );
+              },
+            ),
+
+            // Archive/Unarchive action
+            ActionItem(
+              icon: conversation.isArchived ? Icons.unarchive : Icons.archive,
+              label: conversation.isArchived
+                  ? TextStrings.unarchive
+                  : TextStrings.archive,
+              color: ThemeConstants.orange,
+              onTap: () {
+                controller.toggleArchive(conversation);
+                Navigator.pop(context);
+
+                // Show a snackbar confirmation
+                ResponsiveSnackBar.showInfo(
+                  context: context,
+                  message: conversation.isArchived
+                      ? TextStrings.conversationUnarchived
+                      : TextStrings.conversationArchived,
+                );
+              },
+            ),
+
+            // Delete action
+            ActionItem(
+              icon: Icons.delete_outline,
+              label: TextStrings.delete,
+              color: ThemeConstants.red,
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteConversation(context, conversation);
+              },
+            ),
+          ]);
+        }
 
         return Container(
           decoration: BoxDecoration(
@@ -447,26 +495,60 @@ class ConversationList extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: NetworkImage(conversation.avatarUrl),
-                      ),
+                      // Show special avatar for AI conversations
+                      controller.isAIConversation(conversation)
+                          ? Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    ThemeConstants.primaryColor,
+                                    ThemeConstants.primaryColor
+                                        .withOpacity(0.7),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.smart_toy,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 20,
+                              backgroundImage:
+                                  NetworkImage(conversation.avatarUrl),
+                            ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              // Only show the other participant's name (not your own)
-                              conversation.isGroup
-                                  ? conversation.groupName ?? 'Group Chat'
-                                  : _getOtherParticipant(conversation).name,
+                              // Show "AI Assistant" for AI conversations
+                              controller.isAIConversation(conversation)
+                                  ? 'AI Assistant'
+                                  : conversation.isGroup
+                                      ? conversation.groupName ?? 'Group Chat'
+                                      : _getOtherParticipant(conversation).name,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (!conversation.isGroup &&
+                            if (controller.isAIConversation(conversation))
+                              Text(
+                                'Your AI-powered assistant',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: ThemeConstants.primaryColor,
+                                ),
+                              )
+                            else if (!conversation.isGroup &&
                                 _isParticipantOnline(conversation))
                               Text(
                                 TextStrings.online,
@@ -581,6 +663,42 @@ class ConversationList extends StatelessWidget {
       ),
     );
   }
+
+  void _showClearHistoryDialog(
+      BuildContext context, Conversation conversation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Clear AI History',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        content: Text(
+          'Are you sure you want to clear all conversation history with the AI Assistant? This will reset the AI\'s memory of your preferences and conversation context.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(TextStrings.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              controller.clearAIConversationHistory(conversation);
+              Navigator.pop(context);
+              ResponsiveSnackBar.showInfo(
+                context: context,
+                message: 'AI conversation history cleared',
+              );
+            },
+            child: Text(
+              'Clear History',
+              style: TextStyle(color: ThemeConstants.orange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // Convert _ConversationTile from StatelessWidget to StatefulWidget to track hover state
@@ -685,12 +803,59 @@ class _ConversationTileState extends State<_ConversationTile> {
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               leading: Stack(
                 children: [
-                  SafeNetworkImage(
-                    imageUrl: avatarUrl,
-                    size: 48,
-                    fallbackText: otherParticipant.name,
-                  ),
-                  if (otherParticipant.isOnline)
+                  // Check if this is an AI conversation and show special avatar
+                  widget.controller.isAIConversation(widget.conversation)
+                      ? Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                ThemeConstants.primaryColor,
+                                ThemeConstants.primaryColor.withOpacity(0.7),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.smart_toy,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        )
+                      : SafeNetworkImage(
+                          imageUrl: avatarUrl,
+                          size: 48,
+                          fallbackText: otherParticipant.name,
+                        ),
+                  // Show AI badge for AI conversations
+                  if (widget.controller.isAIConversation(widget.conversation))
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: Colors.purple,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDarkMode
+                                ? ThemeConstants.darkBackgroundColor
+                                : ThemeConstants.lightBackgroundColor,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome,
+                          color: Colors.white,
+                          size: 8,
+                        ),
+                      ),
+                    )
+                  else if (otherParticipant.isOnline)
                     Positioned(
                       right: 0,
                       bottom: 0,
@@ -713,16 +878,32 @@ class _ConversationTileState extends State<_ConversationTile> {
               ),
               title: Row(
                 children: [
+                  // Show AI icon next to name for AI conversations
+                  if (widget.controller.isAIConversation(widget.conversation))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(
+                        Icons.smart_toy,
+                        size: 16,
+                        color: ThemeConstants.primaryColor,
+                      ),
+                    ),
                   Expanded(
                     child: Text(
-                      // Use displayName which handles group vs individual chats
-                      widget.conversation.isGroup
-                          ? widget.conversation.groupName ?? 'Group Chat'
-                          : otherParticipant.name,
+                      // Show "AI Assistant" for AI conversations
+                      widget.controller.isAIConversation(widget.conversation)
+                          ? 'AI Assistant'
+                          : widget.conversation.isGroup
+                              ? widget.conversation.groupName ?? 'Group Chat'
+                              : otherParticipant.name,
                       style: TextStyle(
                         fontWeight: widget.conversation.unreadCount > 0
                             ? FontWeight.bold
                             : FontWeight.normal,
+                        color: widget.controller
+                                .isAIConversation(widget.conversation)
+                            ? ThemeConstants.primaryColor
+                            : null,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -857,8 +1038,6 @@ class _ConversationTileState extends State<_ConversationTile> {
   void _showOptionsPopup(BuildContext context) {
     final conversation = widget.conversation;
     final controller = widget.controller;
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
 
     final RenderBox button = context.findRenderObject() as RenderBox;
     final RenderBox overlay =

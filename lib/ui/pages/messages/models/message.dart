@@ -10,7 +10,7 @@ class Message {
   final String conversationId;
   final String senderId;
   final String senderName;
-  final String content;
+  String content;
   final DateTime timestamp;
   bool isRead;
   MessageStatus status;
@@ -22,7 +22,8 @@ class Message {
   final int? voiceDuration;
   final String? forwardedFrom;
   MessagesController? controller;
-  final bool isEdited;
+  bool isEdited;
+  DateTime? editedAt;
   final MessageType? replyToMessageType;
 
   // Getters for convenience
@@ -48,6 +49,7 @@ class Message {
     this.forwardedFrom,
     this.controller,
     this.isEdited = false,
+    this.editedAt,
     this.replyToMessageType,
   });
 
@@ -132,6 +134,21 @@ class Message {
         type = MessageType.text;
     }
 
+    // Handle editedAt timestamp
+    DateTime? editedAt;
+    final editedAtData = json['editedAt'];
+    if (editedAtData != null) {
+      if (editedAtData is Timestamp) {
+        editedAt = editedAtData.toDate();
+      } else if (editedAtData is String) {
+        try {
+          editedAt = DateTime.parse(editedAtData);
+        } catch (e) {
+          editedAt = null;
+        }
+      }
+    }
+
     return Message(
       id: json['id'],
       conversationId: json['conversationId'] ?? '',
@@ -150,6 +167,7 @@ class Message {
       forwardedFrom: json['forwardedFrom'],
       controller: null, // Default value for controller
       isEdited: json['isEdited'] ?? false,
+      editedAt: editedAt,
       replyToMessageType: json['replyToMessageType'] != null
           ? MessageType.values.firstWhere(
               (e) =>
@@ -222,6 +240,7 @@ class Message {
       'voiceDuration': voiceDuration,
       'forwardedFrom': forwardedFrom,
       'isEdited': isEdited,
+      'editedAt': editedAt?.toIso8601String(),
       'replyToMessageType': replyToMessageType?.toString().split('.').last,
     };
   }

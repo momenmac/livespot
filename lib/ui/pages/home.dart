@@ -10,6 +10,8 @@ import 'package:flutter_application_2/ui/pages/messages/messages_controller.dart
 import 'package:flutter_application_2/ui/pages/notification/notifications_controller.dart';
 import 'package:flutter_application_2/services/messaging/message_event_bus.dart';
 import 'package:flutter_application_2/services/notifications/notification_event_bus.dart';
+import 'package:flutter_application_2/providers/posts_provider.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 
 class Home extends StatefulWidget {
@@ -37,14 +39,25 @@ class _HomeState extends State<Home> {
   NotificationsController? _notificationsController;
 
   // Create pages list with the callback passed to HomeContent
-  late final List<Widget> _pages;
+  List<Widget>? _pages;
 
   @override
   void initState() {
     super.initState();
 
+    // We'll initialize the controllers after the widget is built
+    // so we have access to the Provider context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeControllers();
+    });
+  }
+
+  void _initializeControllers() {
+    // Get the PostsProvider from the context
+    final postsProvider = Provider.of<PostsProvider>(context, listen: false);
+
     // Create a MessagesController instance that will be shared
-    _messagesController = MessagesController();
+    _messagesController = MessagesController(postsProvider: postsProvider);
 
     // Create a NotificationsController instance that will be shared
     _notificationsController = NotificationsController();
@@ -57,6 +70,11 @@ class _HomeState extends State<Home> {
       const NotificationsPage(),
       const ProfilePage(),
     ];
+
+    // Trigger a rebuild now that pages are initialized
+    if (mounted) {
+      setState(() {});
+    }
 
     // Initial update of unread counts
     _updateUnreadCounts();
@@ -180,6 +198,15 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
+    // If pages are not initialized yet, show a loading indicator
+    if (_pages == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final isLargeScreen = MediaQuery.of(context).size.width > 900;
 
     if (isLargeScreen) {
@@ -197,7 +224,7 @@ class _HomeState extends State<Home> {
                   builder: (context) => CustomScaffold(
                     currentIndex: _selectedIndex,
                     onTap: _onItemTapped,
-                    body: _pages[_selectedIndex],
+                    body: _pages![_selectedIndex],
                     unreadMessageCount: _unreadMessageCount,
                     unreadNotificationCount: _unreadNotificationCount,
                   ),
@@ -234,7 +261,7 @@ class _HomeState extends State<Home> {
           CustomScaffold(
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
-            body: _pages[_selectedIndex],
+            body: _pages![_selectedIndex],
             unreadMessageCount: _unreadMessageCount,
             unreadNotificationCount: _unreadNotificationCount,
           ),

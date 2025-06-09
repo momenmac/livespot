@@ -35,6 +35,9 @@ class Conversation {
   // We already have a setter for lastMessage, now add a getter
   Message get lastMessage => _lastMessage;
 
+  // Virtual property for pinning - can be overridden in subclasses
+  bool get isPinned => false;
+
   // Instead of storing the controller, we'll provide a getter that gets it from context when needed
   MessagesController? get controller =>
       null; // This will be handled by the widget tree

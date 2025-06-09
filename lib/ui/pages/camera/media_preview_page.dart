@@ -14,6 +14,7 @@ class MediaPreviewPage extends StatefulWidget {
   final String mediaType; // 'photo' or 'video'
   final Position? position;
   final String? address;
+  final DateTime? customDateTime; // Add custom datetime parameter
 
   const MediaPreviewPage({
     super.key,
@@ -21,6 +22,7 @@ class MediaPreviewPage extends StatefulWidget {
     required this.mediaType,
     this.position,
     this.address,
+    this.customDateTime, // Add custom datetime parameter
   });
 
   @override
@@ -674,6 +676,8 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       debugPrint('  - Event Status: $_eventStatus');
       debugPrint('  - Media URLs: $allMediaUrls');
       debugPrint('  - Anonymous: $_isAnonymous');
+      debugPrint(
+          '  - Custom DateTime: ${widget.customDateTime?.toIso8601String()}');
 
       // Create the post with all media URLs
       await postsProvider.createPost(
@@ -687,6 +691,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         tags: [], // Tags functionality removed
         isAnonymous: _isAnonymous,
         eventStatus: _eventStatus, // Pass the event status to the backend
+        createdAt: widget.customDateTime, // Pass custom datetime if provided
       );
 
       if (mounted) {

@@ -1212,6 +1212,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return distanceInMeters <= 100.0;
   }
 
+  bool _isWithin24Hours() {
+    if (widget.post?.createdAt == null) return false;
+    final now = DateTime.now();
+    final postTime = widget.post!.createdAt;
+    final difference = now.difference(postTime);
+    return difference.inHours < 24;
+  }
+
+  bool _canAddToThread() {
+    return _isWithinRange() && _isWithin24Hours();
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -1259,7 +1271,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       // Add floating action button
       floatingActionButton: widget.post != null
           ? FloatingActionButton(
-              onPressed: _isWithinRange()
+              onPressed: _canAddToThread()
                   ? () {
                       // Navigate to create post screen with thread info
                       Navigator.push(
@@ -1274,12 +1286,14 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         ),
                       );
                     }
-                  : null, // Disable button if not within range
+                  : null, // Disable button if not within range or past 24 hours
               backgroundColor:
-                  _isWithinRange() ? ThemeConstants.primaryColor : Colors.grey,
-              tooltip: _isWithinRange()
+                  _canAddToThread() ? ThemeConstants.primaryColor : Colors.grey,
+              tooltip: _canAddToThread()
                   ? 'Add to Thread'
-                  : 'You must be within 100m to add to this thread',
+                  : (!_isWithinRange()
+                      ? 'You must be within 100m to add to this thread'
+                      : 'Cannot add to threads older than 24 hours'),
               child: Icon(
                 Icons.add,
                 color: Colors.white,
