@@ -87,6 +87,9 @@ class SafeSnackBar {
     final mediaQuery = MediaQuery.of(context);
     final isLargeScreen = mediaQuery.size.width > 600;
 
+    // Calculate top margin to position at the top
+    final topMargin = mediaQuery.padding.top + 16.0;
+
     // Hide any existing SnackBar
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
@@ -113,9 +116,11 @@ class SafeSnackBar {
               },
             ),
         behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.symmetric(
-          horizontal: isLargeScreen ? 32.0 : 16.0,
-          vertical: 16.0,
+        margin: EdgeInsets.only(
+          top: topMargin,
+          left: isLargeScreen ? 32.0 : 16.0,
+          right: isLargeScreen ? 32.0 : 16.0,
+          bottom: mediaQuery.size.height - topMargin - 80, // Position at top
         ),
         backgroundColor: backgroundColor,
       ),

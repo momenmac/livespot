@@ -7,9 +7,8 @@ void showCustomSnackBar(BuildContext context, String message,
   final screenSize = mediaQuery.size;
   final isLargeScreen = screenSize.width > 700;
 
-  // Calculate bottom margin to avoid FAB and navigation bar
-  final bottomMargin =
-      (isLargeScreen ? 20.0 : 100.0) + 16.0; // Added base padding
+  // Position snackbar at the top instead of bottom to avoid duplication issues
+  final topMargin = mediaQuery.padding.top + 16.0; // Below status bar
 
   // Use the global notification service to prevent duplicates
   GlobalNotificationService().showSnackBar(
@@ -18,10 +17,10 @@ void showCustomSnackBar(BuildContext context, String message,
     textColor: isError ? Colors.white : null,
     behavior: SnackBarBehavior.floating,
     margin: EdgeInsets.only(
-      bottom: bottomMargin,
+      top: topMargin,
       left: isLargeScreen ? screenSize.width * 0.5 + 20 : 20,
       right: 20,
-      top: 20,
+      bottom: screenSize.height - topMargin - 80, // Position at top
     ),
     duration: const Duration(seconds: 2),
   );

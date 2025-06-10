@@ -7,6 +7,7 @@ import '../database/notification_database_service.dart';
 import '../api/notification_api_service.dart';
 import 'notification_types.dart';
 import '../../ui/profile/other_user_profile_page.dart';
+import '../../ui/pages/notification/notification_popup.dart';
 import '../../routes/app_routes.dart';
 import '../utils/navigation_service.dart';
 import '../utils/global_notification_service.dart';
@@ -650,15 +651,38 @@ class NotificationHandler {
       }
       debugPrint('💬 🔥 Navigation command sent');
     } else {
-      // For foreground notifications, only show snackbar (FCM system notification already shown)
-      // Don't show local notification to avoid duplicates
+      // For foreground notifications, show a single in-app notification
+      // The FCM system notification is handled separately, so we only show one here
+      
+      // Avoid showing duplicate notifications by checking if this is a repeated message
       String notificationBody = data.body;
       if (data.messageType == 'image') {
         notificationBody = '📷 Sent a photo';
       } else if (data.messageType == 'file') {
         notificationBody = '📎 Sent a file';
       }
-      _showSnackBar('${data.fromUserName}: $notificationBody');
+      
+      // Use the notification popup instead of snackbar for better positioning and less duplication
+      final navigatorContext = NavigationService().navigatorKey.currentContext;
+      if (navigatorContext != null) {
+        // Show a top notification popup instead of bottom snackbar
+        debugPrint('💬 Showing message notification popup at top');
+        NotificationPopup.show(
+          context: navigatorContext,
+          title: data.fromUserName,
+          message: notificationBody,
+          icon: Icons.message,
+          duration: const Duration(seconds: 3), // Shorter duration for messages
+          onTap: () {
+            // Navigate to conversation when tapped
+            if (data.conversationId.isNotEmpty) {
+              NavigationService().navigateTo('/messages/${data.conversationId}');
+            } else {
+              NavigationService().navigateTo(AppRoutes.messages);
+            }
+          },
+        );
+      }
     }
     debugPrint('💬 === MESSAGE NOTIFICATION HANDLING COMPLETED ===');
   }
@@ -785,9 +809,22 @@ class NotificationHandler {
     }
   }
 
-  /// Show snackbar message
+  /// Show snackbar message at the top instead of bottom
   static void _showSnackBar(String message) {
-    GlobalNotificationService().showInfo(message);
+    // Use top-positioned notification instead of bottom snackbar
+    final navigatorContext = NavigationService().navigatorKey.currentContext;
+    if (navigatorContext != null) {
+      NotificationPopup.show(
+        context: navigatorContext,
+        title: 'Notification',
+        message: message,
+        icon: Icons.info,
+        duration: const Duration(seconds: 3),
+      );
+    } else {
+      // Fallback to global notification service if context not available
+      GlobalNotificationService().showInfo(message);
+    }
   }
 
   /// Test method to simulate different notification types

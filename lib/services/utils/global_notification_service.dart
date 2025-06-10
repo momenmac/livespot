@@ -48,23 +48,33 @@ class GlobalNotificationService {
     // Mark this notification as active
     _activeNotifications.add(notificationId);
 
-    // Create the snackbar
+    // Calculate top margin to position snackbar at the top
+    final mediaQuery = MediaQuery.of(navigatorContext);
+    final topSafeArea = mediaQuery.padding.top;
+    final topMargin = topSafeArea + 16.0; // Add some padding below the status bar
+
+    // Create the snackbar positioned at the top
     final snackBar = SnackBar(
       content: Text(
         message,
-        style: TextStyle(color: textColor),
+        style: TextStyle(color: textColor ?? Colors.white),
       ),
       duration: duration,
       backgroundColor: backgroundColor,
-      behavior: behavior,
-      margin: margin,
+      behavior: SnackBarBehavior.floating,
+      margin: margin ?? EdgeInsets.only(
+        top: topMargin,
+        left: 16.0,
+        right: 16.0,
+        bottom: mediaQuery.size.height - topMargin - 80, // Position at top
+      ),
       dismissDirection:
           isDismissible ? DismissDirection.horizontal : DismissDirection.none,
       action: actionLabel != null && onActionPressed != null
           ? SnackBarAction(
               label: actionLabel,
               onPressed: onActionPressed,
-              textColor: textColor,
+              textColor: textColor ?? Colors.white,
             )
           : null,
     );
