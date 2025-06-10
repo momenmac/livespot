@@ -1,0 +1,101 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 10
+skinparam componentStyle rectangle
+
+skinparam component {
+    BackgroundColor #F8F9FA
+    BorderColor #6C757D
+    FontColor #212529
+}
+
+skinparam rectangle {
+    BackgroundColor #E3F2FD
+    BorderColor #1976D2
+    FontColor #0D47A1
+}
+
+skinparam note {
+    BackgroundColor #FFF3E0
+    BorderColor #FF9800
+    FontColor #E65100
+    FontSize 9
+}
+
+title "LiveSpot Security Architecture"
+
+rectangle "Client Security Layer" as client_sec {
+    [Route Protection] as route_guard
+    [JWT Token Manager] as token_mgr
+    [Session Manager] as session_mgr
+    [Input Validation] as input_val
+    [Secure Storage] as secure_store
+}
+
+rectangle "Network Security Layer" as network_sec {
+    [HTTPS/TLS Encryption] as https_tls
+    [CORS Middleware] as cors_mid
+    [Auth Interceptor] as auth_int
+    [JWT Bearer Headers] as jwt_bearer
+}
+
+rectangle "API Security Layer" as api_sec {
+    [Django Middleware] as django_mid
+    [JWT Authentication] as jwt_auth
+    [CSRF Protection] as csrf_prot
+    [Permission Classes] as permissions
+    [Rate Limiting] as rate_limit
+}
+
+rectangle "Data Security Layer" as data_sec {
+    [Password Hashing] as pass_hash
+    [Token Encryption] as token_enc
+    [SQL Injection Protection] as sql_prot
+    [XSS Protection] as xss_prot
+    [Data Validation] as data_val
+}
+
+rectangle "External Security" as ext_sec {
+    [Google OAuth 2.0] as google_oauth
+    [Firebase Security] as firebase_sec
+    [Email Verification] as email_ver
+}
+
+' Security flow connections
+client_sec --> network_sec : "Secure Communication"
+network_sec --> api_sec : "Authenticated Requests"
+api_sec --> data_sec : "Data Protection"
+api_sec --> ext_sec : "External Auth"
+
+' Specific component flows
+route_guard --> token_mgr : "Token Check"
+token_mgr --> secure_store : "Token Storage"
+auth_int --> jwt_bearer : "Add Headers"
+jwt_bearer --> https_tls : "Encrypted Transport"
+
+django_mid --> jwt_auth : "Token Validation"
+jwt_auth --> csrf_prot : "CSRF Check"
+csrf_prot --> permissions : "Authorization"
+permissions --> rate_limit : "Rate Control"
+
+jwt_auth --> token_enc : "Decrypt Token"
+data_val --> pass_hash : "Hash Password"
+data_val --> sql_prot : "Prevent Injection"
+data_val --> xss_prot : "Sanitize Input"
+
+google_oauth --> jwt_auth : "OAuth Validation"
+firebase_sec --> api_sec : "Real-time Security"
+email_ver --> jwt_auth : "Email Verification"
+
+note top of client_sec : "Client-side route protection\nJWT token management\nSecure local storage"
+
+note top of network_sec : "HTTPS/TLS encryption\nCORS policy enforcement\nAuthenticated headers"
+
+note top of api_sec : "JWT authentication\nCSRF protection\nPermission-based access"
+
+note top of data_sec : "Password hashing\nInput validation\nSQL injection prevention"
+
+note top of ext_sec : "Google OAuth integration\nFirebase security rules\nEmail verification system"
+
+@enduml

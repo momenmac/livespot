@@ -1,0 +1,48 @@
+@startuml LiveSpot_System_Architecture
+!theme plain
+title LiveSpot System Architecture - Implementation Overview
+
+' Core application layers
+[Flutter App\n(iOS, Android, Web)] as flutter #lightblue
+
+[Django REST API\nJWT Authentication] as django #lightyellow
+
+database "PostgreSQL\nDatabase" as postgres #lightgray
+
+' External services with actual implementations
+cloud "External Services" as external #lightcyan {
+  [OpenStreetMap\n+ Nominatim] as osm
+  [Google Gemini AI\nRAG Integration] as gemini
+  [Firebase\nFCM + Firestore] as firebase
+}
+
+' Primary connections showing actual data flow
+flutter --> django : REST API\n(Provider Pattern)
+django --> postgres : ORM Queries
+flutter --> osm : Direct API Calls\n(Hybrid Geocoding)
+flutter --> gemini : AI Assistant\n(Conversation Memory)
+flutter --> firebase : Real-time Messaging\n& Push Notifications
+
+' Simple notes reflecting real implementation
+note right of flutter
+  • Multi-platform (iOS/Android/Web)
+  • Provider state management
+  • Named route navigation
+  • JWT token management
+end note
+
+note right of django
+  • Django REST Framework
+  • Custom Account model
+  • JWT token authentication
+  • PostgreSQL integration
+end note
+
+note right of postgres
+  • User accounts & profiles
+  • Posts with coordinates
+  • Media file references
+  • Notification management
+end note
+
+@enduml

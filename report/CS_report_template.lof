@@ -1,0 +1,19 @@
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces LiveSpot System Architecture Overview - Comprehensive view of the hybrid mobile-first architecture showing Flutter client, Django REST backend, PostgreSQL database, and external service integrations}}{18}{figure.caption.10}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces LiveSpot Database Entity Relationship Diagram - Complete schema showing all entities, relationships, and key attributes supporting location-verified social networking functionality}}{20}{figure.caption.11}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces User Authentication Sequence Diagram - Complete JWT-based login flow showing credential validation, token generation, FCM registration, and session establishment}}{22}{figure.caption.12}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces Post Creation and Threading Sequence Diagram}}{23}{figure.caption.13}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces Real-time Messaging Sequence Diagram - Hybrid messaging architecture combining Firebase Firestore real-time synchronization with FCM push notifications for comprehensive communication coverage}}{24}{figure.caption.14}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces LiveSpot REST API Architecture - Vertical layout showing layered architecture from Flutter client through authentication middleware to organized API endpoints with external service integrations}}{25}{figure.caption.15}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces Service Integration Architecture - Simplified vertical view of external service connections showing the layered integration approach from Flutter client through Django backend to various cloud services}}{25}{figure.caption.16}%
+\contentsline {figure}{\numberline {4.8}{\ignorespaces JWT Authentication Sequence Diagram - Complete authentication flow showing JWT token lifecycle, Google OAuth integration, and FCM token registration for secure user access and push notifications}}{26}{figure.caption.17}%
+\contentsline {figure}{\numberline {4.9}{\ignorespaces Security Architecture - Multi-layered security implementation showing client-side protection, network security, API authentication, data encryption, and external service security integration}}{27}{figure.caption.18}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }

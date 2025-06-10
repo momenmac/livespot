@@ -104,6 +104,21 @@ class AccountsVerificationcode(models.Model):
         db_table = 'accounts_verificationcode'
 
 
+class AccountsVerificationrequest(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=10)
+    admin_notes = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    reviewed_by = models.ForeignKey(AccountsAccount, models.DO_NOTHING, blank=True, null=True)
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING, related_name='accountsverificationrequest_user_set')
+
+    class Meta:
+        managed = False
+        db_table = 'accounts_verificationrequest'
+
+
 class AuthGroup(models.Model):
     name = models.CharField(unique=True, max_length=150)
 
@@ -169,6 +184,56 @@ class DjangoMigrations(models.Model):
         db_table = 'django_migrations'
 
 
+class EventConfirmations(models.Model):
+    id = models.UUIDField(primary_key=True)
+    event_id = models.CharField(max_length=255)
+    is_still_there = models.BooleanField()
+    response_message = models.TextField()
+    notification_id = models.UUIDField(blank=True, null=True)
+    confirmation_request_sent = models.BooleanField()
+    response_received = models.BooleanField()
+    requested_at = models.DateTimeField()
+    responded_at = models.DateTimeField(blank=True, null=True)
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'event_confirmations'
+        unique_together = (('event_id', 'user', 'requested_at'),)
+
+
+class FcmTokens(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    token = models.TextField()
+    device_platform = models.CharField(max_length=20)
+    is_active = models.BooleanField()
+    created_at = models.DateTimeField()
+    last_used = models.DateTimeField()
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'fcm_tokens'
+        unique_together = (('user', 'token'),)
+
+
+class FriendRequests(models.Model):
+    id = models.UUIDField(primary_key=True)
+    status = models.CharField(max_length=20)
+    message = models.TextField()
+    notification_sent = models.BooleanField()
+    notification_id = models.UUIDField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    responded_at = models.DateTimeField(blank=True, null=True)
+    from_user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+    to_user = models.ForeignKey(AccountsAccount, models.DO_NOTHING, related_name='friendrequests_to_user_set')
+
+    class Meta:
+        managed = False
+        db_table = 'friend_requests'
+        unique_together = (('from_user', 'to_user'),)
+
+
 class MediaApiMediafile(models.Model):
     id = models.UUIDField(primary_key=True)
     file = models.CharField(max_length=100)
@@ -178,10 +243,119 @@ class MediaApiMediafile(models.Model):
     firebase_url = models.CharField(max_length=500, blank=True, null=True)
     uploaded_at = models.DateTimeField()
     user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+    thumbnail_url = models.CharField(max_length=500, blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = 'media_api_mediafile'
+
+
+class NotificationHistory(models.Model):
+    id = models.UUIDField(primary_key=True)
+    notification_type = models.CharField(max_length=50)
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    data = models.JSONField()
+    sent = models.BooleanField()
+    delivered = models.BooleanField()
+    read = models.BooleanField()
+    processed = models.BooleanField()
+    sent_at = models.DateTimeField(blank=True, null=True)
+    delivered_at = models.DateTimeField(blank=True, null=True)
+    read_at = models.DateTimeField(blank=True, null=True)
+    processed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'notification_history'
+
+
+class NotificationQueue(models.Model):
+    id = models.UUIDField(primary_key=True)
+    notification_type = models.CharField(max_length=50)
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    data = models.JSONField()
+    priority = models.CharField(max_length=10)
+    status = models.CharField(max_length=20)
+    scheduled_for = models.DateTimeField()
+    max_retries = models.IntegerField()
+    retry_count = models.IntegerField()
+    processing_started_at = models.DateTimeField(blank=True, null=True)
+    processed_at = models.DateTimeField(blank=True, null=True)
+    error_message = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'notification_queue'
+
+
+class NotificationSettings(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    friend_requests = models.BooleanField()
+    events = models.BooleanField()
+    reminders = models.BooleanField()
+    nearby_events = models.BooleanField()
+    system_notifications = models.BooleanField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    user = models.OneToOneField(AccountsAccount, models.DO_NOTHING)
+    follow_notifications = models.BooleanField()
+
+    class Meta:
+        managed = False
+        db_table = 'notification_settings'
+
+
+class NotificationTemplates(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(unique=True, max_length=100)
+    notification_type = models.CharField(max_length=50)
+    title_template = models.CharField(max_length=255)
+    body_template = models.TextField()
+    data_template = models.JSONField()
+    available_variables = models.JSONField()
+    description = models.TextField()
+    is_active = models.BooleanField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'notification_templates'
+
+
+class PostsCategoryinteraction(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    category = models.CharField(max_length=20)
+    interaction_type = models.CharField(max_length=20)
+    created_at = models.DateTimeField()
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+    count = models.IntegerField()
+    last_updated = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'posts_categoryinteraction'
+        unique_together = (('user', 'category', 'interaction_type'),)
+
+
+class PostsEventstatusvote(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    voted_ended = models.BooleanField()
+    created_at = models.DateTimeField()
+    post = models.ForeignKey('PostsPost', models.DO_NOTHING)
+    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'posts_eventstatusvote'
+        unique_together = (('user', 'post'),)
 
 
 class PostsPost(models.Model):
@@ -201,8 +375,8 @@ class PostsPost(models.Model):
     tags = models.JSONField()
     author = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
     location = models.ForeignKey('PostsPostcoordinates', models.DO_NOTHING, blank=True, null=True)
-    thread = models.ForeignKey('PostsThread', models.DO_NOTHING, blank=True, null=True)
     is_anonymous = models.BooleanField()
+    related_post = models.ForeignKey('self', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
         managed = False
@@ -220,23 +394,6 @@ class PostsPostcoordinates(models.Model):
         db_table = 'posts_postcoordinates'
 
 
-class PostsPostthread(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    content = models.TextField()
-    media_url = models.CharField(max_length=255)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-    likes = models.IntegerField()
-    replies = models.IntegerField()
-    is_verified_location = models.BooleanField()
-    author = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
-    post = models.ForeignKey(PostsPost, models.DO_NOTHING)
-
-    class Meta:
-        managed = False
-        db_table = 'posts_postthread'
-
-
 class PostsPostvote(models.Model):
     id = models.BigAutoField(primary_key=True)
     is_upvote = models.BooleanField()
@@ -248,36 +405,6 @@ class PostsPostvote(models.Model):
         managed = False
         db_table = 'posts_postvote'
         unique_together = (('user', 'post'),)
-
-
-class PostsThread(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    title = models.CharField(max_length=100)
-    category = models.CharField(max_length=20)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-    tags = models.JSONField()
-    honesty_score = models.IntegerField()
-    location = models.ForeignKey(PostsPostcoordinates, models.DO_NOTHING)
-
-    class Meta:
-        managed = False
-        db_table = 'posts_thread'
-
-
-class PostsUsercategorypreference(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    category = models.CharField(max_length=20)
-    interaction_count = models.IntegerField()
-    view_count = models.IntegerField()
-    last_interaction = models.DateTimeField()
-    created_at = models.DateTimeField()
-    user = models.ForeignKey(AccountsAccount, models.DO_NOTHING)
-
-    class Meta:
-        managed = False
-        db_table = 'posts_usercategorypreference'
-        unique_together = (('user', 'category'),)
 
 
 class SpatialRefSys(models.Model):

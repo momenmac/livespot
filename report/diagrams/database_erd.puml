@@ -1,0 +1,216 @@
+@startuml LiveSpot_Database_ERD
+!theme plain
+title LiveSpot Database Entity Relationship Diagram
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam dpi 200
+skinparam padding 20
+skinparam minClassWidth 180
+skinparam maxMessageSize 120
+skinparam wrapWidth 280
+skinparam nodesep 50
+skinparam ranksep 80
+skinparam linetype ortho
+
+' Color scheme
+skinparam entity {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #000000
+}
+
+skinparam package {
+  BackgroundColor #F5F5F5
+  BorderColor #9E9E9E
+  FontColor #424242
+}
+
+skinparam note {
+  BackgroundColor #FFF9C4
+  BorderColor #F57F17
+  FontColor #3E2723
+}
+
+' Let PlantUML choose optimal layout
+!define PRIMARY_COLOR #1976D2
+!define SECONDARY_COLOR #388E3C
+!define ACCENT_COLOR #F57C00
+
+' User Management System
+package "User Management" #E8F5E8 {
+  entity "Account" as account #C8E6C9 {
+    **PK** id : BIGINT
+    ==
+    **User Info**
+    email : VARCHAR(254) <<U>>
+    first_name : VARCHAR(50)
+    last_name : VARCHAR(50)
+    password : VARCHAR(128)
+    --
+    **Status**
+    is_active : BOOLEAN
+    is_verified : BOOLEAN
+    created_at : TIMESTAMP
+    profile_picture : VARCHAR(100)
+    google_id : VARCHAR(255)
+  }
+  
+  entity "UserProfile" as profile #C8E6C9 {
+    **PK** id : BIGINT
+    ==
+    **FK** user_id : BIGINT
+    --
+    **Profile**
+    username : VARCHAR(30) <<U>>
+    honesty_score : INTEGER
+    activity_status : VARCHAR(15)
+    last_active : TIMESTAMP
+    bio : TEXT
+    location : VARCHAR(100)
+    interests : JSON
+  }
+}
+
+' Content Management System
+package "Content System" #E3F2FD {
+  entity "Post" as post #BBDEFB {
+    **PK** id : BIGINT
+    ==
+    **FK** author_id : BIGINT
+    **FK** location_id : BIGINT
+    **FK** related_post_id : BIGINT
+    --
+    **Content**
+    title : VARCHAR(100)
+    content : TEXT
+    category : VARCHAR(20)
+    created_at : TIMESTAMP
+    --
+    **Engagement**
+    upvotes : INTEGER
+    downvotes : INTEGER
+    honesty_score : INTEGER
+    --
+    **Settings**
+    status : VARCHAR(20)
+    is_verified_location : BOOLEAN
+    is_anonymous : BOOLEAN
+    media_urls : JSON
+    tags : JSON
+  }
+  
+  entity "PostCoordinates" as coords #BBDEFB {
+    **Primary Key**
+    * id : BIGINT <<PK>>
+    ==
+    **Location Data**
+    * latitude : FLOAT
+    * longitude : FLOAT
+    address : VARCHAR(255)
+  }
+  
+  entity "PostVote" as vote #BBDEFB {
+    **Primary Key**
+    * id : BIGINT <<PK>>
+    ==
+    **Foreign Keys**
+    * user_id : BIGINT <<FK>>
+    * post_id : BIGINT <<FK>>
+    --
+    **Vote Data**
+    * is_upvote : BOOLEAN
+    * created_at : TIMESTAMP
+  }
+}
+
+' Notification System
+package "Notification System" #FFF3E0 {
+  entity "NotificationHistory" as notif #FFE0B2 {
+    **Primary Key**
+    * id : UUID <<PK>>
+    ==
+    **Foreign Keys**
+    * user_id : BIGINT <<FK>>
+    --
+    **Notification Data**
+    * notification_type : VARCHAR(50)
+    * title : VARCHAR(255)
+    * body : TEXT
+    --
+    **Status Tracking**
+    * sent : BOOLEAN
+    * delivered : BOOLEAN
+    * read : BOOLEAN
+    * processed : BOOLEAN
+    * created_at : TIMESTAMP
+    data : JSON
+  }
+  
+  entity "FCMTokens" as fcm #FFE0B2 {
+    **Primary Key**
+    * id : BIGINT <<PK>>
+    ==
+    **Foreign Keys**
+    * user_id : BIGINT <<FK>>
+    --
+    **Token Data**
+    * token : TEXT
+    * device_platform : VARCHAR(20)
+    * is_active : BOOLEAN
+    * created_at : TIMESTAMP
+    * last_used : TIMESTAMP
+  }
+}
+
+' Media & Social Features
+package "Media & Social" #F3E5F5 {
+  entity "MediaFile" as media #E1BEE7 {
+    **Primary Key**
+    * id : UUID <<PK>>
+    ==
+    **Foreign Keys**
+    * user_id : BIGINT <<FK>>
+    --
+    **File Data**
+    * original_filename : VARCHAR(255)
+    * content_type : VARCHAR(20)
+    * file_size : INTEGER
+    * uploaded_at : TIMESTAMP
+    firebase_url : VARCHAR(500)
+    thumbnail_url : VARCHAR(500)
+  }
+  
+  entity "SavedPosts" as saved #E1BEE7 {
+    **Composite Primary Key**
+    * userprofile_id : BIGINT <<FK>>
+    * post_id : BIGINT <<FK>>
+  }
+  
+  entity "Followers" as follow #E1BEE7 {
+    **Composite Primary Key**
+    * from_userprofile_id : BIGINT <<FK>>
+    * to_userprofile_id : BIGINT <<FK>>
+  }
+}
+
+' Relationships with colors
+account ||--|| profile : "has profile"
+account ||--o{ post : "creates"
+account ||--o{ vote : "votes"
+account ||--o{ notif : "receives"
+account ||--o{ fcm : "has tokens"
+account ||--o{ media : "uploads"
+
+profile ||--o{ follow : "follows/followed"
+profile ||--o{ saved : "saves posts"
+
+post }o--|| coords : "located at"
+post ||--o{ vote : "receives votes"
+post ||--o{ post : "threading"
+post ||--o{ saved : "can be saved"
+
+note top of post : "**Threading System**\nrelated_post_id enables\ncomment/reply chains"
+
+note bottom of notif : "**Push Notifications**\nFCM integration with\ndelivery status tracking"
+
+@enduml

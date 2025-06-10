@@ -1,0 +1,53 @@
+@startuml Authentication_Sequence
+!theme plain
+title User Authentication Flow - LiveSpot
+
+actor User
+participant "Flutter App" as app
+participant "AccountProvider" as provider
+participant "TokenManager" as token
+participant "Django API" as api
+participant "PostgreSQL" as db
+participant "Firebase FCM" as fcm
+
+User -> app : Enter credentials
+app -> provider : login(email, password)
+
+provider -> api : POST /api/accounts/auth/login/
+api -> db : Validate credentials
+db --> api : User data
+
+alt Successful Authentication
+    api --> provider : JWT tokens + user data
+    provider -> token : Store tokens securely
+    token --> provider : Tokens cached
+    
+    provider -> fcm : Initialize FCM token
+    fcm --> provider : FCM token generated
+    
+    provider -> api : Register FCM token
+    api -> db : Store FCM token
+    db --> api : Token stored
+    
+    provider --> app : Authentication success
+    app --> User : Navigate to home screen
+    
+else Authentication Failed
+    api --> provider : Error response
+    provider --> app : Authentication failed
+    app --> User : Show error message
+end
+
+note right of token
+  JWT tokens stored in
+  SharedPreferences with
+  automatic refresh logic
+end note
+
+note right of fcm
+  FCM token enables
+  push notifications
+  for real-time features
+end note
+
+@enduml

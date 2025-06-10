@@ -1,0 +1,97 @@
+@startuml Post_Creation_Sequence
+!theme plain
+title Post Creation & Threading Flow - LiveSpot
+
+actor User
+participant "Flutter App" as app
+participant "PostsProvider" as provider
+participant "LocationService" as location
+participant "Django API" as api
+participant "PostgreSQL" as db
+participant "OpenStreetMap" as osm
+
+User -> app : Tap "Create Post" or "Add to Thread"
+app -> location : getCurrentPosition()
+location -> location : Get GPS coordinates
+location --> app : Position(lat, lng)
+
+app -> osm : Reverse geocode location
+osm --> app : Address details
+
+User -> app : Enter content & select category
+User -> app : Tap "Submit Post"
+
+app -> provider : createPost() or createRelatedPost()
+
+alt Creating Main Post
+    provider -> api : POST /api/posts/
+    api -> db : Verify user location proximity
+    
+    alt Location Verified
+        db --> api : Location valid
+        api -> db : INSERT new post (related_post_id = NULL)
+        db --> api : Post created (ID: 123)
+        
+        api --> provider : Success response
+        provider -> provider : Update local posts cache
+        provider --> app : Post created successfully
+        app --> User : Navigate to map view
+        
+    else Location Too Far
+        db --> api : Location verification failed
+        api --> provider : Error: Location too far
+        provider --> app : Location error
+        app --> User : Show error message
+    end
+
+else Adding to Existing Thread
+    provider -> api : POST /api/posts/ (with related_post_id)
+    
+    api -> db : Verify threading conditions
+    note right of db
+      Threading Rules:
+      - User within location range
+      - Within 24 hours of main post
+      - Main post still active
+    end note
+    
+    alt Threading Allowed
+        db --> api : Threading conditions met
+        api -> db : INSERT new post (related_post_id = main_post_id)
+        db -> db : Increment related_posts_count on main post
+        db --> api : Related post created (ID: 124)
+        
+        api --> provider : Success response
+        provider -> provider : Update thread cache & main post count
+        provider --> app : Thread post created successfully
+        app --> User : Show updated thread view
+        
+    else Threading Denied
+        db --> api : Threading conditions failed
+        note right of api
+          Reasons for denial:
+          - Too far from location
+          - More than 24 hours passed
+          - Main post ended/inactive
+        end note
+        api --> provider : Error: Threading not allowed
+        provider --> app : Threading error
+        app --> User : Show threading restriction message
+    end
+end
+
+note right of api
+  Location verification ensures
+  users are physically present.
+  Threading creates grouped
+  discussions around events.
+end note
+
+note right of provider
+  Local cache updated with:
+  - New posts in feed
+  - Thread relationships
+  - Updated counters
+end note
+
+@enduml

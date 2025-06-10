@@ -1,0 +1,79 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 10
+skinparam componentStyle rectangle
+
+skinparam component {
+    BackgroundColor #F8F9FA
+    BorderColor #6C757D
+    FontColor #212529
+}
+
+skinparam rectangle {
+    BackgroundColor #E3F2FD
+    BorderColor #1976D2
+    FontColor #0D47A1
+}
+
+skinparam cloud {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    FontColor #1B5E20
+}
+
+title "LiveSpot Service Integration"
+
+' === VERTICAL STACK LAYOUT ===
+
+rectangle "Flutter Client" as client {
+    [Location Services] as location
+    [Firebase Messaging] as fcm
+    [Google Sign-In] as oauth
+}
+
+rectangle "Django Backend" as backend {
+    [Authentication API] as auth
+    [Posts API] as posts
+    [AI Assistant] as ai
+    [Media API] as media
+}
+
+cloud "Google Services" as google {
+    [OAuth 2.0] as g_oauth
+    [Gemini AI] as g_ai
+    [Firebase FCM] as g_fcm
+    [Firebase Storage] as g_storage
+}
+
+cloud "OpenStreetMap" as osm {
+    [Map Tiles] as osm_tiles
+    [Nominatim] as nominatim
+}
+
+cloud "Other Services" as other {
+    [SMTP Email] as email
+    [PostgreSQL] as postgres
+}
+
+' === VERTICAL CONNECTIONS ===
+
+client --> backend : "HTTPS API"
+backend --> google : "Service Calls"
+backend --> osm : "Map Data"
+backend --> other : "Email & DB"
+
+' === SPECIFIC SERVICE FLOWS ===
+
+oauth --> g_oauth : "Auth Flow"
+fcm --> g_fcm : "Push Notifications"
+ai --> g_ai : "AI Queries"
+media --> g_storage : "File Storage"
+
+location --> nominatim : "Geocoding"
+posts --> osm_tiles : "Map Display"
+
+auth --> email : "Verification"
+backend --> postgres : "Data Storage"
+
+@enduml

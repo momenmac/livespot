@@ -1,0 +1,53 @@
+@startuml Messaging_Sequence
+!theme plain
+title Real-time Messaging Flow - LiveSpot
+
+actor "User A" as userA
+participant "Flutter App A" as appA
+participant "MessagesController" as controllerA
+participant "Firebase Firestore" as firestore
+participant "Firebase FCM" as fcm
+participant "Django API" as api
+participant "Flutter App B" as appB
+participant "User B" as userB
+
+userA -> appA : Type message
+userA -> appA : Send message
+appA -> controllerA : sendMessage(content)
+
+controllerA -> firestore : Add message to conversation
+firestore --> controllerA : Message stored
+
+controllerA -> firestore : Update conversation lastMessage
+firestore --> controllerA : Conversation updated
+
+' Real-time listener on User B's device
+firestore --> appB : Real-time message update
+appB -> appB : Display new message
+appB --> userB : Message appears instantly
+
+' Send push notification if User B is offline
+controllerA -> api : Send push notification
+api -> fcm : Send FCM notification
+fcm --> appB : Push notification delivered
+
+alt User B is offline
+    fcm --> userB : Mobile notification shown
+    userB -> appB : Tap notification
+    appB -> appB : Navigate to conversation
+    appB --> userB : Show conversation
+end
+
+note right of firestore
+  Real-time listeners provide
+  instant message delivery
+  for online users
+end note
+
+note right of fcm
+  Push notifications ensure
+  message delivery even
+  when app is closed
+end note
+
+@enduml

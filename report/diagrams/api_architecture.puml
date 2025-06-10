@@ -1,0 +1,83 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 11
+skinparam componentStyle rectangle
+
+skinparam component {
+    BackgroundColor #F8F9FA
+    BorderColor #6C757D
+    FontColor #212529
+}
+
+skinparam rectangle {
+    BackgroundColor #E3F2FD
+    BorderColor #1976D2
+    FontColor #0D47A1
+}
+
+title LiveSpot API Architecture
+
+rectangle "Flutter Mobile Client" as client {
+    [HTTP Client] as http
+    [JWT Manager] as jwt
+    [API Services] as services
+}
+
+rectangle "Authentication Layer" as auth_layer {
+    [JWT Middleware] as jwt_mid
+    [CORS Handler] as cors
+}
+
+rectangle "Accounts API" as accounts_api {
+    [Authentication] as auth_eps
+    [Profile Management] as profile_eps
+    [Security] as security_eps
+}
+
+rectangle "Posts API" as posts_api {
+    [Content CRUD] as content_eps
+    [Features] as features_eps
+}
+
+rectangle "Notifications API" as notif_api {
+    [FCM Management] as fcm_eps
+    [History & Settings] as history_eps
+}
+
+rectangle "Media API" as media_api {
+    [File Operations] as file_eps
+}
+
+rectangle "External Services" as external {
+    [Firebase FCM] as fcm
+    [Google OAuth] as oauth
+    [Email SMTP] as email
+    [Media Storage] as storage
+}
+
+rectangle "Database Layer" as database {
+    [PostgreSQL] as postgres
+    [Django ORM] as orm
+    [Redis Cache] as redis
+}
+
+' Data Flow Connections
+client --> auth_layer : HTTPS + JWT
+auth_layer --> accounts_api : Authenticated Requests
+auth_layer --> posts_api
+auth_layer --> notif_api
+auth_layer --> media_api
+
+accounts_api --> database : User Data
+posts_api --> database : Content Data
+notif_api --> database : Notification Data
+media_api --> database : Media Metadata
+
+' External Service Connections
+auth_eps --> oauth : OAuth Flow
+security_eps --> email : Verification
+fcm_eps --> fcm : Push Notifications
+file_eps --> storage : File Storage
+
+@enduml
