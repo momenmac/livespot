@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// A global set to track active notification popups and prevent duplicates
+final Set<String> _activePopups = <String>{};
+
 class NotificationPopup extends StatelessWidget {
   final String title;
   final String message;
@@ -142,8 +145,20 @@ class NotificationPopup extends StatelessWidget {
     Duration duration = const Duration(seconds: 4),
   }) {
     try {
+      // Create unique identifier to prevent duplicates
+      final popupId = '${title}_${message}';
+      
+      // Prevent duplicate popups
+      if (_activePopups.contains(popupId)) {
+        debugPrint('Duplicate notification popup prevented: $popupId');
+        return;
+      }
+
       OverlayState overlayState = Overlay.of(context);
       OverlayEntry? entry;
+
+      // Mark popup as active
+      _activePopups.add(popupId);
 
       entry = OverlayEntry(
         builder: (context) {
@@ -156,10 +171,12 @@ class NotificationPopup extends StatelessWidget {
                 Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87,
             onTap: () {
               entry?.remove();
+              _activePopups.remove(popupId);
               onTap?.call();
             },
             onDismiss: () {
               entry?.remove();
+              _activePopups.remove(popupId);
               onDismiss?.call();
             },
           );
@@ -171,6 +188,7 @@ class NotificationPopup extends StatelessWidget {
       // Auto dismiss after specified duration
       Future.delayed(duration, () {
         entry?.remove();
+        _activePopups.remove(popupId);
       });
     } catch (e) {
       debugPrint('Error showing notification popup: $e');

@@ -681,7 +681,7 @@ class _MyAppState extends State<MyApp> {
     if (!isLogoutNavigation) {
       widget.accountProvider.beginAuthStateTransition();
     }
-
+ 
     // Execute the navigation with a delay to ensure UI stability
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted && NavigationService().navigatorKey.currentState != null) {

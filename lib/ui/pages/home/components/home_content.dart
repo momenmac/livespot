@@ -176,12 +176,6 @@ class _HomeContentState extends State<HomeContent> {
           icon: const Icon(Icons.location_on_outlined),
         ),
         actions: [
-          // Test notification button
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: _testNotificationPopup,
-            tooltip: 'Test Notification',
-          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
