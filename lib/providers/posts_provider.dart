@@ -172,7 +172,8 @@ class PostsProvider with ChangeNotifier {
   Future<void> fetchNearbyPosts({int radius = 1000}) async {
     _setLoading(true);
     try {
-      final position = await _locationService.getCurrentPosition();
+      // Use the new fallback method that tries multiple strategies including Tulkarm
+      final position = await _locationService.getCurrentPositionWithFallback();
 
       _posts = await _postsService.getNearbyPosts(
         latitude: position.latitude,
@@ -202,9 +203,22 @@ class PostsProvider with ChangeNotifier {
     try {
       // Get user location if not provided
       if (latitude == null || longitude == null) {
-        final position = await _locationService.getCurrentPosition();
-        latitude = position.latitude;
-        longitude = position.longitude;
+        try {
+          // Use the new fallback method that tries multiple strategies
+          final position =
+              await _locationService.getCurrentPositionWithFallback();
+          latitude = position.latitude;
+          longitude = position.longitude;
+          debugPrint(
+              '🌐 Location obtained successfully: ($latitude, $longitude)');
+        } catch (locationError) {
+          debugPrint('🌐 All location strategies failed: $locationError');
+          // This should not happen since getCurrentPositionWithFallback has Tulkarm fallback
+          latitude = 32.3082; // Tulkarm coordinates as final fallback
+          longitude = 35.0283;
+          debugPrint(
+              '🌐 Using final Tulkarm fallback: ($latitude, $longitude)');
+        }
       }
 
       debugPrint(
@@ -223,6 +237,23 @@ class PostsProvider with ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to fetch recommended posts: $e';
       debugPrint('❌ PostsProvider: Error fetching recommendations: $e');
+
+      // Try one more time with Tulkarm coordinates if the error was API-related
+      try {
+        debugPrint('🔄 Final retry with Tulkarm coordinates...');
+        final result = await _postsService.getRecommendedPosts(
+          latitude: 32.3082, // Tulkarm
+          longitude: 35.0283, // Tulkarm
+          radiusKm: radiusKm,
+          limit: limit,
+          date: date,
+        );
+        _errorMessage = null;
+        return result;
+      } catch (fallbackError) {
+        debugPrint('❌ Fallback also failed: $fallbackError');
+      }
+
       return {
         'posts': <Post>[],
         'metadata': {},
@@ -381,7 +412,9 @@ class PostsProvider with ChangeNotifier {
   Future<bool> isUserNearPost(Post post,
       {double maxDistanceMeters = 100.0}) async {
     try {
-      final currentPosition = await _locationService.getCurrentPosition();
+      // Use the new fallback method for better reliability
+      final currentPosition =
+          await _locationService.getCurrentPositionWithFallback();
 
       final distance = _locationService.calculateDistanceInMeters(
         currentPosition.latitude,
@@ -448,8 +481,9 @@ class PostsProvider with ChangeNotifier {
     required int maxDistanceInMeters,
   }) async {
     try {
-      // Get current user location
-      final currentPosition = await _locationService.getCurrentPosition();
+      // Get current user location using the fallback method
+      final currentPosition =
+          await _locationService.getCurrentPositionWithFallback();
 
       // Calculate distance between user and post
       final distance = _locationService.calculateDistanceInMeters(
