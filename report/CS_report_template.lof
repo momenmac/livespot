@@ -12,6 +12,29 @@
 \contentsline {figure}{\numberline {4.8}{\ignorespaces JWT Authentication Sequence Diagram - Complete authentication flow showing JWT token lifecycle, Google OAuth integration, and FCM token registration for secure user access and push notifications}}{26}{figure.caption.17}%
 \contentsline {figure}{\numberline {4.9}{\ignorespaces Security Architecture - Multi-layered security implementation showing client-side protection, network security, API authentication, data encryption, and external service security integration}}{27}{figure.caption.18}%
 \addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Account Creation Flow on Android---Dark Theme Implementation}}{30}{figure.caption.24}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Welcome Screen}}}{30}{figure.caption.24}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Create Account}}}{30}{figure.caption.24}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Email Verification}}}{30}{figure.caption.24}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Account Creation on Web---Light Theme Responsive Design}}{31}{figure.caption.25}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Login Interface on Web---Light Theme Design}}{31}{figure.caption.27}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Login Interface on Android---Dark Theme Implementation}}{32}{figure.caption.28}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Password Recovery Flow on Android---Reset Process}}{32}{figure.caption.30}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Reset Request}}}{32}{figure.caption.30}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Verification Code}}}{32}{figure.caption.30}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces Home Feed Interface on Android---Dark Theme Implementation}}{33}{figure.caption.33}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Main Feed}}}{33}{figure.caption.33}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Alternative View}}}{33}{figure.caption.33}%
+\contentsline {figure}{\numberline {5.7}{\ignorespaces Home Feed Interface on Web---Light Theme Responsive Design}}{34}{figure.caption.34}%
+\contentsline {figure}{\numberline {5.8}{\ignorespaces Profile Management on Android---Comprehensive User Account Features}}{35}{figure.caption.36}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Settings Overview}}}{35}{figure.caption.36}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Profile View}}}{35}{figure.caption.36}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Edit Profile}}}{35}{figure.caption.36}%
+\contentsline {figure}{\numberline {5.9}{\ignorespaces Change Password Interface on Android---Security Settings}}{36}{figure.caption.37}%
+\contentsline {figure}{\numberline {5.10}{\ignorespaces Profile Management on Web---Comprehensive User Interface}}{36}{figure.caption.38}%
+\contentsline {figure}{\numberline {5.11}{\ignorespaces Social Features and Map on Android---Stories and Location Integration}}{37}{figure.caption.40}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Stories Interface}}}{37}{figure.caption.40}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Interactive Map}}}{37}{figure.caption.40}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
 \addvspace {10\p@ }
