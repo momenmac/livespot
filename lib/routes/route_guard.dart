@@ -94,8 +94,6 @@ class RouteGuard {
     // CRITICAL FIX: If we're accessing the verification screen, don't process security checks at all
     // This prevents endless redirects when users are already on the verification screen
     if (routeName == AppRoutes.verifyEmail) {
-      print(
-          '🔒 RouteGuard: Accessing verification screen, bypassing security checks to prevent loops');
       return;
     }
 
@@ -104,25 +102,19 @@ class RouteGuard {
     if (_lastNavigationTime != null &&
         now.difference(_lastNavigationTime!) <
             const Duration(milliseconds: 1000)) {
-      print(
-          '🔒 RouteGuard: Debouncing navigation request for $routeName (too soon)');
       return;
     }
 
     // Check if we're already processing this same route
     if (_lastProcessedRoute == routeName) {
-      print('🔒 RouteGuard: Already processed route $routeName, skipping');
       return;
     }
 
-    print('🔒 RouteGuard: Processing security check for $routeName');
     _lastNavigationTime = now;
 
     // Use a longer delay to allow route transitions to fully complete
     Future.delayed(const Duration(milliseconds: 300), () async {
       if (!context.mounted) {
-        print(
-            '🔒 RouteGuard: Context no longer mounted, aborting security check');
         _lastProcessedRoute = null;
         return;
       }

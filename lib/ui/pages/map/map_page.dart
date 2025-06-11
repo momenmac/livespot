@@ -1200,9 +1200,8 @@ class _MapPageState extends State<MapPage> {
                               // Close the overlay
                               removeOverlay();
 
-                              // Navigate to post detail page
-                              Navigator.push(
-                                context,
+                              // Navigate to post detail page - use the root navigator
+                              Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
                                   builder: (context) => PostDetailPage(
                                     title: title,
@@ -1262,9 +1261,8 @@ class _MapPageState extends State<MapPage> {
                                 // Close the overlay
                                 removeOverlay();
 
-                                // Navigate based on media type
-                                Navigator.push(
-                                  context,
+                                // Navigate based on media type - use the root navigator
+                                Navigator.of(context, rootNavigator: true).push(
                                   MaterialPageRoute(
                                     builder: (context) => ReelsPage(
                                       post: postObj,
@@ -1520,14 +1518,6 @@ class _MapPageState extends State<MapPage> {
                 title: Text(TextStrings.map,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 actions: [
-                  if (_controller.destination != null)
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(
-                            context, _controller.locationController.text);
-                      },
-                      child: const Text('Select Location'),
-                    ),
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: MapDatePicker(

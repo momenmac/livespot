@@ -227,10 +227,15 @@ class MapPageController extends ChangeNotifier {
     if (_isDisposed) return; // Safety check
 
     try {
+      debugPrint('🗺️ Centering on user location');
       if (currentLocation != null) {
         await _moveMapWhenReady(currentLocation!, 15.0);
+        showInfoMessage("Centered on your location");
       } else {
         // Try to get current position if location is null
+        debugPrint('🗺️ Current location not available, fetching position');
+        showInfoMessage("Finding your location...");
+
         final position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
@@ -241,16 +246,21 @@ class MapPageController extends ChangeNotifier {
         final newLocation = LatLng(position.latitude, position.longitude);
         currentLocation = newLocation;
 
+        debugPrint(
+            '🗺️ Got user location: ${position.latitude}, ${position.longitude}');
         await _moveMapWhenReady(newLocation, 15.0);
 
+        showSuccessMessage("Found your location");
         _safeNotifyListeners();
       }
 
       // If route mode is enabled and we have a destination, recalculate route
       if (showRoute && destination != null) {
+        debugPrint('🛣️ Recalculating route with updated user location');
         await fetchRoute();
       }
     } catch (e) {
+      debugPrint('🗺️ Error centering on user location: $e');
       if (!_isDisposed) {
         showErrorMessage(TextStrings.unableToGetCurrentLocation);
       }
@@ -304,14 +314,25 @@ class MapPageController extends ChangeNotifier {
       return;
     }
 
+    debugPrint('🔍 Searching for location: $query');
+    showInfoMessage("Searching for $query...");
+
+    // Track search start time for performance monitoring
+    final searchStartTime = DateTime.now();
+
     // Create URL with optimization to return limited fields for faster response
     final url = Uri.parse(
         '${ApiUrls.nominatimSearch}/search?q=${Uri.encodeComponent(query)}&format=json&limit=1&addressdetails=0&namedetails=0');
 
+    debugPrint('🔍 Search URL: $url');
+
     try {
       final response = await http.get(url).timeout(
-        const Duration(seconds: 5), // Reduced timeout for faster failures
+        const Duration(
+            seconds:
+                5), // Reduced timeout from 10 to 5 seconds for faster failures
         onTimeout: () {
+          debugPrint('🔍 Search request timed out');
           showErrorMessage('Location search timed out. Please try again.');
           return http.Response('{"error": "timeout"}', 408);
         },
@@ -319,9 +340,15 @@ class MapPageController extends ChangeNotifier {
 
       if (_isDisposed) return; // Check again after async operation
 
+      // Calculate search response time
+      final searchResponseTime =
+          DateTime.now().difference(searchStartTime).inMilliseconds;
+      debugPrint('🔍 Search API response took $searchResponseTime ms');
+
       if (response.statusCode == 200) {
         // Early validation of JSON response
         if (response.body.isEmpty) {
+          debugPrint('🔍 Empty response received');
           showErrorMessage("No location data received. Please try again.");
           return;
         }
@@ -330,6 +357,7 @@ class MapPageController extends ChangeNotifier {
           final data = json.decode(response.body);
 
           if (data is! List || data.isEmpty) {
+            debugPrint('🔍 No results found for location: $query');
             showErrorMessage(
                 "Location not found. Please try a different search term.");
             return;
@@ -343,12 +371,14 @@ class MapPageController extends ChangeNotifier {
 
           // Validate coordinates
           if (lat == 0.0 && lon == 0.0) {
+            debugPrint('🔍 Invalid coordinates received: $lat, $lon');
             showErrorMessage(
                 "Invalid location coordinates received. Please try again.");
             return;
           }
 
           final newLocation = LatLng(lat, lon);
+          debugPrint('🔍 Location found: $displayName at $lat,$lon');
 
           // Update destination and description
           destination = newLocation;
@@ -369,21 +399,26 @@ class MapPageController extends ChangeNotifier {
           // Move to the location immediately
           await _moveMapWhenReady(newLocation, 13.0);
 
-          // Only show success message for manual searches (not automatic ones)
+          // Show success message
           showSuccessMessage("Location found: $displayName");
 
           // If route mode is enabled, calculate the route immediately
           if (showRoute && !_isDisposed) {
+            debugPrint('🛣️ Route mode is enabled, calculating route...');
             await calculateRouteTo(newLocation); // Use the enhanced method
           }
         } catch (e) {
+          debugPrint('🔍 Error parsing location data: $e');
           showErrorMessage("Error processing location data. Please try again.");
         }
       } else {
+        debugPrint(
+            '🔍 Search API error: ${response.statusCode} - ${response.body}');
         showErrorMessage(
             "Server error while finding location. Please try again.");
       }
     } catch (e) {
+      debugPrint('🔍 Exception while searching location: $e');
       if (!_isDisposed) {
         showErrorMessage(
             'Network error. Please check your connection and try again.');
@@ -394,9 +429,15 @@ class MapPageController extends ChangeNotifier {
   Future<void> fetchRoute() async {
     if (_isDisposed) return; // Safety check
     if (currentLocation == null || destination == null) {
+      debugPrint(
+          '🛣️ Cannot fetch route: current location or destination is null');
       showErrorMessage(TextStrings.failedToFetchRoute);
       return;
     }
+
+    debugPrint(
+        '🛣️ Fetching route from ${currentLocation!.latitude},${currentLocation!.longitude} to ${destination!.latitude},${destination!.longitude}');
+    showInfoMessage("Finding route...");
 
     // Calculate straight-line distance (in km) between points using Haversine formula
     final double lat1 = currentLocation!.latitude;
@@ -420,57 +461,126 @@ class MapPageController extends ChangeNotifier {
     // For very close points (under 100m), just create a direct line
     if (distance < 0.1) {
       // Less than 100 meters
+      debugPrint(
+          '🛣️ Points are very close (${(distance * 1000).toStringAsFixed(0)}m), creating direct route');
       route = [currentLocation!, destination!];
       showMarkersAndRoute = true;
       _safeNotifyListeners();
+      showSuccessMessage(
+          'Destination is ${(distance * 1000).toStringAsFixed(0)}m away');
       return;
     }
 
-    debugPrint('🛣️ Trying multiple routing services for better coverage...');
+    // Important: OSRM API uses longitude,latitude order (not latitude,longitude)
+    final url = Uri.parse("${ApiUrls.osrmRouting}/route/v1/driving/"
+        "${currentLocation!.longitude},${currentLocation!.latitude};"
+        "${destination!.longitude},${destination!.latitude}?overview=full&geometries=polyline&steps=true");
 
-    // Try multiple routing services in order of preference for Palestine/Israel region
-    final routingServices = [
-      () => _tryOpenRouteService(lat1, lon1, lat2, lon2),
-      () => _tryGraphHopper(lat1, lon1, lat2, lon2),
-      () => _tryOSRM(lat1, lon1, lat2, lon2),
-    ];
+    debugPrint('🛣️ API URL: $url');
 
-    bool routeFound = false;
+    try {
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          debugPrint('🛣️ Route request timed out');
+          showErrorMessage(
+              'Route calculation is taking too long. Please try again.');
+          return http.Response('{"error": "timeout"}', 408);
+        },
+      );
 
-    for (int i = 0; i < routingServices.length; i++) {
-      if (_isDisposed) return;
+      if (_isDisposed) return; // Check again after async operation
 
-      try {
-        debugPrint(
-            '🛣️ Trying routing service ${i + 1}/${routingServices.length}...');
-        final success = await routingServices[i]();
-        if (success) {
-          routeFound = true;
-          debugPrint('✅ Route found using service ${i + 1}');
-          break;
+      debugPrint('🛣️ Route API response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        // Check if request was successful
+        if (data['code'] != 'Ok') {
+          debugPrint(
+              '🛣️ OSRM API returned an error: ${data['code']} - ${data['message'] ?? 'Unknown error'}');
+          showErrorMessage(
+              'Route error: ${data['message'] ?? 'Failed to find route'}');
+          return;
         }
-      } catch (e) {
-        debugPrint('❌ Routing service ${i + 1} failed: $e');
-        continue;
-      }
-    }
 
-    if (!routeFound) {
-      debugPrint(
-          '🛣️ All routing services failed, using direct route fallback');
-      _createDirectRoute(distance);
-      showErrorMessage(
-          'No road route available. Showing direct path (${distance.toStringAsFixed(1)}km)');
+        // Check if routes array exists and is not empty
+        if (data['routes'] == null || (data['routes'] as List).isEmpty) {
+          debugPrint('🛣️ No routes found in API response');
+          showErrorMessage('No route found for this destination');
+          return;
+        }
+
+        final geometry = data['routes'][0]['geometry'];
+        debugPrint('🛣️ Successfully received route geometry');
+
+        // Clear existing route
+        route.clear();
+
+        // Decode new polyline
+        _decodePolyline(geometry);
+        debugPrint('🛣️ Route decoded with ${route.length} points');
+
+        // Ensure showMarkersAndRoute is enabled
+        showMarkersAndRoute = true;
+
+        // Notify listeners to update the UI
+        _safeNotifyListeners();
+
+        // Show success message
+        final distance =
+            (data['routes'][0]['distance'] / 1000).toStringAsFixed(1);
+        final duration =
+            (data['routes'][0]['duration'] / 60).toStringAsFixed(0);
+        showSuccessMessage(
+            'Route found! Distance: $distance km (approx. $duration mins)');
+
+        // After route is decoded, fit bounds to show entire route
+        if (route.isNotEmpty && !_isDisposed) {
+          final bounds = LatLngBounds.fromPoints(route);
+          await _mapReadyCompleter.future;
+          if (!_isDisposed) {
+            try {
+              debugPrint('🛣️ Fitting map to show entire route');
+              mapController.fitCamera(
+                CameraFit.bounds(
+                  bounds: bounds,
+                  padding: const EdgeInsets.all(50.0),
+                  maxZoom: 15, // Increased from 7 to 15 for better visibility
+                ),
+              );
+            } catch (e) {
+              debugPrint('🛣️ Error fitting camera bounds: $e');
+            }
+          }
+        }
+      } else {
+        String errorBody = 'Unknown error';
+        try {
+          errorBody = response.body;
+        } catch (_) {}
+        debugPrint('🛣️ Route API error: ${response.statusCode} - $errorBody');
+        showErrorMessage('Failed to find route. Please try again.');
+      }
+    } catch (e) {
+      debugPrint('🛣️ Exception while fetching route: $e');
+      if (!_isDisposed) {
+        showErrorMessage(
+            'Error calculating route: Connection problem. Please try again.');
+      }
     }
   }
 
   void _decodePolyline(String encodedPolyline) {
+    debugPrint('🛣️ Decoding polyline...');
     try {
       PolylinePoints polylinePoints = PolylinePoints();
       List<PointLatLng> decodedPoints =
           polylinePoints.decodePolyline(encodedPolyline);
 
       if (decodedPoints.isEmpty) {
+        debugPrint('🛣️ Warning: Decoded polyline is empty');
         return;
       }
 
@@ -481,7 +591,10 @@ class MapPageController extends ChangeNotifier {
       route = decodedPoints
           .map((point) => LatLng(point.latitude, point.longitude))
           .toList();
+
+      debugPrint('🛣️ Polyline decoded with ${route.length} points');
     } catch (e) {
+      debugPrint('🛣️ Error decoding polyline: $e');
       showErrorMessage('Error processing route data');
     }
   }
@@ -508,27 +621,10 @@ class MapPageController extends ChangeNotifier {
   void showInfoMessage(String message) {
     if (_isDisposed || _context == null) return; // Safety check
 
-    // Disable info snackbars to reduce noise - only show critical info
+    // Disable snackbars on web platform for map pages
     if (kIsWeb) {
       debugPrint("Map Info (Web): $message");
       return;
-    }
-
-    // Only show info messages for important actions, skip routine ones
-    if (message.contains("Finding your location") ||
-        message.contains("Searching for") ||
-        message.contains("Finding route") ||
-        message.contains("Route mode") ||
-        message.contains("Location centered") ||
-        message.contains("Please enter a location") ||
-        message.contains("Showing data for") ||
-        message.contains("Location found") ||
-        message.contains("Located") ||
-        message.contains("Your location") ||
-        message.contains("Map centered") ||
-        message.contains("Centering") ||
-        message.contains("Location services")) {
-      return; // Skip these frequent messages
     }
 
     ResponsiveSnackBar.showInfo(
@@ -540,29 +636,10 @@ class MapPageController extends ChangeNotifier {
   void showSuccessMessage(String message) {
     if (_isDisposed || _context == null) return; // Safety check
 
-    // Disable success snackbars on web platform
+    // Disable snackbars on web platform for map pages
     if (kIsWeb) {
       debugPrint("Map Success (Web): $message");
       return;
-    }
-
-    // Only show success messages for significant achievements, skip routine ones
-    if (message.contains("Found your location") ||
-        message.contains("Centered on your location") ||
-        message.contains("Location found") ||
-        message.contains("Route found") ||
-        message.contains("Route mode") ||
-        message.contains("Destination is") ||
-        message.contains("away") ||
-        message.contains("via") ||
-        message.contains("Distance:") ||
-        message.contains("Your location") ||
-        message.contains("Location centered") ||
-        message.contains("Map centered") ||
-        message.contains("Coordinates") ||
-        message.contains("Position") ||
-        message.contains("Navigation")) {
-      return; // Skip these frequent messages
     }
 
     ResponsiveSnackBar.showSuccess(
@@ -619,19 +696,26 @@ class MapPageController extends ChangeNotifier {
     if (_isDisposed) return; // Safety check
 
     showRoute = !showRoute;
+    debugPrint('🛣️ Route mode ${showRoute ? 'enabled' : 'disabled'}');
 
     if (!showRoute) {
       // Clear the route when disabling route mode
       route = [];
+      showInfoMessage("Route mode disabled");
     } else {
+      showInfoMessage("Route mode enabled");
       // Only fetch route if destination exists and route mode is enabled
       if (destination != null && currentLocation != null) {
+        debugPrint('🛣️ Destination exists, fetching route');
         // Small delay to improve user experience
         Future.delayed(const Duration(milliseconds: 100), () {
           if (!_isDisposed) {
             fetchRoute();
           }
         });
+      } else {
+        debugPrint('🛣️ No destination set yet. Search for a location first.');
+        showInfoMessage("Search for a destination to see the route");
       }
     }
     _safeNotifyListeners();
@@ -830,279 +914,5 @@ class MapPageController extends ChangeNotifier {
 
     // Calculate full route
     await fetchRoute();
-  }
-
-  /// Creates a direct route between current location and destination
-  /// This is used as a fallback when OSRM routing fails or no road route is available
-  void _createDirectRoute(double distance) {
-    if (currentLocation == null || destination == null) return;
-
-    debugPrint(
-        '🛣️ Creating direct route fallback (${distance.toStringAsFixed(1)}km)');
-
-    // Create a simple direct line with intermediate points for better visualization
-    final List<LatLng> directRoute = [];
-
-    // Add starting point
-    directRoute.add(currentLocation!);
-
-    // For longer distances, add intermediate points to make the line more visible
-    if (distance > 1.0) {
-      // More than 1km
-      final int segments = (distance / 2).ceil().clamp(2, 10); // 2-10 segments
-
-      for (int i = 1; i < segments; i++) {
-        final double ratio = i / segments;
-        final double lat = currentLocation!.latitude +
-            (destination!.latitude - currentLocation!.latitude) * ratio;
-        final double lng = currentLocation!.longitude +
-            (destination!.longitude - currentLocation!.longitude) * ratio;
-        directRoute.add(LatLng(lat, lng));
-      }
-    }
-
-    // Add destination point
-    directRoute.add(destination!);
-
-    // Update route
-    route = directRoute;
-
-    // Ensure markers and route are visible
-    showMarkersAndRoute = true;
-
-    // Notify listeners to update UI
-    _safeNotifyListeners();
-
-    debugPrint('🛣️ Direct route created with ${directRoute.length} points');
-  }
-
-  /// Try OpenRouteService (excellent for Europe/Middle East)
-  Future<bool> _tryOpenRouteService(
-      double lat1, double lon1, double lat2, double lon2) async {
-    try {
-      debugPrint('🗺️ Trying OpenRouteService...');
-
-      // Use the provided API key
-      final url = Uri.parse(
-          "https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf624827f445bd9c1d459ca5988d83cc9612fd&start=$lon1,$lat1&end=$lon2,$lat2");
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept':
-              'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
-        },
-      ).timeout(const Duration(seconds: 8));
-
-      debugPrint(
-          '🗺️ OpenRouteService response status: ${response.statusCode}');
-      if (response.statusCode != 200) {
-        debugPrint('❌ OpenRouteService error response: ${response.body}');
-        return false;
-      }
-
-      final data = json.decode(response.body);
-
-      if (data['features'] != null && (data['features'] as List).isNotEmpty) {
-        final geometry = data['features'][0]['geometry'];
-        if (geometry != null && geometry['coordinates'] != null) {
-          debugPrint('✅ OpenRouteService route found successfully!');
-          return _processOpenRouteServiceGeometry(
-              geometry['coordinates'], data);
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ OpenRouteService error: $e');
-    }
-    return false;
-  }
-
-  /// Try GraphHopper routing service
-  Future<bool> _tryGraphHopper(
-      double lat1, double lon1, double lat2, double lon2) async {
-    try {
-      debugPrint('🗺️ Trying GraphHopper...');
-
-      // Note: GraphHopper requires API key for production, skipping for now
-      // Instead, let's try a different approach - using OSRM with a different server
-      debugPrint(
-          '🗺️ GraphHopper requires API key, trying alternative OSRM server...');
-
-      // Try alternative OSRM server that might have better coverage
-      final coordinates = "$lon1,$lat1;$lon2,$lat2";
-      final url = Uri.parse(
-          "https://routing.openstreetmap.de/routed-car/route/v1/driving/$coordinates?overview=full&geometries=polyline");
-
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
-
-      debugPrint(
-          '🗺️ Alternative OSRM response status: ${response.statusCode}');
-      if (response.statusCode != 200) {
-        debugPrint('❌ Alternative OSRM error response: ${response.body}');
-        return false;
-      }
-
-      final data = json.decode(response.body);
-
-      if (data['code'] == 'Ok' &&
-          data['routes'] != null &&
-          (data['routes'] as List).isNotEmpty) {
-        final geometry = data['routes'][0]['geometry'];
-        if (geometry != null) {
-          return _processOSRMGeometry(geometry, data);
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ GraphHopper/Alternative OSRM error: $e');
-    }
-    return false;
-  }
-
-  /// Try OSRM routing service with multiple servers
-  Future<bool> _tryOSRM(
-      double lat1, double lon1, double lat2, double lon2) async {
-    // Try multiple OSRM servers for better coverage
-    final servers = [
-      'https://router.project-osrm.org', // Main OSRM server
-      'https://routing.openstreetmap.de/routed-car', // German server
-      'https://router.openstreetmap.fr', // French server
-    ];
-
-    for (final server in servers) {
-      try {
-        debugPrint('🗺️ Trying OSRM server: $server');
-
-        final coordinates = "$lon1,$lat1;$lon2,$lat2";
-        final url = Uri.parse(
-            "$server/route/v1/driving/$coordinates?overview=full&geometries=polyline");
-
-        final response =
-            await http.get(url).timeout(const Duration(seconds: 5));
-
-        debugPrint(
-            '🗺️ OSRM ($server) response status: ${response.statusCode}');
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-
-          if (data['code'] == 'Ok' &&
-              data['routes'] != null &&
-              (data['routes'] as List).isNotEmpty) {
-            final geometry = data['routes'][0]['geometry'];
-            if (geometry != null) {
-              debugPrint('✅ Route found using OSRM server: $server');
-              return _processOSRMGeometry(geometry, data);
-            }
-          } else {
-            debugPrint(
-                '❌ OSRM ($server) no route found: ${data['code']} - ${data['message']}');
-          }
-        } else {
-          debugPrint('❌ OSRM ($server) error response: ${response.body}');
-        }
-      } catch (e) {
-        debugPrint('❌ OSRM ($server) error: $e');
-        continue; // Try next server
-      }
-    }
-    return false;
-  }
-
-  /// Process OpenRouteService geometry (GeoJSON LineString)
-  bool _processOpenRouteServiceGeometry(
-      List coordinates, Map<String, dynamic> data) {
-    try {
-      route.clear();
-
-      for (final coord in coordinates) {
-        if (coord is List && coord.length >= 2) {
-          final lng = coord[0].toDouble();
-          final lat = coord[1].toDouble();
-          route.add(LatLng(lat, lng));
-        }
-      }
-
-      if (route.isNotEmpty) {
-        _finalizeRoute(data, 'OpenRouteService');
-        return true;
-      }
-    } catch (e) {
-      debugPrint('❌ Error processing OpenRouteService geometry: $e');
-    }
-    return false;
-  }
-
-  /// Process OSRM geometry (encoded polyline)
-  bool _processOSRMGeometry(String encodedPolyline, Map<String, dynamic> data) {
-    try {
-      _decodePolyline(encodedPolyline);
-
-      if (route.isNotEmpty) {
-        _finalizeRoute(data, 'OSRM');
-        return true;
-      }
-    } catch (e) {
-      debugPrint('❌ Error processing OSRM geometry: $e');
-    }
-    return false;
-  }
-
-  /// Finalize route processing and update UI
-  void _finalizeRoute(Map<String, dynamic> data, String serviceName) {
-    // Ensure showMarkersAndRoute is enabled
-    showMarkersAndRoute = true;
-
-    // Notify listeners to update the UI
-    _safeNotifyListeners();
-
-    // Show success message
-    String distanceInfo = '';
-    try {
-      // Try to get distance from different service formats
-      if (serviceName == 'OSRM' && data['routes'] != null) {
-        final distanceM = data['routes'][0]['distance']?.toDouble() ?? 0.0;
-        distanceInfo = ' Distance: ${(distanceM / 1000).toStringAsFixed(1)}km';
-      } else if (serviceName == 'GraphHopper' && data['paths'] != null) {
-        final distanceM = data['paths'][0]['distance']?.toDouble() ?? 0.0;
-        distanceInfo = ' Distance: ${(distanceM / 1000).toStringAsFixed(1)}km';
-      } else if (serviceName == 'OpenRouteService' &&
-          data['features'] != null) {
-        final props = data['features'][0]['properties'];
-        final distanceM =
-            props?['segments']?[0]?['distance']?.toDouble() ?? 0.0;
-        if (distanceM > 0) {
-          distanceInfo =
-              ' Distance: ${(distanceM / 1000).toStringAsFixed(1)}km';
-        }
-      }
-    } catch (e) {
-      // Ignore distance calculation errors
-    }
-
-    showSuccessMessage('Route found via $serviceName!$distanceInfo');
-
-    // Fit map bounds to show entire route
-    _fitRouteBounds();
-  }
-
-  /// Fit map camera to show the entire route
-  Future<void> _fitRouteBounds() async {
-    if (route.isNotEmpty && !_isDisposed) {
-      final bounds = LatLngBounds.fromPoints(route);
-      await _mapReadyCompleter.future;
-      if (!_isDisposed) {
-        try {
-          mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(50.0),
-              maxZoom: 15,
-            ),
-          );
-        } catch (e) {
-          // Ignore map fitting errors
-        }
-      }
-    }
   }
 }

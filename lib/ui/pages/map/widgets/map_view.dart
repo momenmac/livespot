@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/services/api/account/api_urls.dart';
-import 'package:flutter_application_2/ui/pages/map/widgets/custom_event_marker.dart';
 import 'package:flutter_application_2/ui/pages/map/map_controller.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
-import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 
 class MapView extends StatelessWidget {
   final MapPageController controller;
@@ -73,30 +71,24 @@ class MapWidget extends StatelessWidget {
             'User-Agent': 'Flutter Application 6/1.0',
           },
         ),
+        // Route layer (rendered before markers so markers appear on top)
+        PolylineLayer(
+          polylines: [
+            if (mapController.showMarkersAndRoute &&
+                mapController.route.isNotEmpty)
+              Polyline(
+                points: mapController.route,
+                color: Colors.blue,
+                strokeWidth: 4.0,
+              ),
+          ],
+        ),
         // Custom markers from the map page
         if (customMarkers != null && customMarkers!.isNotEmpty)
           MarkerLayer(markers: customMarkers!),
-        // Standard markers from controller
+        // Standard markers from controller (destination and current location)
         MarkerLayer(
           markers: [
-            if (mapController.showMarkersAndRoute &&
-                mapController.destination != null)
-              Marker(
-                point: mapController.destination!,
-                child: CustomEventMarker.forEvent(
-                  location: mapController.destination!,
-                  eventType: mapController.markerEventType,
-                  onTap: () {
-                    // Show info about the marker when tapped
-                    if (mapController.markerDescription != null) {
-                      ResponsiveSnackBar.showInfo(
-                        context: context,
-                        message: mapController.markerDescription!,
-                      );
-                    }
-                  },
-                ),
-              ),
             if (mapController.showMarkersAndRoute &&
                 mapController.currentLocation != null)
               Marker(
@@ -148,16 +140,40 @@ class MapWidget extends StatelessWidget {
                   ),
                 ),
               ),
-          ],
-        ),
-        PolylineLayer(
-          polylines: [
+            // Destination marker (placed after current location to appear on top)
             if (mapController.showMarkersAndRoute &&
-                mapController.route.isNotEmpty)
-              Polyline(
-                points: mapController.route,
-                color: Colors.blue,
-                strokeWidth: 4.0,
+                mapController.destination != null)
+              Marker(
+                point: mapController.destination!,
+                child: Container(
+                  height: 48, // Larger than standard markers
+                  width: 48,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.red.shade600, Colors.red.shade400],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(0.5),
+                        blurRadius: 12,
+                        spreadRadius: 3,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 3,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.place,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
               ),
           ],
         ),

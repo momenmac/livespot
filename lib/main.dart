@@ -652,9 +652,6 @@ class _MyAppState extends State<MyApp> {
 
   void _navigateTo(String routeName) {
     final currentRoute = NavigationService().currentRoute;
-    developer.log(
-        'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}, currentRoute=$currentRoute',
-        name: 'AuthNavigateDebug');
 
     // Special handling for logout navigation to initial route
     final isLogoutNavigation = !widget.accountProvider.isAuthenticated &&
@@ -664,30 +661,22 @@ class _MyAppState extends State<MyApp> {
     // Defensive exit conditions to prevent navigation flood
     // 1. Check if already navigating, but make an exception for logout
     if (_isNavigating && !isLogoutNavigation) {
-      developer.log('Navigation skipped: already navigating',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // 2. Check if already at the target route
     if (currentRoute == routeName) {
-      developer.log('Navigation skipped: already at $routeName',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // 3. Check if just navigated to this route (prevents bouncing)
     // Exception for logout navigation
     if (_lastNavigatedRoute == routeName && !isLogoutNavigation) {
-      developer.log('Navigation skipped: just navigated to $routeName',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // Don't check auth state transition for logout navigation
     if (widget.accountProvider.inAuthStateTransition && !isLogoutNavigation) {
-      developer.log('Navigation deferred: auth state transition in progress',
-          name: 'AuthNavigateDebug');
       // Schedule deferred navigation after transition completes
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_isNavigating && mounted) {
@@ -699,9 +688,6 @@ class _MyAppState extends State<MyApp> {
 
     // For logout navigation, reset the navigation service's throttling
     if (isLogoutNavigation) {
-      developer.log(
-          'Forcing logout navigation to $routeName - resetting navigation flags',
-          name: 'AuthNavigateDebug');
       NavigationService().reset();
     }
 
@@ -845,14 +831,9 @@ class FirebaseHelper {
   }
 
   static void printStatus() {
-    if (isAvailable) {
-      print('======================================');
-      print('✅ FIREBASE STATUS CHECK: ACTIVE & WORKING! ✅');
-      print('======================================');
-    } else {
-      print('======================================');
-      print('❌ FIREBASE STATUS CHECK: NOT AVAILABLE ❌');
-      print('======================================');
+    // Reduced logging noise - only log errors or first-time status
+    if (!isAvailable) {
+      print('❌ FIREBASE STATUS: NOT AVAILABLE');
     }
   }
 }
