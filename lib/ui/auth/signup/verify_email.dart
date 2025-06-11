@@ -13,6 +13,7 @@ import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
+import 'package:flutter_application_2/services/firebase_messaging_service.dart';
 import 'package:provider/provider.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -160,13 +161,23 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
           // CRITICAL FIX: Check if user is already authenticated
           // If they are, go to home. If not, go to login.
-          Future.delayed(const Duration(milliseconds: 500), () {
+          Future.delayed(const Duration(milliseconds: 500), () async {
             if (mounted) {
               final accountProvider =
                   Provider.of<AccountProvider>(context, listen: false);
               if (accountProvider.isAuthenticated) {
                 print(
-                    '✅ User verified and authenticated - redirecting to home');
+                    '✅ User verified and authenticated - registering FCM token and redirecting to home');
+
+                // Register FCM token now that the user is fully verified and authenticated
+                try {
+                  await FirebaseMessagingService.registerToken();
+                  print('✅ FCM token registered after email verification');
+                } catch (e) {
+                  print(
+                      '⚠️ Error registering FCM token after verification: $e');
+                }
+
                 NavigationService().replaceAllWith(AppRoutes.home);
               } else {
                 print(

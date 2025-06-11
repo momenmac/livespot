@@ -195,13 +195,14 @@ class AccountProvider extends ChangeNotifier {
             user: result['user'] as Account,
           );
 
-          // Re-initialize FCM token registration after successful login
+          // Register FCM token after successful login
           try {
-            await FirebaseMessagingService.initialize();
-            developer.log('FCM token service re-initialized after login',
+            // Use the explicit registration method instead of just initialization
+            await FirebaseMessagingService.registerToken();
+            developer.log('FCM token registered after successful login',
                 name: 'AccountProvider');
           } catch (e) {
-            developer.log('Error initializing FCM token service: $e',
+            developer.log('Error registering FCM token: $e',
                 name: 'AccountProvider');
           }
 
@@ -433,13 +434,13 @@ class AccountProvider extends ChangeNotifier {
             user: result['user'] as Account,
           );
 
-          // Re-initialize FCM token registration after successful registration
+          // Register FCM token after successful registration
           try {
-            await FirebaseMessagingService.initialize();
-            developer.log('FCM token service initialized after registration',
+            await FirebaseMessagingService.registerToken();
+            developer.log('FCM token registered after registration',
                 name: 'AccountProvider');
           } catch (e) {
-            developer.log('Error initializing FCM token service: $e',
+            developer.log('Error registering FCM token: $e',
                 name: 'AccountProvider');
           }
         }
@@ -706,13 +707,13 @@ class AccountProvider extends ChangeNotifier {
             user: result['user'] as Account,
           );
 
-          // Re-initialize FCM token registration after successful Google login
+          // Register FCM token after successful Google login
           try {
-            await FirebaseMessagingService.initialize();
-            developer.log('FCM token service re-initialized after Google login',
+            await FirebaseMessagingService.registerToken();
+            developer.log('FCM token registered after Google login',
                 name: 'AccountProvider');
           } catch (e) {
-            developer.log('Error initializing FCM token service: $e',
+            developer.log('Error registering FCM token: $e',
                 name: 'AccountProvider');
           }
         }

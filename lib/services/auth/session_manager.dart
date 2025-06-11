@@ -16,6 +16,14 @@ enum SessionState {
   error,
 }
 
+// Special events to notify listeners about important authentication state changes
+enum SessionEvent {
+  sessionAuthenticated,
+  sessionRefreshed,
+  sessionExpired,
+  userUpdated,
+}
+
 class SessionManager {
   // Singleton instance
   static final SessionManager _instance = SessionManager._internal();
@@ -27,6 +35,11 @@ class SessionManager {
   final StreamController<SessionState> _stateController =
       StreamController<SessionState>.broadcast();
   Stream<SessionState> get onStateChanged => _stateController.stream;
+
+  // Add a dedicated stream for session events
+  final StreamController<SessionEvent> _eventController =
+      StreamController<SessionEvent>.broadcast();
+  Stream<SessionEvent> get onSessionEvent => _eventController.stream;
 
   // Session data
   Account? _user;
@@ -120,11 +133,19 @@ class SessionManager {
     _stateController.add(newState);
   }
 
+  // Fire a session event
+  void _fireSessionEvent(SessionEvent event) {
+    _eventController.add(event);
+  }
+
   // Set session with token and user
   void setSession({required JwtToken token, required Account user}) {
     _tokenManager.setToken(token);
     _user = user;
     _setState(SessionState.authenticated);
+
+    // Fire a session authenticated event
+    _fireSessionEvent(SessionEvent.sessionAuthenticated);
   }
 
   // Set user data
@@ -132,6 +153,9 @@ class SessionManager {
     _user = user;
     if (_state != SessionState.authenticated && _tokenManager.isAuthenticated) {
       _setState(SessionState.authenticated);
+      _fireSessionEvent(SessionEvent.sessionAuthenticated);
+    } else {
+      _fireSessionEvent(SessionEvent.userUpdated);
     }
     _stateController.add(_state); // Notify of user data change
   }

@@ -220,8 +220,17 @@ Future<void> main() async {
     // Initialize Firebase Messaging and related services (only once, after Firebase core is ready)
     if (_isFirebaseInitialized) {
       try {
+        // Initialize Firebase Messaging first
         await FirebaseMessagingService.initialize();
         print('✅ Firebase Messaging initialized successfully');
+
+        // If the user is already authenticated, attempt to register the FCM token explicitly
+        final accountProvider = AccountProvider();
+        if (accountProvider.isAuthenticated) {
+          print(
+              '🔑 User is already authenticated at startup, registering FCM token');
+          await FirebaseMessagingService.registerToken();
+        }
 
         // Initialize ActionConfirmationService with NavigationService's navigator key
         ActionConfirmationService.initialize(NavigationService().navigatorKey);
