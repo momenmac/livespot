@@ -305,27 +305,59 @@ class _ChatDetailPageState extends State<ChatDetailPage>
       if (mounted && snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
         if (data.containsKey('typingUsers') && data['typingUsers'] != null) {
-          final typingUsersMap =
-              Map<String, dynamic>.from(data['typingUsers'] ?? {});
-          final currentUserId = _controller.currentUserId;
+          try {
+            debugPrint('[Typing] Processing typing users data...');
 
-          // Check if AI is typing (for AI conversations)
-          final isAIChat = _controller.isAIConversation(widget.conversation);
-          final aiAssistantId = GeminiAIService().aiAssistantId;
+            // Handle both Map and List formats for backwards compatibility
+            Map<String, dynamic> typingUsersMap = {};
 
-          setState(() {
-            if (isAIChat) {
-              // For AI conversations, check if AI assistant is typing
-              isTyping = typingUsersMap.containsKey(aiAssistantId) &&
-                  typingUsersMap[aiAssistantId] == true;
+            if (data['typingUsers'] is Map) {
+              // If it's already a Map, just cast it
+              typingUsersMap = Map<String, dynamic>.from(data['typingUsers']);
+              debugPrint('[Typing] Received typing users as Map format');
+            } else if (data['typingUsers'] is List) {
+              // If it's a List, convert to a Map
+              final typingList = List<dynamic>.from(data['typingUsers']);
+
+              // Convert list to map where each user in the list is marked as typing
+              for (final userId in typingList) {
+                if (userId is String) {
+                  typingUsersMap[userId] = true;
+                }
+              }
+              debugPrint(
+                  '[Typing] Converted typing users from List to Map format: $typingUsersMap');
             } else {
-              // For regular conversations, check if any other user is typing
-              isTyping = typingUsersMap.keys.any((id) =>
-                  id != currentUserId &&
-                  typingUsersMap[id] == true &&
-                  widget.conversation.participants.any((u) => u.id == id));
+              // Fallback to empty map if format is unexpected
+              debugPrint(
+                  '[Typing] Unexpected typing users format: ${data['typingUsers'].runtimeType}');
             }
-          });
+
+            final currentUserId = _controller.currentUserId;
+
+            // Check if AI is typing (for AI conversations)
+            final isAIChat = _controller.isAIConversation(widget.conversation);
+            final aiAssistantId = GeminiAIService().aiAssistantId;
+
+            setState(() {
+              if (isAIChat) {
+                // For AI conversations, check if AI assistant is typing
+                isTyping = typingUsersMap.containsKey(aiAssistantId) &&
+                    typingUsersMap[aiAssistantId] == true;
+              } else {
+                // For regular conversations, check if any other user is typing
+                isTyping = typingUsersMap.keys.any((id) =>
+                    id != currentUserId &&
+                    typingUsersMap[id] == true &&
+                    widget.conversation.participants.any((u) => u.id == id));
+              }
+            });
+          } catch (error) {
+            debugPrint('[Typing] Error processing typing data: $error');
+            setState(() {
+              isTyping = false;
+            });
+          }
         } else {
           setState(() {
             isTyping = false;
@@ -688,7 +720,7 @@ class _ChatDetailPageState extends State<ChatDetailPage>
 
     // If URL starts with file:/// - convert to proper HTTP URL
     if (url.startsWith('file:///')) {
-      // Replace file:/// with the actual server base URL from ApiUrls
+      // Replace file:///with the actual server base URL from ApiUrls
       return '${ApiUrls.baseUrl}${url.substring(7)}';
     }
 
@@ -787,11 +819,15 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                   ? null
                   : () => _navigateToUserProfile(otherParticipant),
               child: CircleAvatar(
-                backgroundColor: isAIChat 
+                backgroundColor: isAIChat
                     ? (isDarkMode ? Colors.grey[800] : Colors.grey[200])
                     : null,
-                backgroundImage: !isAIChat && _getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name).isNotEmpty
-                    ? NetworkImage(_getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name))
+                backgroundImage: !isAIChat &&
+                        _getValidAvatarUrl(otherParticipant.avatarUrl,
+                                otherParticipant.name)
+                            .isNotEmpty
+                    ? NetworkImage(_getValidAvatarUrl(
+                        otherParticipant.avatarUrl, otherParticipant.name))
                     : null,
                 child: isAIChat
                     ? Icon(
@@ -799,7 +835,9 @@ class _ChatDetailPageState extends State<ChatDetailPage>
                         color: isDarkMode ? Colors.white : Colors.black87,
                         size: 24,
                       )
-                    : (_getValidAvatarUrl(otherParticipant.avatarUrl, otherParticipant.name).isEmpty
+                    : (_getValidAvatarUrl(otherParticipant.avatarUrl,
+                                otherParticipant.name)
+                            .isEmpty
                         ? Text(otherParticipant.name.isNotEmpty
                             ? otherParticipant.name[0].toUpperCase()
                             : '?')

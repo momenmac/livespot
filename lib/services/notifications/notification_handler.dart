@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_2/constants/theme_constants.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../action_confirmation_service.dart';
 import '../database/notification_database_service.dart';
@@ -653,7 +654,7 @@ class NotificationHandler {
     } else {
       // For foreground notifications, show a single in-app notification
       // The FCM system notification is handled separately, so we only show one here
-      
+
       // Avoid showing duplicate notifications by checking if this is a repeated message
       String notificationBody = data.body;
       if (data.messageType == 'image') {
@@ -661,27 +662,85 @@ class NotificationHandler {
       } else if (data.messageType == 'file') {
         notificationBody = '📎 Sent a file';
       }
-      
-      // Use the notification popup instead of snackbar for better positioning and less duplication
-      final navigatorContext = NavigationService().navigatorKey.currentContext;
-      if (navigatorContext != null) {
-        // Show a top notification popup instead of bottom snackbar
-        debugPrint('💬 Showing message notification popup at top');
-        NotificationPopup.show(
-          context: navigatorContext,
-          title: data.fromUserName,
-          message: notificationBody,
-          icon: Icons.message,
-          duration: const Duration(seconds: 3), // Shorter duration for messages
-          onTap: () {
-            // Navigate to conversation when tapped
-            if (data.conversationId.isNotEmpty) {
-              NavigationService().navigateTo('/messages/${data.conversationId}');
-            } else {
-              NavigationService().navigateTo(AppRoutes.messages);
-            }
-          },
-        );
+
+      debugPrint('💬 Showing message notification');
+
+      // Use the direct ScaffoldMessenger approach for most reliable display
+      try {
+        final navigatorContext =
+            NavigationService().navigatorKey.currentContext;
+        if (navigatorContext != null) {
+          try {
+            // Try using ScaffoldMessenger directly first
+            final scaffoldMessenger = ScaffoldMessenger.of(navigatorContext);
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.message,
+                        color: ThemeConstants.primaryColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data.fromUserName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            notificationBody,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+                margin: EdgeInsets.only(
+                  left: 16.0,
+                  top: 0,
+                  right: 16.0,
+                  bottom: MediaQuery.of(navigatorContext).size.height - 275,
+                ),
+                action: SnackBarAction(
+                  label: 'Reply',
+                  onPressed: () {
+                    // Navigate to conversation when tapped
+                    if (data.conversationId.isNotEmpty) {
+                      NavigationService()
+                          .navigateTo('/messages/${data.conversationId}');
+                    } else {
+                      NavigationService().navigateTo(AppRoutes.messages);
+                    }
+                  },
+                ),
+              ),
+            );
+            return;
+          } catch (e) {
+            debugPrint('❌ Failed to show SnackBar: $e');
+            // Fall back to global notification service
+            GlobalNotificationService()
+                .showInfo('${data.fromUserName}: $notificationBody');
+          }
+        } else {
+          debugPrint('❌ No navigator context available for notification');
+          // Fall back to global notification service
+          GlobalNotificationService()
+              .showInfo('${data.fromUserName}: $notificationBody');
+        }
+      } catch (e) {
+        debugPrint('❌ Error showing message notification: $e');
+        // Last resort fallback
+        GlobalNotificationService()
+            .showInfo('${data.fromUserName}: $notificationBody');
       }
     }
     debugPrint('💬 === MESSAGE NOTIFICATION HANDLING COMPLETED ===');
@@ -811,19 +870,80 @@ class NotificationHandler {
 
   /// Show snackbar message at the top instead of bottom
   static void _showSnackBar(String message) {
-    // Use top-positioned notification instead of bottom snackbar
-    final navigatorContext = NavigationService().navigatorKey.currentContext;
-    if (navigatorContext != null) {
-      NotificationPopup.show(
-        context: navigatorContext,
-        title: 'Notification',
-        message: message,
-        icon: Icons.info,
-        duration: const Duration(seconds: 3),
-      );
-    } else {
-      // Fallback to global notification service if context not available
-      GlobalNotificationService().showInfo(message);
+    try {
+      // First try using NavigationService context
+      final navigatorContext = NavigationService().navigatorKey.currentContext;
+      if (navigatorContext != null) {
+        try {
+          // Try using ScaffoldMessenger directly first
+          final scaffoldMessenger = ScaffoldMessenger.of(navigatorContext);
+          final mediaQuery = MediaQuery.of(navigatorContext);
+
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(message),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              margin: EdgeInsets.only(
+                left: 16.0,
+                top: 16.0 + mediaQuery.padding.top, // Position at top
+                right: 16.0,
+                bottom: 0.0, // Explicitly set bottom to 0
+              ),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                onPressed: () {
+                  scaffoldMessenger.hideCurrentSnackBar();
+                },
+              ),
+            ),
+          );
+          return;
+        } catch (scaffoldError) {
+          debugPrint('Failed to use ScaffoldMessenger: $scaffoldError');
+
+          // Then try NotificationPopup
+          try {
+            NotificationPopup.show(
+              context: navigatorContext,
+              title: 'Notification',
+              message: message,
+              icon: Icons.info,
+              duration: const Duration(seconds: 3),
+            );
+            return;
+          } catch (popupError) {
+            debugPrint('Failed to show NotificationPopup: $popupError');
+          }
+        }
+      }
+
+      // Fallback to global notification service which has its own scaffoldMessengerKey
+      try {
+        GlobalNotificationService().showInfo(message);
+      } catch (globalError) {
+        debugPrint('Failed to use GlobalNotificationService: $globalError');
+
+        // Last resort: try to use any available ScaffoldMessengerState
+        final globalKey = GlobalNotificationService().scaffoldMessengerKey;
+        if (globalKey.currentState != null) {
+          try {
+            globalKey.currentState!.showSnackBar(
+              SnackBar(
+                content: Text(message),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+                margin: const EdgeInsets.fromLTRB(
+                    16.0, 16.0, 16.0, 0), // Position at top
+              ),
+            );
+          } catch (finalError) {
+            debugPrint('All notification fallbacks failed: $finalError');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to show notification: $e');
     }
   }
 

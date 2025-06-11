@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 
 /// A global set to track active notification popups and prevent duplicates
 final Set<String> _activePopups = <String>{};
@@ -147,14 +148,83 @@ class NotificationPopup extends StatelessWidget {
     try {
       // Create unique identifier to prevent duplicates
       final popupId = '${title}_${message}';
-      
+
       // Prevent duplicate popups
       if (_activePopups.contains(popupId)) {
         debugPrint('Duplicate notification popup prevented: $popupId');
         return;
       }
 
-      OverlayState overlayState = Overlay.of(context);
+      // Try to find an overlay. If not available, fall back to ScaffoldMessenger
+      OverlayState? overlayState;
+      try {
+        overlayState = Overlay.of(context);
+      } catch (e) {
+        debugPrint(
+            'No Overlay widget found. Falling back to ScaffoldMessenger: $e');
+        // Fall back to SnackBar when Overlay is not available
+        try {
+          final scaffoldMessenger = ScaffoldMessenger.of(context);
+          final mediaQuery = MediaQuery.of(context);
+
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          message,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: duration,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                onPressed: () {
+                  scaffoldMessenger.hideCurrentSnackBar();
+                  onDismiss?.call();
+                },
+              ),
+              margin: EdgeInsets.only(
+                left: 16.0,
+                top: 16.0 + mediaQuery.padding.top, // Position from top
+                right: 16.0,
+                bottom: 0.0, // Set to 0 to position at top
+              ),
+            ),
+          );
+        } catch (snackbarError) {
+          debugPrint('Also failed to show SnackBar: $snackbarError');
+          // Final fallback - try GlobalNotificationService directly
+          try {
+            GlobalNotificationService().showInfo(message);
+          } catch (finalError) {
+            debugPrint('All notification methods failed: $finalError');
+          }
+        }
+        return;
+      }
+
       OverlayEntry? entry;
 
       // Mark popup as active
@@ -183,15 +253,28 @@ class NotificationPopup extends StatelessWidget {
         },
       );
 
+      // Insert the entry into the overlay
       overlayState.insert(entry);
 
       // Auto dismiss after specified duration
       Future.delayed(duration, () {
-        entry?.remove();
-        _activePopups.remove(popupId);
+        try {
+          entry?.remove();
+          _activePopups.remove(popupId);
+        } catch (e) {
+          debugPrint('Error removing overlay entry: $e');
+        }
       });
     } catch (e) {
       debugPrint('Error showing notification popup: $e');
+      // Last resort - directly use GlobalNotificationService
+      try {
+        // Show a fallback notification
+        GlobalNotificationService().showInfo(message);
+      } catch (finalError) {
+        debugPrint(
+            'Failed to show notification through any method: $finalError');
+      }
     }
   }
 }

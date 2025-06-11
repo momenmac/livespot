@@ -25,6 +25,7 @@ import 'package:flutter_application_2/services/action_confirmation_service.dart'
 import 'package:flutter_application_2/services/notifications/notification_handler.dart';
 import 'package:flutter_application_2/services/api/notification_api_service.dart';
 import 'package:flutter_application_2/ui/pages/notification/notification_settings_controller.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -766,6 +767,9 @@ class _MyAppState extends State<MyApp> {
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],
+            // Use GlobalNotificationService's scaffoldMessengerKey for consistent SnackBar access
+            scaffoldMessengerKey:
+                GlobalNotificationService().scaffoldMessengerKey,
             builder: (context, child) {
               if (!firebaseStatus.isInitialized) {
                 print(
@@ -775,15 +779,17 @@ class _MyAppState extends State<MyApp> {
               return MediaQuery(
                 data: MediaQuery.of(context)
                     .copyWith(textScaler: TextScaler.linear(1.0)),
-                child: GestureDetector(
-                  onTap: () {
-                    FocusScopeNode currentFocus = FocusScope.of(context);
-                    if (!currentFocus.hasPrimaryFocus &&
-                        currentFocus.focusedChild != null) {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                    }
-                  },
-                  child: child!,
+                child: Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () {
+                      FocusScopeNode currentFocus = FocusScope.of(context);
+                      if (!currentFocus.hasPrimaryFocus &&
+                          currentFocus.focusedChild != null) {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                      }
+                    },
+                    child: child!,
+                  ),
                 ),
               );
             },
