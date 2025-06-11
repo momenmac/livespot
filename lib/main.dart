@@ -551,6 +551,15 @@ class _MyAppState extends State<MyApp> {
     final isAtInitial = currentRoute == AppRoutes.initial ||
         currentRoute == null ||
         currentRoute == '/';
+    final isAtVerifyEmail = currentRoute == AppRoutes.verifyEmail;
+
+    // CRITICAL FIX: Don't interfere if user is on verification screen
+    if (isAtVerifyEmail) {
+      developer.log(
+          'User is on verification screen, skipping auth state processing to prevent interference',
+          name: 'AuthListener');
+      return;
+    }
 
     // Start location event monitor if user is authenticated
     if (isAuthenticated && isEmailVerified) {
@@ -599,8 +608,21 @@ class _MyAppState extends State<MyApp> {
       developer.log('👤 Auth state changed after initialization.',
           name: 'AuthListener');
 
+      // CRITICAL FIX: Add special handling for email verification completion
+      // If user just became verified, wait a moment before redirecting to allow UI to settle
       if (isAuthenticated && isEmailVerified && !isAtHome) {
-        _navigateTo(AppRoutes.home);
+        developer.log('User is authenticated and verified, redirecting to home',
+            name: 'AuthListener');
+
+        // Add a small delay to prevent conflicts with VerifyEmailScreen navigation
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted &&
+              widget.accountProvider.isAuthenticated &&
+              widget.accountProvider.isEmailVerified &&
+              NavigationService().currentRoute != AppRoutes.home) {
+            _navigateTo(AppRoutes.home);
+          }
+        });
       } else if (!isAuthenticated && (!isAtInitial && !isAtAuthRoute)) {
         developer.log(
             'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
@@ -681,7 +703,7 @@ class _MyAppState extends State<MyApp> {
     if (!isLogoutNavigation) {
       widget.accountProvider.beginAuthStateTransition();
     }
- 
+
     // Execute the navigation with a delay to ensure UI stability
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted && NavigationService().navigatorKey.currentState != null) {

@@ -604,15 +604,34 @@ class AccountProvider extends ChangeNotifier {
       print('🌐 Request body: {"code": "$code"}');
       print('🌐 Response status: ${response.statusCode}');
       print('🌐 Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        // Optionally update user state here
-        await _fetchUserProfile();
+        print('✅ Email verification successful!');
+
+        // CRITICAL FIX: Update user verification status immediately
+        if (_sessionManager.user != null) {
+          final updatedUser = _sessionManager.user!.copyWith(isVerified: true);
+          _sessionManager.setUser(updatedUser);
+          print('✅ Updated user verification status locally');
+        }
+
+        // Try to fetch fresh profile data, but don't fail verification if it doesn't work
+        try {
+          await _fetchUserProfile();
+          print('✅ Profile fetch after verification successful');
+        } catch (profileError) {
+          print('⚠️ Profile fetch after verification failed: $profileError');
+          print('⚠️ This is not critical - verification was still successful');
+        }
+
         return true;
       } else {
+        print(
+            '❌ Email verification failed with status: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('Verify email error: $e');
+      print('❌ Verify email error: $e');
       return false;
     } finally {
       _isLoading = false;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_application_2/services/utils/navigation_service.dart';
+import 'package:flutter_application_2/routes/route_guard.dart';
 
 class AppRouteObserver extends NavigatorObserver {
   static String? _currentRouteName;
@@ -29,6 +30,9 @@ class AppRouteObserver extends NavigatorObserver {
       );
       // _updateRoute should already handle setting the name if available.
     }
+
+    // Reset route guard debounce after successful navigation
+    RouteGuard.resetNavigationDebounce();
   }
 
   @override
@@ -49,6 +53,9 @@ class AppRouteObserver extends NavigatorObserver {
       'NAV OBSERVER: Replaced route "${oldRoute?.settings.name}" with "${newRoute?.settings.name}". Current is now "$_currentRouteName"',
       name: 'RouteObserver',
     );
+
+    // Reset route guard debounce after successful navigation
+    RouteGuard.resetNavigationDebounce();
   }
 
   @override

@@ -28,6 +28,17 @@ class RouteGuard {
     AppRoutes.networkTest,
   ];
 
+  // Navigation debounce mechanism
+  static String? _lastProcessedRoute;
+  static DateTime? _lastNavigationTime;
+  static const Duration _navigationDebounceDelay = Duration(milliseconds: 100);
+
+  /// Reset the navigation debounce - call this when navigation completes successfully
+  static void resetNavigationDebounce() {
+    _lastProcessedRoute = null;
+    _lastNavigationTime = null;
+  }
+
   static bool isProtectedRoute(String routeName) {
     return _protectedRoutes.contains(routeName);
   }
@@ -80,57 +91,171 @@ class RouteGuard {
   }
 
   static void handleRouteSecurity(BuildContext context, String routeName) {
-    Future.microtask(() async {
-      final bool isAuthenticated = await RouteGuard.isAuthenticated();
-      final NavigationService nav = NavigationService();
-      final sessionManager = SessionManager();
+    // CRITICAL FIX: If we're accessing the verification screen, don't process security checks at all
+    // This prevents endless redirects when users are already on the verification screen
+    if (routeName == AppRoutes.verifyEmail) {
+      print(
+          '🔒 RouteGuard: Accessing verification screen, bypassing security checks to prevent loops');
+      return;
+    }
 
-      // Exit early if already at the route we're checking
-      if (nav.currentRoute == routeName) {
-        return;
-      }
+    // More aggressive debouncing to prevent rapid navigation cycles
+    final now = DateTime.now();
+    if (_lastNavigationTime != null &&
+        now.difference(_lastNavigationTime!) <
+            const Duration(milliseconds: 1000)) {
+      print(
+          '🔒 RouteGuard: Debouncing navigation request for $routeName (too soon)');
+      return;
+    }
 
-      if (isPublicRoute(routeName)) {
-        return;
-      }
+    // Check if we're already processing this same route
+    if (_lastProcessedRoute == routeName) {
+      print('🔒 RouteGuard: Already processed route $routeName, skipping');
+      return;
+    }
 
-      if (isProtectedRoute(routeName) && !isAuthenticated) {
+    print('🔒 RouteGuard: Processing security check for $routeName');
+    _lastNavigationTime = now;
+
+    // Use a longer delay to allow route transitions to fully complete
+    Future.delayed(const Duration(milliseconds: 300), () async {
+      if (!context.mounted) {
         print(
-            '🔒 Unauthorized access attempt to $routeName, redirecting to login');
+            '🔒 RouteGuard: Context no longer mounted, aborting security check');
+        _lastProcessedRoute = null;
+        return;
+      }
 
-        // Only show warning if the context is still valid and mounted
-        if (context.mounted) {
-          try {
-            GlobalNotificationService()
-                .showWarning("Please login to access this feature");
-          } catch (e) {
-            print('⚠️ Could not show login required message: $e');
+      try {
+        final bool isAuthenticated = await RouteGuard.isAuthenticated();
+        final NavigationService nav = NavigationService();
+        final sessionManager = SessionManager();
+
+        // Get current route more reliably
+        String? currentRoute;
+        try {
+          final currentContext = nav.navigatorKey.currentContext;
+          if (currentContext != null) {
+            final modalRoute = ModalRoute.of(currentContext);
+            currentRoute = modalRoute?.settings.name;
           }
+          // Fallback to navigation service if modal route is null
+          currentRoute ??= nav.currentRoute;
+        } catch (e) {
+          print('🔒 RouteGuard: Error getting current route: $e');
+          currentRoute = nav.currentRoute;
         }
-        nav.replaceAllWith(AppRoutes.login);
-      } else if (isAuthRoute(routeName) && isAuthenticated) {
+
         print(
-            '🔒 Authenticated user trying to access $routeName, redirecting to home');
-        // Avoid redirecting if already at home
-        if (nav.currentRoute != AppRoutes.home) {
-          nav.replaceTo(AppRoutes.home);
+            '🔒 RouteGuard: Checking route $routeName (current: $currentRoute, authenticated: $isAuthenticated)');
+
+        // CRITICAL: If current route is verification screen, don't redirect again
+        if (currentRoute == AppRoutes.verifyEmail) {
+          print(
+              '🔒 RouteGuard: Currently on verification screen, avoiding redirect loops');
+          _lastProcessedRoute = routeName;
+          return;
         }
-      } else if (isAuthenticated) {
-        // NEW: Check email verification status
-        if (sessionManager.isEmailVerified) {
-          // Only navigate if not already at home
-          if (routeName != AppRoutes.home &&
-              nav.currentRoute != AppRoutes.home) {
-            nav.replaceTo(AppRoutes.home);
+
+        // Update processed route to prevent repeated processing
+        _lastProcessedRoute = routeName;
+
+        // Exit early if already at the target route
+        if (currentRoute == routeName) {
+          print(
+              '🔒 RouteGuard: Already at target route $routeName, no action needed');
+          return;
+        }
+
+        // Handle public routes first
+        if (isPublicRoute(routeName)) {
+          print('🔒 RouteGuard: Public route $routeName, allowing access');
+          return;
+        }
+
+        // Handle different authentication scenarios
+        if (!isAuthenticated) {
+          // User not authenticated
+          if (isProtectedRoute(routeName)) {
+            print(
+                '🔒 RouteGuard: Unauthorized access to $routeName, redirecting to login');
+            if (context.mounted) {
+              try {
+                GlobalNotificationService()
+                    .showWarning("Please login to access this feature");
+              } catch (e) {
+                print('⚠️ Could not show login required message: $e');
+              }
+            }
+            _performNavigation(() => nav.replaceAllWith(AppRoutes.login));
+          }
+          // For unauthenticated users accessing auth routes, allow it
+          return;
+        }
+
+        // User is authenticated
+        if (isAuthRoute(routeName)) {
+          // Allow authenticated users to access forgot password and reset password routes
+          if (routeName == AppRoutes.forgotPassword ||
+              routeName == AppRoutes.resetPassword) {
+            print(
+                '🔒 RouteGuard: Authenticated user accessing password reset route $routeName, allowing access');
+            return;
+          }
+
+          // For other auth routes, redirect to home if email is verified
+          if (sessionManager.isEmailVerified) {
+            print(
+                '🔒 RouteGuard: Verified user accessing auth route $routeName, redirecting to home');
+            if (currentRoute != AppRoutes.home) {
+              _performNavigation(() => nav.replaceTo(AppRoutes.home));
+            }
+          } else {
+            // Unverified user accessing auth routes (except verify email) - redirect to verification
+            // ONLY redirect if not already on verification screen
+            if (routeName != AppRoutes.verifyEmail) {
+              print(
+                  '🔒 RouteGuard: Unverified user accessing auth route $routeName, redirecting to verification');
+              _performNavigation(() => nav.replaceTo(AppRoutes.verifyEmail));
+            }
+          }
+        } else if (isProtectedRoute(routeName)) {
+          // Authenticated user accessing protected routes
+          if (sessionManager.isEmailVerified) {
+            // Email verified, allow access to protected routes
+            print(
+                '🔒 RouteGuard: Verified user accessing protected route $routeName, allowing access');
+          } else {
+            // Email not verified, redirect to verification
+            print(
+                '🔒 RouteGuard: Unverified user accessing protected route $routeName, redirecting to verification');
+            _performNavigation(() => nav.replaceTo(AppRoutes.verifyEmail));
           }
         } else {
-          // Only redirect if not already on /verify-email
-          if (nav.currentRoute != AppRoutes.verifyEmail) {
-            nav.replaceTo(AppRoutes.verifyEmail);
+          // Authenticated user accessing other routes - check email verification
+          if (!sessionManager.isEmailVerified) {
+            print(
+                '🔒 RouteGuard: Unverified user, redirecting to email verification');
+            _performNavigation(() => nav.replaceTo(AppRoutes.verifyEmail));
           }
         }
+      } catch (e) {
+        print('🔒 RouteGuard: Error in security check: $e');
+        _lastProcessedRoute = null;
       }
     });
+  }
+
+  /// Perform navigation with proper cleanup
+  static void _performNavigation(VoidCallback navigationAction) {
+    // Reset processed route before navigation to allow new route to be processed
+    _lastProcessedRoute = null;
+    try {
+      navigationAction();
+    } catch (e) {
+      print('🔒 RouteGuard: Error during navigation: $e');
+    }
   }
 
   /// Get the widget for a route

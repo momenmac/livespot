@@ -115,7 +115,7 @@ class UserProfileProvider extends ChangeNotifier {
           name: 'UserProfileProvider');
 
       // Handle nested response structure - extract the actual profile data
-      Map<String, dynamic> profileData;
+      Map<String, dynamic>? profileData;
       if (response['success'] == true && response.containsKey('data')) {
         var data = response['data'];
 
@@ -130,8 +130,22 @@ class UserProfileProvider extends ChangeNotifier {
           profileData = data;
         }
 
+        // Final safety check - ensure we have valid profile data
+        if (profileData == null || profileData.isEmpty) {
+          throw Exception('Profile data is null or empty from server response');
+        }
+
         // Add the account data to the profile data if it's not already included
         if (!profileData.containsKey('account')) {
+          profileData['account'] = account.toJson();
+        }
+
+        // Validate account data exists before parsing
+        if (profileData['account'] == null &&
+            (profileData['account_id'] == null &&
+                profileData['user_id'] == null)) {
+          developer.log('Adding missing account data to profile',
+              name: 'UserProfileProvider');
           profileData['account'] = account.toJson();
         }
 

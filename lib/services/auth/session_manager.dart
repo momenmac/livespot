@@ -194,7 +194,28 @@ class SessionManager {
         if (responseJson['data'] != null) {
           developer.log('Successfully fetched user profile data',
               name: 'SessionManager');
-          return Account.fromJson(responseJson['data']);
+
+          // Validate that the data has required fields for Account parsing
+          final profileData = responseJson['data'];
+          if (profileData is Map<String, dynamic>) {
+            // Check if this is account data or profile data with nested account
+            if (profileData.containsKey('account')) {
+              // This is profile data, extract account from it
+              return Account.fromJson(profileData['account']);
+            } else if (profileData.containsKey('id') ||
+                profileData.containsKey('email')) {
+              // This is direct account data
+              return Account.fromJson(profileData);
+            } else {
+              developer.log('Profile data structure unrecognized: $profileData',
+                  name: 'SessionManager');
+              return null;
+            }
+          } else {
+            developer.log('Profile data is not a Map: $profileData',
+                name: 'SessionManager');
+            return null;
+          }
         } else {
           developer.log('Profile data missing in response: $responseJson',
               name: 'SessionManager');

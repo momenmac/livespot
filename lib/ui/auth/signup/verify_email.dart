@@ -47,8 +47,14 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
   String? _effectiveEmail;
   bool _hasSentInitialCode = false;
+  bool _isInitializing = false; // New flag to prevent multiple initializations
+
+  // Static variable to track screen instances to prevent multiple code sends
+  static bool _isScreenActive = false;
 
   void _startResendTimer() {
+    if (!mounted) return;
+
     setState(() {
       _isResendEnabled = false;
       _resendTimer = 30;
@@ -56,6 +62,11 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
       setState(() {
         if (_resendTimer > 0) {
           _resendTimer--;
@@ -68,6 +79,9 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
   }
 
   Future<void> _handleResendCode() async {
+    if (!_isResendEnabled || _isVerifying)
+      return; // Prevent resend during verification
+
     setState(() {
       _isResendEnabled = false;
     });
@@ -77,7 +91,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           Provider.of<AccountProvider>(context, listen: false);
       final result = await accountProvider.resendVerificationCode();
 
-      if (result) {
+      if (mounted && result) {
         setState(() {
           _attemptCount = 0;
         });
@@ -87,7 +101,7 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
           context: context,
           message: "Verification code resent! Please check your email.",
         );
-      } else {
+      } else if (mounted) {
         ResponsiveSnackBar.showError(
           context: context,
           message: accountProvider.error ??
@@ -99,13 +113,15 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       }
     } catch (e) {
       print('🔄 Resend code error: $e');
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Error sending code: ${e.toString()}",
-      );
-      setState(() {
-        _isResendEnabled = true;
-      });
+      if (mounted) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Error sending code: ${e.toString()}",
+        );
+        setState(() {
+          _isResendEnabled = true;
+        });
+      }
     }
   }
 
@@ -134,35 +150,59 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
 
       final result = await accountProvider.verifyEmail(code);
 
-      if (result) {
-        ResponsiveSnackBar.showSuccess(
-          context: context,
-          message: "Your email has been verified! You can now log in.",
-        );
-        NavigationService().replaceAllWith(AppRoutes.login);
-      } else {
-        _verificationKey.currentState?.clearFields();
-
-        if (_attemptCount >= _maxAttempts) {
-          _showTooManyAttemptsDialog();
-        } else {
-          ResponsiveSnackBar.showError(
+      if (mounted) {
+        // Check if widget is still mounted before updating UI
+        if (result) {
+          ResponsiveSnackBar.showSuccess(
             context: context,
-            message: accountProvider.error ??
-                "Invalid code. You have ${_maxAttempts - _attemptCount} attempts left.",
+            message: "Your email has been verified successfully!",
           );
+
+          // CRITICAL FIX: Check if user is already authenticated
+          // If they are, go to home. If not, go to login.
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              final accountProvider =
+                  Provider.of<AccountProvider>(context, listen: false);
+              if (accountProvider.isAuthenticated) {
+                print(
+                    '✅ User verified and authenticated - redirecting to home');
+                NavigationService().replaceAllWith(AppRoutes.home);
+              } else {
+                print(
+                    '✅ User verified but not authenticated - redirecting to login');
+                NavigationService().replaceAllWith(AppRoutes.login);
+              }
+            }
+          });
+        } else {
+          _verificationKey.currentState?.clearFields();
+
+          if (_attemptCount >= _maxAttempts) {
+            _showTooManyAttemptsDialog();
+          } else {
+            ResponsiveSnackBar.showError(
+              context: context,
+              message: accountProvider.error ??
+                  "Invalid code. You have ${_maxAttempts - _attemptCount} attempts left.",
+            );
+          }
         }
       }
     } catch (e) {
       print('✉️ Verification error: $e');
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: "Verification failed: ${e.toString()}",
-      );
+      if (mounted) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Verification failed: ${e.toString()}",
+        );
+      }
     } finally {
-      setState(() {
-        _isVerifying = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isVerifying = false;
+        });
+      }
     }
   }
 
@@ -209,8 +249,8 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     ];
   }
 
-  void _checkEmailAndRedirectIfInvalid() {
-    // Try to get email from widget or provider
+  void _initializeEmail() {
+    // Initialize email synchronously to avoid state issues
     String? email = widget.email;
     if (email == null || email.isEmpty) {
       final accountProvider =
@@ -218,22 +258,53 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
       email = accountProvider.currentUser?.email;
     }
     _effectiveEmail = email;
+  }
 
-    if (_effectiveEmail == null || _effectiveEmail!.isEmpty) {
-      print('⚠️ Attempted to access verification screen without valid email');
-      Future.microtask(() {
-        ResponsiveSnackBar.showError(
-          context: context,
-          message: "Email verification requires registration first",
-        );
-        NavigationService().replaceAllWith(AppRoutes.login);
-      });
+  void _handleInvalidEmail() {
+    print('⚠️ Attempted to access verification screen without valid email');
+    Future.microtask(() {
+      if (!mounted) return;
+      ResponsiveSnackBar.showError(
+        context: context,
+        message: "Email verification requires registration first",
+      );
+      NavigationService().replaceAllWith(AppRoutes.login);
+    });
+  }
+
+  void _checkVerificationStatusSafely() {
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    // Only log status, don't auto-redirect to prevent interference
+    if (accountProvider.isUserVerified) {
+      print('✅ User is already verified but staying on verification screen');
+    } else {
+      print('⏳ User not verified. Showing verification screen...');
     }
   }
 
   @override
   void initState() {
     super.initState();
+
+    // Prevent multiple screen initializations
+    if (_isInitializing) {
+      print(
+          '⚠️ VerifyEmailScreen already initializing, skipping duplicate initialization');
+      return;
+    }
+    _isInitializing = true;
+
+    // Mark screen as active to prevent multiple instances
+    if (_isScreenActive) {
+      print('⚠️ VerifyEmailScreen already active, skipping code sending');
+      return;
+    }
+    _isScreenActive = true;
+
+    print('🚀 VerifyEmailScreen: Starting initialization');
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -241,73 +312,98 @@ class VerifyEmailScreenState extends State<VerifyEmailScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
 
+    // Initialize email immediately and synchronously
+    _initializeEmail();
+
+    // Only do async operations after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkVerificationStatus();
-      // Only send code if not verified and not already sent
+      if (!mounted) {
+        _isInitializing = false;
+        return;
+      }
+
+      // Check if email is valid before proceeding
+      if (_effectiveEmail == null || _effectiveEmail!.isEmpty) {
+        _handleInvalidEmail();
+        _isInitializing = false;
+        return;
+      }
+
+      print('✅ VerifyEmailScreen: Email validated: $_effectiveEmail');
+
+      // Only check verification status without automatic redirects
+      _checkVerificationStatusSafely();
+
+      // Send initial code only if needed and email is valid
       final accountProvider =
           Provider.of<AccountProvider>(context, listen: false);
       if (!accountProvider.isUserVerified && !_hasSentInitialCode) {
-        if ((widget.email != null && widget.email!.isNotEmpty) ||
-            (_effectiveEmail != null && _effectiveEmail!.isNotEmpty)) {
-          _startResendTimer();
-          _sendInitialVerificationCode();
-        }
+        print('📧 VerifyEmailScreen: Sending initial verification code');
+        _startResendTimer();
+        _sendInitialVerificationCode();
+      } else {
+        print(
+            '📧 VerifyEmailScreen: Skipping code send - already verified or already sent');
       }
-    });
 
-    _checkEmailAndRedirectIfInvalid();
+      _isInitializing = false;
+    });
   }
 
   void _sendInitialVerificationCode() async {
-    if (_hasSentInitialCode) return;
-    _hasSentInitialCode = true;
-
-    final accountProvider =
-        Provider.of<AccountProvider>(context, listen: false);
-
-    final result = await accountProvider.resendVerificationCode();
-    if (!mounted) return; // Prevent setState or snackbar if unmounted
-
-    if (result) {
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: "Verification code sent! Please check your email.",
-      );
-    } else {
-      ResponsiveSnackBar.showError(
-        context: context,
-        message: accountProvider.error ??
-            "Failed to send verification code. Please try again.",
-      );
+    if (_hasSentInitialCode || !mounted) {
+      print(
+          '📧 VerifyEmailScreen: Skipping initial code send - already sent or not mounted');
+      return;
     }
-  }
 
-  // Check if the user is already verified
-  void _checkVerificationStatus() {
+    _hasSentInitialCode = true;
+    print(
+        '📧 VerifyEmailScreen: Sending initial verification code to $_effectiveEmail');
+
     final accountProvider =
         Provider.of<AccountProvider>(context, listen: false);
 
-    if (accountProvider.isUserVerified) {
-      print('✅ User is already verified. Redirecting to home...');
-      ResponsiveSnackBar.showSuccess(
-        context: context,
-        message: "Your email is already verified",
-      );
+    try {
+      final result = await accountProvider.resendVerificationCode();
+      if (!mounted) return; // Prevent setState or snackbar if unmounted
 
-      Future.delayed(Duration(seconds: 1), () {
-        if (mounted) {
-          NavigationService().replaceAllWith(AppRoutes.home);
-        }
-      });
-    } else {
-      print('⏳ User not verified. Showing verification screen...');
+      if (result) {
+        print(
+            '✅ VerifyEmailScreen: Initial verification code sent successfully');
+        ResponsiveSnackBar.showSuccess(
+          context: context,
+          message: "Verification code sent! Please check your email.",
+        );
+      } else {
+        print('❌ VerifyEmailScreen: Failed to send initial verification code');
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: accountProvider.error ??
+              "Failed to send verification code. Please try again.",
+        );
+      }
+    } catch (e) {
+      print('📧 Initial code send error: $e');
+      if (mounted) {
+        ResponsiveSnackBar.showError(
+          context: context,
+          message: "Error sending initial code: ${e.toString()}",
+        );
+      }
     }
   }
 
   @override
   void dispose() {
+    print('🗑️ VerifyEmailScreen: Disposing resources');
     _controller.dispose();
     _timer?.cancel();
+
+    // Reset static flags when screen is disposed
+    _isScreenActive = false;
+    _isInitializing = false;
+
     super.dispose();
   }
 

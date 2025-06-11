@@ -37,9 +37,16 @@ class VerificationCodeFieldState extends State<VerificationCodeField> {
   }
 
   void _onChanged(int index, String value) {
+    if (!mounted) return; // Safety check
+
     if (value.length == 1) {
       if (index < 5) {
-        _focusNodes[index + 1].requestFocus();
+        // Small delay to ensure the UI is stable before changing focus
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted && _focusNodes[index + 1].canRequestFocus) {
+            _focusNodes[index + 1].requestFocus();
+          }
+        });
       } else {
         // Last digit entered, trigger completion
         final code = _controllers.map((c) => c.text).join();
@@ -50,15 +57,28 @@ class VerificationCodeFieldState extends State<VerificationCodeField> {
     }
 
     if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
+      // Small delay to ensure the UI is stable before changing focus
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted && _focusNodes[index - 1].canRequestFocus) {
+          _focusNodes[index - 1].requestFocus();
+        }
+      });
     }
   }
 
   // Make sure onCompleted is called with keyboard dismissal
   void _handleCompletion(String code) {
-    // Dismiss keyboard
+    if (!mounted) return; // Safety check
+
+    // Dismiss keyboard first
     FocusScope.of(context).unfocus();
-    widget.onCompleted(code);
+
+    // Small delay to ensure the keyboard is dismissed before calling completion
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        widget.onCompleted(code);
+      }
+    });
   }
 
   @override
