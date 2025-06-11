@@ -25,6 +25,7 @@ import 'package:flutter_application_2/services/action_confirmation_service.dart'
 import 'package:flutter_application_2/services/notifications/notification_handler.dart';
 import 'package:flutter_application_2/services/api/notification_api_service.dart';
 import 'package:flutter_application_2/ui/pages/notification/notification_settings_controller.dart';
+import 'package:flutter_application_2/services/utils/global_notification_service.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -220,8 +221,17 @@ Future<void> main() async {
     // Initialize Firebase Messaging and related services (only once, after Firebase core is ready)
     if (_isFirebaseInitialized) {
       try {
+        // Initialize Firebase Messaging first
         await FirebaseMessagingService.initialize();
         print('✅ Firebase Messaging initialized successfully');
+
+        // If the user is already authenticated, attempt to register the FCM token explicitly
+        final accountProvider = AccountProvider();
+        if (accountProvider.isAuthenticated) {
+          print(
+              '🔑 User is already authenticated at startup, registering FCM token');
+          await FirebaseMessagingService.registerToken();
+        }
 
         // Initialize ActionConfirmationService with NavigationService's navigator key
         ActionConfirmationService.initialize(NavigationService().navigatorKey);
@@ -551,6 +561,15 @@ class _MyAppState extends State<MyApp> {
     final isAtInitial = currentRoute == AppRoutes.initial ||
         currentRoute == null ||
         currentRoute == '/';
+    final isAtVerifyEmail = currentRoute == AppRoutes.verifyEmail;
+
+    // CRITICAL FIX: Don't interfere if user is on verification screen
+    if (isAtVerifyEmail) {
+      developer.log(
+          'User is on verification screen, skipping auth state processing to prevent interference',
+          name: 'AuthListener');
+      return;
+    }
 
     // Start location event monitor if user is authenticated
     if (isAuthenticated && isEmailVerified) {
@@ -599,8 +618,21 @@ class _MyAppState extends State<MyApp> {
       developer.log('👤 Auth state changed after initialization.',
           name: 'AuthListener');
 
+      // CRITICAL FIX: Add special handling for email verification completion
+      // If user just became verified, wait a moment before redirecting to allow UI to settle
       if (isAuthenticated && isEmailVerified && !isAtHome) {
-        _navigateTo(AppRoutes.home);
+        developer.log('User is authenticated and verified, redirecting to home',
+            name: 'AuthListener');
+
+        // Add a small delay to prevent conflicts with VerifyEmailScreen navigation
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted &&
+              widget.accountProvider.isAuthenticated &&
+              widget.accountProvider.isEmailVerified &&
+              NavigationService().currentRoute != AppRoutes.home) {
+            _navigateTo(AppRoutes.home);
+          }
+        });
       } else if (!isAuthenticated && (!isAtInitial && !isAtAuthRoute)) {
         developer.log(
             'User is unauthenticated and not at initial/auth route (or currentRoute is null/not initial). Forcing navigation to initial.',
@@ -620,9 +652,6 @@ class _MyAppState extends State<MyApp> {
 
   void _navigateTo(String routeName) {
     final currentRoute = NavigationService().currentRoute;
-    developer.log(
-        'Attempting navigation to "$routeName". Current state: mounted=$mounted, navigator=${NavigationService().navigatorKey.currentState != null}, currentRoute=$currentRoute',
-        name: 'AuthNavigateDebug');
 
     // Special handling for logout navigation to initial route
     final isLogoutNavigation = !widget.accountProvider.isAuthenticated &&
@@ -632,30 +661,22 @@ class _MyAppState extends State<MyApp> {
     // Defensive exit conditions to prevent navigation flood
     // 1. Check if already navigating, but make an exception for logout
     if (_isNavigating && !isLogoutNavigation) {
-      developer.log('Navigation skipped: already navigating',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // 2. Check if already at the target route
     if (currentRoute == routeName) {
-      developer.log('Navigation skipped: already at $routeName',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // 3. Check if just navigated to this route (prevents bouncing)
     // Exception for logout navigation
     if (_lastNavigatedRoute == routeName && !isLogoutNavigation) {
-      developer.log('Navigation skipped: just navigated to $routeName',
-          name: 'AuthNavigateDebug');
       return;
     }
 
     // Don't check auth state transition for logout navigation
     if (widget.accountProvider.inAuthStateTransition && !isLogoutNavigation) {
-      developer.log('Navigation deferred: auth state transition in progress',
-          name: 'AuthNavigateDebug');
       // Schedule deferred navigation after transition completes
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_isNavigating && mounted) {
@@ -667,9 +688,6 @@ class _MyAppState extends State<MyApp> {
 
     // For logout navigation, reset the navigation service's throttling
     if (isLogoutNavigation) {
-      developer.log(
-          'Forcing logout navigation to $routeName - resetting navigation flags',
-          name: 'AuthNavigateDebug');
       NavigationService().reset();
     }
 
@@ -681,7 +699,7 @@ class _MyAppState extends State<MyApp> {
     if (!isLogoutNavigation) {
       widget.accountProvider.beginAuthStateTransition();
     }
- 
+
     // Execute the navigation with a delay to ensure UI stability
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted && NavigationService().navigatorKey.currentState != null) {
@@ -735,6 +753,9 @@ class _MyAppState extends State<MyApp> {
             initialRoute: AppRoutes.initial,
             onGenerateRoute: RouteGuard.generateRoute,
             navigatorObservers: [AppRouteObserver()],
+            // Use GlobalNotificationService's scaffoldMessengerKey for consistent SnackBar access
+            scaffoldMessengerKey:
+                GlobalNotificationService().scaffoldMessengerKey,
             builder: (context, child) {
               if (!firebaseStatus.isInitialized) {
                 print(
@@ -744,15 +765,17 @@ class _MyAppState extends State<MyApp> {
               return MediaQuery(
                 data: MediaQuery.of(context)
                     .copyWith(textScaler: TextScaler.linear(1.0)),
-                child: GestureDetector(
-                  onTap: () {
-                    FocusScopeNode currentFocus = FocusScope.of(context);
-                    if (!currentFocus.hasPrimaryFocus &&
-                        currentFocus.focusedChild != null) {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                    }
-                  },
-                  child: child!,
+                child: Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () {
+                      FocusScopeNode currentFocus = FocusScope.of(context);
+                      if (!currentFocus.hasPrimaryFocus &&
+                          currentFocus.focusedChild != null) {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                      }
+                    },
+                    child: child!,
+                  ),
                 ),
               );
             },
@@ -808,14 +831,9 @@ class FirebaseHelper {
   }
 
   static void printStatus() {
-    if (isAvailable) {
-      print('======================================');
-      print('✅ FIREBASE STATUS CHECK: ACTIVE & WORKING! ✅');
-      print('======================================');
-    } else {
-      print('======================================');
-      print('❌ FIREBASE STATUS CHECK: NOT AVAILABLE ❌');
-      print('======================================');
+    // Reduced logging noise - only log errors or first-time status
+    if (!isAvailable) {
+      print('❌ FIREBASE STATUS: NOT AVAILABLE');
     }
   }
 }

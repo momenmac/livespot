@@ -120,8 +120,8 @@ class _MapPageState extends State<MapPage> {
     // Cancel any previous timer
     _fetchDebounceTimer?.cancel();
 
-    // Start a new timer - wait 500ms before making API call
-    _fetchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+    // Start a new timer - wait 1000ms before making API call (increased from 500ms)
+    _fetchDebounceTimer = Timer(const Duration(milliseconds: 1000), () {
       if (mounted) {
         _fetchMapLocations();
       }
@@ -165,31 +165,16 @@ class _MapPageState extends State<MapPage> {
         ? "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}"
         : null;
 
-    // Print debug info about the current request
-    print(
-        '🔍 Fetch request - Date: $dateParam, Categories: $_selectedCategories');
-
     // Check if we can use the cache - with proper comparison of category lists
     if (_locationsCache != null &&
         _lastCacheDateParam == dateParam &&
         _areListsEqual(_lastCacheCategories, _selectedCategories)) {
-      print('✅ Using cache - Avoiding network request');
       setState(() {
         _mapLocations = _locationsCache!;
         _isLoadingLocations = false;
         _addMarkersToMap();
       });
       return;
-    }
-
-    // Cache miss - debug info
-    print('⚠️ Cache miss - Making network request');
-    if (_lastCacheDateParam != dateParam) {
-      print('  - Date changed: $_lastCacheDateParam → $dateParam');
-    }
-    if (!_areListsEqual(_lastCacheCategories, _selectedCategories)) {
-      print(
-          '  - Categories changed: $_lastCacheCategories → $_selectedCategories');
     }
 
     setState(() {
@@ -216,50 +201,25 @@ class _MapPageState extends State<MapPage> {
             '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
       }
 
-      // Debug the actual URL being sent
-      print('🔍 API URL with filters: $url');
-      print('📋 Selected categories: $_selectedCategories');
-
       // Make the HTTP request using TokenManager
       final token = await _tokenManager.getValidAccessToken();
-
-      print('Using token from TokenManager');
-      if (token != null) {
-        print('Authorization header: Bearer ${token.substring(0, 3)}...');
-      } else {
-        print('No authentication token available');
-      }
 
       // Debug headers before making request
       final headers = {
         'Content-Type': 'application/json',
         'Authorization': token != null ? 'Bearer $token' : '',
       };
-      print('🔒 Request headers: $headers');
 
       final response = await http.get(
         Uri.parse(url),
         headers: headers,
       );
 
-      // Debug response
-      print('📡 Response status code: ${response.statusCode}');
-      print('📝 Response headers: ${response.headers}');
-      if (response.statusCode != 200) {
-        print('❌ Error response body: ${response.body}');
-      }
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('✅ Successful response data: $data');
 
         // Check if response contains paginated data structure
         if (data is Map && data.containsKey('results')) {
-          print('📄 Paginated response detected');
-          print('📊 Total count: ${data['count']}');
-          print('⏭️ Next page: ${data['next']}');
-          print('⏮️ Previous page: ${data['previous']}');
-
           // Get the current page results
           final List<dynamic> currentResults = data['results'];
           final String? nextPageUrl = data['next'];
@@ -276,7 +236,6 @@ class _MapPageState extends State<MapPage> {
 
             // Fetch remaining pages one at a time
             while (currentNextUrl != null && mounted) {
-              print('🔄 Fetching next page: $currentNextUrl');
               final nextResponse = await http.get(
                 Uri.parse(currentNextUrl),
                 headers: headers,
@@ -286,7 +245,6 @@ class _MapPageState extends State<MapPage> {
                 final nextData = jsonDecode(nextResponse.body);
                 if (nextData is Map && nextData.containsKey('results')) {
                   final newResults = nextData['results'] as List;
-                  print('📥 Got page with ${newResults.length} results');
 
                   // Update UI progressively with new markers
                   setState(() {
@@ -295,12 +253,10 @@ class _MapPageState extends State<MapPage> {
                   });
 
                   currentNextUrl = nextData['next'] as String?;
-                  print('📊 Total locations so far: ${_mapLocations.length}');
                 } else {
                   break;
                 }
               } else {
-                print('❌ Failed to fetch page: ${nextResponse.statusCode}');
                 break;
               }
             }
@@ -309,14 +265,11 @@ class _MapPageState extends State<MapPage> {
           setState(() {
             _isLoadingLocations = false;
           });
-          print(
-              '✅ All pages fetched. Total locations: ${_mapLocations.length}');
           // Cache the results
           _locationsCache = _mapLocations;
           _lastCacheDateParam = dateParam;
           _lastCacheCategories = List.from(_selectedCategories);
         } else {
-          print('⚠️ Non-paginated response detected');
           setState(() {
             _mapLocations = data;
             _isLoadingLocations = false;
@@ -329,27 +282,23 @@ class _MapPageState extends State<MapPage> {
         }
 
         if (_mapLocations.isEmpty) {
-          print(
-              'No locations found for the selected filters - markers cleared');
           _mapMarkers.clear();
           setState(() {}); // Trigger a rebuild to show the empty map
         }
       } else {
-        print('❌ Error status code: ${response.statusCode}');
         final errorMessage =
             "Failed to fetch locations: ${response.statusCode} - ${response.body}";
-        print('❌ Error message: $errorMessage');
         setState(() {
           _error = errorMessage;
           _isLoadingLocations = false;
         });
 
-        // Show error in snackbar
-        if (mounted) {
+        // Show error in snackbar only for significant errors
+        if (mounted && response.statusCode >= 500) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(errorMessage),
-              duration: const Duration(seconds: 5),
+              content: Text("Server error. Please try again later."),
+              duration: const Duration(seconds: 3),
               action: SnackBarAction(
                 label: 'Dismiss',
                 onPressed: () {

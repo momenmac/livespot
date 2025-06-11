@@ -514,6 +514,14 @@ class _MapPageState extends State<MapPage> {
             SnackBar(
               content: Text(errorMessage),
               duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.only(
+                left: 16.0,
+                top: 16.0 +
+                    MediaQuery.of(context).padding.top, // Position at top
+                right: 16.0,
+                bottom: 0.0, // Set bottom to 0 to position at top
+              ),
               action: SnackBarAction(
                 label: 'Dismiss',
                 onPressed: () {
@@ -1192,9 +1200,8 @@ class _MapPageState extends State<MapPage> {
                               // Close the overlay
                               removeOverlay();
 
-                              // Navigate to post detail page
-                              Navigator.push(
-                                context,
+                              // Navigate to post detail page - use the root navigator
+                              Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
                                   builder: (context) => PostDetailPage(
                                     title: title,
@@ -1254,9 +1261,8 @@ class _MapPageState extends State<MapPage> {
                                 // Close the overlay
                                 removeOverlay();
 
-                                // Navigate based on media type
-                                Navigator.push(
-                                  context,
+                                // Navigate based on media type - use the root navigator
+                                Navigator.of(context, rootNavigator: true).push(
                                   MaterialPageRoute(
                                     builder: (context) => ReelsPage(
                                       post: postObj,
@@ -1491,8 +1497,8 @@ class _MapPageState extends State<MapPage> {
       },
       child: Scaffold(
         // Configure SnackBar behavior for proper display
-        bottomNavigationBar: const SizedBox(
-            height: 1), // Tiny placeholder to fix SnackBar positioning
+        // Set this to null to allow proper SnackBar display from the bottom
+        bottomNavigationBar: null,
         appBar: widget.showBackButton && !isLargeScreen
             ? AppBar(
                 leading: IconButton(
@@ -1512,14 +1518,6 @@ class _MapPageState extends State<MapPage> {
                 title: Text(TextStrings.map,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 actions: [
-                  if (_controller.destination != null)
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(
-                            context, _controller.locationController.text);
-                      },
-                      child: const Text('Select Location'),
-                    ),
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: MapDatePicker(

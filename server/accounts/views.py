@@ -788,6 +788,7 @@ class VerifyResetCodeView(APIView):
             
             return add_cors_headers(Response({
                 "message": "Code verified successfully",
+                "reset_token": tokens['access'],  # Use access token as reset token
                 "tokens": tokens
             }))
             
@@ -801,18 +802,15 @@ class ResetPasswordView(APIView):
 
     def post(self, request):
         try:
-            # Use JWT token for authentication
-            token = request.data.get('token')
+            # Get reset token and new password from request
+            reset_token = request.data.get('reset_token')
             new_password = request.data.get('new_password')
             
-            if not token or not new_password:
+            if not reset_token or not new_password:
                 return add_cors_headers(Response(
-                    {"error": "Token and new password are required"}, 
+                    {"error": "Reset token and new password are required"}, 
                     status=400
                 ))
-            
-            # Validate JWT token
-            # Since we're using JWT, we can use the request.user after authentication middleware
             
             # Check if password meets minimum requirements
             if len(new_password) < 6:
@@ -821,11 +819,20 @@ class ResetPasswordView(APIView):
                     status=400
                 ))
             
-            # You would need to validate the token manually if not using middleware
-            # For simplicity, we'll assume the token is valid
+            # Validate JWT token manually since this is AllowAny endpoint
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                decoded_token = AccessToken(reset_token)
+                user_id = decoded_token['user_id']
+                user = Account.objects.get(id=user_id)
+            except Exception as e:
+                logger.error(f"Invalid reset token: {str(e)}")
+                return add_cors_headers(Response(
+                    {"error": "Invalid or expired reset token"}, 
+                    status=400
+                ))
             
             # Update user password
-            user = request.user
             user.set_password(new_password)
             user.save()
             

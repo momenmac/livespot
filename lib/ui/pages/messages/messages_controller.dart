@@ -251,6 +251,34 @@ class MessagesController extends ChangeNotifier {
                 needsUpdate = true;
               }
 
+              // Update typing users status
+              if (conversationData.containsKey('typingUsers')) {
+                try {
+                  final typingUsersData =
+                      conversationData['typingUsers'] as Map<String, dynamic>?;
+                  if (typingUsersData != null) {
+                    // Clear existing typing status for this conversation
+                    _typingUsers.removeWhere((userId, _) =>
+                        _conversations[existingIndex]
+                            .participants
+                            .any((u) => u.id == userId));
+
+                    // Add new typing status
+                    typingUsersData.forEach((userId, isTyping) {
+                      if (isTyping == true && userId != currentUserId) {
+                        _typingUsers[userId] = true;
+                        debugPrint(
+                            '[Typing] User $userId is typing in conversation $conversationId');
+                      }
+                    });
+
+                    needsUpdate = true;
+                  }
+                } catch (e) {
+                  debugPrint('[Typing] Error processing typing users: $e');
+                }
+              }
+
               // If this conversation is the selected one, update its reference too
               if (_selectedConversation?.id == conversationId) {
                 _selectedConversation = _conversations[existingIndex];

@@ -11,8 +11,16 @@ class GlobalNotificationService {
   factory GlobalNotificationService() => _instance;
   GlobalNotificationService._internal();
 
+  // Global key for ScaffoldMessenger - this is an alternative way to access ScaffoldMessenger
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   // Keep track of active notifications to prevent duplicates
   final Set<String> _activeNotifications = <String>{};
+
+  // Access the current ScaffoldMessenger through the key if NavigationService fails
+  ScaffoldMessengerState? get _fallbackScaffoldMessenger =>
+      scaffoldMessengerKey.currentState;
 
   /// Shows a snackbar using the root navigator context to avoid duplicates
   /// in split-screen layouts with multiple Navigator widgets.
@@ -35,25 +43,43 @@ class GlobalNotificationService {
       return;
     }
 
+    // Try to get a valid context for showing the SnackBar
     final navigatorContext = NavigationService().navigatorKey.currentContext;
-    if (navigatorContext == null) {
-      debugPrint(
-          '[GlobalNotificationService] Navigator context is null, cannot show snackbar');
-      return;
+    ScaffoldMessengerState? scaffoldMessenger;
+
+    // Try to find a valid ScaffoldMessenger
+    if (navigatorContext != null) {
+      try {
+        scaffoldMessenger = ScaffoldMessenger.of(navigatorContext);
+      } catch (e) {
+        debugPrint(
+            '[GlobalNotificationService] Failed to get ScaffoldMessenger from context: $e');
+      }
     }
 
-    // Find the root ScaffoldMessenger
-    final scaffoldMessenger = ScaffoldMessenger.of(navigatorContext);
+    // If no scaffoldMessenger from navigatorContext, try the fallback key
+    if (scaffoldMessenger == null) {
+      scaffoldMessenger = scaffoldMessengerKey.currentState;
+      if (scaffoldMessenger != null) {
+        debugPrint(
+            '[GlobalNotificationService] Using fallback ScaffoldMessenger');
+      }
+    }
+
+    // If still no scaffoldMessenger, log error and exit
+    if (scaffoldMessenger == null) {
+      debugPrint(
+          '[GlobalNotificationService] No ScaffoldMessenger available, cannot show snackbar');
+      return;
+    }
 
     // Mark this notification as active
     _activeNotifications.add(notificationId);
 
-    // Calculate top margin to position snackbar at the top
-    final mediaQuery = MediaQuery.of(navigatorContext);
-    final topSafeArea = mediaQuery.padding.top;
-    final topMargin = topSafeArea + 16.0; // Add some padding below the status bar
+    // Calculate proper margins to ensure the SnackBar is visible on screen
+    final horizontalMargin = 16.0;
 
-    // Create the snackbar positioned at the top
+    // Create the snackbar with proper margins (CANNOT use both margin and width together)
     final snackBar = SnackBar(
       content: Text(
         message,
@@ -62,19 +88,23 @@ class GlobalNotificationService {
       duration: duration,
       backgroundColor: backgroundColor,
       behavior: SnackBarBehavior.floating,
-      margin: margin ?? EdgeInsets.only(
-        top: topMargin,
-        left: 16.0,
-        right: 16.0,
-        bottom: mediaQuery.size.height - topMargin - 80, // Position at top
-      ),
+      // Position at top of screen
+      margin: margin ??
+          EdgeInsets.only(
+            left: horizontalMargin,
+            top: 16.0 +
+                (navigatorContext != null
+                    ? MediaQuery.of(navigatorContext).padding.top
+                    : 0),
+            right: horizontalMargin,
+          ),
       dismissDirection:
           isDismissible ? DismissDirection.horizontal : DismissDirection.none,
       action: actionLabel != null && onActionPressed != null
           ? SnackBarAction(
               label: actionLabel,
               onPressed: onActionPressed,
-              textColor: textColor ?? Colors.white,
+              textColor: textColor ?? Colors.blue,
             )
           : null,
     );

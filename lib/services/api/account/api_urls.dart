@@ -7,7 +7,7 @@ class ApiUrls {
     if (kIsWeb) {
       return 'http://localhost:8000'; // For web development
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.38:8000'; // For Android emulator
+      return 'http://192.168.1.13:8000'; // For Android emulator
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'http://localhost:8000'; // For iOS simulator
     } else {
@@ -90,6 +90,15 @@ class ApiUrls {
 
   // Maps endpoints
   static String get openStreetMapTiles => 'https://tile.openstreetmap.org';
-  static String get osrmRouting => 'http://router.project-osrm.org';
+  static String get osrmRouting => 'https://router.project-osrm.org';
   static String get nominatimSearch => 'https://nominatim.openstreetmap.org';
+
+  // Alternative routing services for better coverage
+  static String get openRouteService =>
+      'https://api.openrouteservice.org/v2/directions/driving-car';
+  static String get graphHopper => 'https://graphhopper.com/api/1/route';
+  static String get mapboxDirections =>
+      'https://api.mapbox.com/directions/v5/mapbox/driving';
+  static String get googleDirections =>
+      'https://maps.googleapis.com/maps/api/directions/json';
 }

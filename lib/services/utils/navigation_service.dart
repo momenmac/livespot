@@ -87,6 +87,10 @@ class NavigationService {
           '[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceTo $routeName');
       return Future.value(null);
     }
+
+    // Update current route immediately to prevent race conditions
+    _currentRoute = routeName;
+
     return navigatorKey.currentState!.pushReplacementNamed(
       routeName,
       arguments: arguments,
@@ -101,6 +105,10 @@ class NavigationService {
           '[NavigationService] WARNING: navigatorKey.currentState is null, cannot replaceAllWith $routeName');
       return Future.value(null);
     }
+
+    // Update current route immediately to prevent race conditions
+    _currentRoute = routeName;
+
     return navigatorKey.currentState!.pushNamedAndRemoveUntil(
       routeName,
       (_) => false, // Remove all previous routes

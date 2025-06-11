@@ -232,8 +232,21 @@ class FirebaseMessagingService {
     }
   }
 
-  static Future<void> deactivateCurrentToken() async {
-    await _fcmTokenService.deactivateCurrentToken();
+  /// Register FCM token after authentication is confirmed
+  /// This can be called explicitly after login or token refresh to ensure registration
+  static Future<bool> registerToken() async {
+    if (!_isInitialized) {
+      print('⚠️ FirebaseMessagingService not initialized, initializing now...');
+      await initialize();
+    }
+
+    print('🔄 Explicitly registering FCM token after authentication...');
+    return await _fcmTokenService.registerToken();
+  }
+
+  /// Deactivate the current FCM token
+  static Future<bool> deactivateCurrentToken() async {
+    return await _fcmTokenService.deactivateCurrentToken();
   }
 
   static Future<AuthorizationStatus> getNotificationPermissionStatus() async {

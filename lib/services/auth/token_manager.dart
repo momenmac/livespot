@@ -22,8 +22,16 @@ class TokenManager {
   JwtToken? get currentToken => _currentToken;
 
   /// Check if user is authenticated (has valid refresh token)
-  bool get isAuthenticated =>
-      _currentToken != null && !_currentToken!.isRefreshTokenExpired;
+  bool get isAuthenticated {
+    // Simple check based on the current token
+    if (_currentToken == null) {
+      return false;
+    }
+    return !_currentToken!.isRefreshTokenExpired;
+  }
+  
+  /// Additional method to track if authentication is in progress
+  bool get isAuthInProgress => _isRefreshing;
 
   /// Check if access token needs refresh
   bool get needsRefresh =>

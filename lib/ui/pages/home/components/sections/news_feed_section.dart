@@ -39,7 +39,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
   bool _isLoadingMore = false;
   bool _isLoading = false;
-  
+
   // Recommended posts state
   List<Post> _recommendedPosts = [];
   bool _isLoadingRecommended = false;
@@ -85,28 +85,33 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
     try {
       final provider = Provider.of<PostsProvider>(context, listen: false);
-      
+
       // Format date as YYYY-MM-DD for API (same as regular posts)
-      final formattedDate = widget.selectedDate.toIso8601String().split('T').first;
-      
-      debugPrint('🎯 NewsFeedSection: Fetching recommendations for date: $formattedDate');
-      
+      final formattedDate =
+          widget.selectedDate.toIso8601String().split('T').first;
+
+      debugPrint(
+          '🎯 NewsFeedSection: Fetching recommendations for date: $formattedDate');
+
       final result = await provider.fetchRecommendedPosts(
         radiusKm: 50, // 50km radius
-        limit: 10,    // Get 10 recommendations
+        limit: 10, // Get 10 recommendations
         date: formattedDate,
       );
 
       if (mounted) {
         setState(() {
           _recommendedPosts = List<Post>.from(result['posts'] ?? []);
-          _recommendationMetadata = Map<String, dynamic>.from(result['metadata'] ?? {});
+          _recommendationMetadata =
+              Map<String, dynamic>.from(result['metadata'] ?? {});
           _recommendationMessage = result['message'] ?? '';
           _isLoadingRecommended = false;
         });
 
-        debugPrint('🎯 NewsFeedSection: Loaded ${_recommendedPosts.length} recommended posts');
-        debugPrint('🎯 NewsFeedSection: Recommendation message: $_recommendationMessage');
+        debugPrint(
+            '🎯 NewsFeedSection: Loaded ${_recommendedPosts.length} recommended posts');
+        debugPrint(
+            '🎯 NewsFeedSection: Recommendation message: $_recommendationMessage');
       }
     } catch (e) {
       debugPrint('❌ NewsFeedSection: Error fetching recommendations: $e');
@@ -114,7 +119,18 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
         setState(() {
           _recommendedPosts = [];
           _recommendationMetadata = {};
-          _recommendationMessage = 'Failed to load recommendations';
+          // Show more helpful error message based on the error type
+          if (e.toString().toLowerCase().contains('location')) {
+            _recommendationMessage =
+                'Using default location (Tulkarm) for recommendations. Enable location for personalized content.';
+          } else if (e.toString().toLowerCase().contains('network') ||
+              e.toString().toLowerCase().contains('connection')) {
+            _recommendationMessage =
+                'Network error - please check your internet connection';
+          } else {
+            _recommendationMessage =
+                'Loading recommendations with default location...';
+          }
           _isLoadingRecommended = false;
         });
       }
@@ -144,13 +160,12 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
           '🎯 NewsFeedSection._fetchPosts: Formatted date: $formattedDate');
 
       final provider = Provider.of<PostsProvider>(context, listen: false);
-      debugPrint(
-          '🎯 _fetchPosts: BEFORE provider.fetchRecommendedPosts');
+      debugPrint('🎯 _fetchPosts: BEFORE provider.fetchRecommendedPosts');
 
       // Use recommended posts instead of regular posts
       final result = await provider.fetchRecommendedPosts(
         radiusKm: 50, // 50km radius for local content
-        limit: 20,    // Get 20 recommendations
+        limit: 20, // Get 20 recommendations
         date: formattedDate,
       );
 
@@ -160,26 +175,31 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
       if (mounted) {
         debugPrint(
             '🎯 _fetchPosts: BEFORE setState _isLoading=false (current: $_isLoading)');
-        
+
         // Extract posts from recommendation result
-        final List<Post> recommendedPosts = List<Post>.from(result['posts'] ?? []);
-        
+        final List<Post> recommendedPosts =
+            List<Post>.from(result['posts'] ?? []);
+
         setState(() {
           _isLoading = false;
           // Store recommended posts for display
           _recommendedPosts = recommendedPosts;
-          _recommendationMetadata = Map<String, dynamic>.from(result['metadata'] ?? {});
-          _recommendationMessage = result['message'] ?? 'Recommendations loaded';
+          _recommendationMetadata =
+              Map<String, dynamic>.from(result['metadata'] ?? {});
+          _recommendationMessage =
+              result['message'] ?? 'Recommendations loaded';
         });
-        
+
         debugPrint(
             '🎯 _fetchPosts: AFTER setState _isLoading=false, loaded ${recommendedPosts.length} recommended posts');
-        debugPrint('🎯 _fetchPosts: Recommendation metadata: $_recommendationMetadata');
+        debugPrint(
+            '🎯 _fetchPosts: Recommendation metadata: $_recommendationMetadata');
       }
 
       // Show success message if we have recommendations
       if (mounted && _recommendedPosts.isNotEmpty) {
-        debugPrint('🎯 _fetchPosts: Successfully loaded ${_recommendedPosts.length} recommended posts');
+        debugPrint(
+            '🎯 _fetchPosts: Successfully loaded ${_recommendedPosts.length} recommended posts');
       }
       // No snackbar for empty recommendations - handled by empty state UI
     } catch (e) {
@@ -363,20 +383,22 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(12)),
                     child: Container(
                       height: 100,
                       width: double.infinity,
                       child: _buildPostImage(post, height: 100),
                     ),
                   ),
-                  
+
                   // Category badge positioned in top-left corner of image
                   Positioned(
                     top: 6,
                     left: 6,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: CategoryUtils.getCategoryColor(post.category),
                         borderRadius: BorderRadius.circular(6),
@@ -529,7 +551,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
   Widget _buildPostsList(List<Post> posts) {
     // Preserve the backend's recommendation order - don't sort by honesty score
     // The backend already provides posts in the optimal recommendation order
-    
+
     // Extract featured and regular posts while preserving order
     final featuredPost = posts.isNotEmpty ? posts.first : null;
     final regularPosts = posts.length > 1 ? posts.sublist(1) : <Post>[];
@@ -640,7 +662,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               top: 16,
               left: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: CategoryUtils.getCategoryColor(post.category),
                   borderRadius: BorderRadius.circular(16),
@@ -887,13 +910,14 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
                       child: _buildImage(_getBestImageUrl(post)),
                     ),
                   ),
-                  
+
                   // Category badge positioned in top-left corner of image
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: CategoryUtils.getCategoryColor(post.category),
                         borderRadius: BorderRadius.circular(8),
@@ -1100,7 +1124,7 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
       case 'other':
         return 'Other';
       default:
-        return category.isNotEmpty 
+        return category.isNotEmpty
             ? category[0].toUpperCase() + category.substring(1)
             : 'Other';
     }
@@ -1574,7 +1598,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
   // Build content for recommended posts instead of using Consumer
   Widget _buildRecommendedPostsContent() {
-    debugPrint('🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD START 🎯🎯🎯');
+    debugPrint(
+        '🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD START 🎯🎯🎯');
     debugPrint('🎯 Local _isLoading=$_isLoading');
     debugPrint('🎯 Local _isLoadingRecommended=$_isLoadingRecommended');
     debugPrint('🎯 Recommended posts.length=${_recommendedPosts.length}');
@@ -1582,13 +1607,15 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
 
     // Show local loading state first
     if (_isLoading || _isLoadingRecommended) {
-      debugPrint('🎯 CONDITION: _isLoading or _isLoadingRecommended is true -> Showing loading indicator');
+      debugPrint(
+          '🎯 CONDITION: _isLoading or _isLoadingRecommended is true -> Showing loading indicator');
       return const Center(child: CircularProgressIndicator());
     }
 
     // Show no news message if we have no posts and aren't loading
     if (_recommendedPosts.isEmpty) {
-      debugPrint('🎯 CONDITION: _recommendedPosts.isEmpty -> Showing no recommendations message');
+      debugPrint(
+          '🎯 CONDITION: _recommendedPosts.isEmpty -> Showing no recommendations message');
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1605,7 +1632,8 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
               const SizedBox(height: 8),
               Text(
                 _recommendationMessage,
-                style: const TextStyle(color: ThemeConstants.grey, fontSize: 12),
+                style:
+                    const TextStyle(color: ThemeConstants.grey, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -1620,20 +1648,22 @@ class _NewsFeedSectionState extends State<NewsFeedSection> {
       );
     }
 
-    debugPrint('🎯 CONDITION: DEFAULT -> Showing recommended posts list with ${_recommendedPosts.length} posts');
-    debugPrint('🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD END 🎯🎯🎯');
+    debugPrint(
+        '🎯 CONDITION: DEFAULT -> Showing recommended posts list with ${_recommendedPosts.length} posts');
+    debugPrint(
+        '🎯🎯🎯 NewsFeedSection _buildRecommendedPostsContent BUILD END 🎯🎯🎯');
     return _buildPostsList(_recommendedPosts);
   }
 
   // Build post image widget - handles different media types
   Widget _buildPostImage(Post post, {double? height}) {
     final String imageUrl = _getBestImageUrl(post);
-    
+
     // Check if it's a video file
     if (_isVideoFile(imageUrl)) {
       return _buildVideoThumbnail(imageUrl, fit: BoxFit.cover);
     }
-    
+
     // Otherwise build regular image
     return _buildImage(imageUrl, fit: BoxFit.cover);
   }

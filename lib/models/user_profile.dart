@@ -96,7 +96,7 @@ class UserProfile {
         name: 'UserProfileModel');
 
     // Handle nullable account data safely
-    Account account;
+    Account? account;
     try {
       // First, ensure the account field exists and is properly formatted
       if (json['account'] == null) {
@@ -183,6 +183,15 @@ class UserProfile {
     }
 
     // Return the UserProfile with safer parsing
+    // Final safety check - if account is still null, this indicates a critical parsing error
+    if (account == null) {
+      developer.log(
+          'CRITICAL: Account is null after all parsing attempts. Raw JSON: ${json.toString()}',
+          name: 'UserProfileModel');
+      throw Exception(
+          'Failed to parse account data from profile JSON. Cannot create UserProfile without valid account.');
+    }
+
     return UserProfile(
       account: account,
       username: json['username'] ?? '',

@@ -9,7 +9,6 @@ import 'package:flutter_application_2/services/utils/navigation_service.dart';
 import 'package:flutter_application_2/routes/app_routes.dart';
 import 'package:flutter_application_2/ui/widgets/responsive_snackbar.dart';
 import 'package:flutter_application_2/services/api/account/account_provider.dart';
-import 'package:flutter_application_2/ui/auth/signup/verify_email.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_application_2/data/shared_prefs.dart';
 
@@ -122,14 +121,13 @@ class LoginScreenState extends State<LoginScreen>
             await Future.delayed(Duration(milliseconds: 500));
             if (!mounted) return;
 
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VerifyEmailScreen(
-                  email: email,
-                  censorEmail: false, // Don't censor on login flow
-                ),
-              ),
+            // Use NavigationService instead of Navigator.push to prevent multiple screens
+            NavigationService().replaceTo(
+              AppRoutes.verifyEmail,
+              arguments: {
+                'email': email,
+                'censorEmail': false, // Don't censor on login flow
+              },
             );
           }
         } else {

@@ -691,7 +691,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
         // Construct full URL using ApiUrls.baseUrl, always including /media/
         String thumbnailUrl = '${ApiUrls.baseUrl}/media/$relativePath';
-        print('🎥 Constructed server thumbnail URL: $thumbnailUrl');
+        debugPrint('🎥 Constructed server thumbnail URL: $thumbnailUrl');
         return thumbnailUrl;
       } else if (videoUrl.contains('attachments/image/') &&
           videoUrl.endsWith('.mp4')) {
@@ -706,12 +706,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
         // Construct full URL using ApiUrls.baseUrl without extra /media/
         String thumbnailUrl = '${ApiUrls.baseUrl}/$relativePath';
-        print(
+        debugPrint(
             '🎥 Constructed server thumbnail URL for misplaced video: $thumbnailUrl');
         return thumbnailUrl;
       }
     } catch (e) {
-      print('🎥 Error extracting thumbnail URL: $e');
+      debugPrint('🎥 Error extracting thumbnail URL: $e');
     }
     return null;
   }
@@ -745,7 +745,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 return _buildVideoLoading();
               },
               errorBuilder: (context, error, stackTrace) {
-                print(
+                debugPrint(
                     '🎥 Server thumbnail failed, trying client generation: $error');
                 // Fallback to client-side thumbnail generation
                 return FutureBuilder<Widget>(

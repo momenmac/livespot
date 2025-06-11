@@ -20,7 +20,7 @@ void showCustomSnackBar(BuildContext context, String message,
       top: topMargin,
       left: isLargeScreen ? screenSize.width * 0.5 + 20 : 20,
       right: 20,
-      bottom: screenSize.height - topMargin - 80, // Position at top
+      bottom: 0.0, // Set bottom to 0 to position at top
     ),
     duration: const Duration(seconds: 2),
   );
