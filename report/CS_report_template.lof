@@ -12,31 +12,82 @@
 \contentsline {figure}{\numberline {4.8}{\ignorespaces JWT Authentication Sequence Diagram - Complete authentication flow showing JWT token lifecycle, Google OAuth integration, and FCM token registration for secure user access and push notifications}}{26}{figure.caption.17}%
 \contentsline {figure}{\numberline {4.9}{\ignorespaces Security Architecture - Multi-layered security implementation showing client-side protection, network security, API authentication, data encryption, and external service security integration}}{27}{figure.caption.18}%
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {5.1}{\ignorespaces Account Creation Flow on Android---Dark Theme Implementation}}{30}{figure.caption.24}%
-\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Welcome Screen}}}{30}{figure.caption.24}%
-\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Create Account}}}{30}{figure.caption.24}%
-\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Email Verification}}}{30}{figure.caption.24}%
-\contentsline {figure}{\numberline {5.2}{\ignorespaces Account Creation on Web---Light Theme Responsive Design}}{31}{figure.caption.25}%
-\contentsline {figure}{\numberline {5.3}{\ignorespaces Login Interface on Web---Light Theme Design}}{31}{figure.caption.27}%
-\contentsline {figure}{\numberline {5.4}{\ignorespaces Login Interface on Android---Dark Theme Implementation}}{32}{figure.caption.28}%
-\contentsline {figure}{\numberline {5.5}{\ignorespaces Password Recovery Flow on Android---Reset Process}}{32}{figure.caption.30}%
-\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Reset Request}}}{32}{figure.caption.30}%
-\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Verification Code}}}{32}{figure.caption.30}%
-\contentsline {figure}{\numberline {5.6}{\ignorespaces Home Feed Interface on Android---Dark Theme Implementation}}{33}{figure.caption.33}%
-\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Main Feed}}}{33}{figure.caption.33}%
-\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Alternative View}}}{33}{figure.caption.33}%
-\contentsline {figure}{\numberline {5.7}{\ignorespaces Home Feed Interface on Web---Light Theme Responsive Design}}{34}{figure.caption.34}%
-\contentsline {figure}{\numberline {5.8}{\ignorespaces Profile Management on Android---Comprehensive User Account Features}}{35}{figure.caption.36}%
-\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Settings Overview}}}{35}{figure.caption.36}%
-\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Profile View}}}{35}{figure.caption.36}%
-\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Edit Profile}}}{35}{figure.caption.36}%
-\contentsline {figure}{\numberline {5.9}{\ignorespaces Change Password Interface on Android---Security Settings}}{36}{figure.caption.37}%
-\contentsline {figure}{\numberline {5.10}{\ignorespaces Profile Management on Web---Comprehensive User Interface}}{36}{figure.caption.38}%
-\contentsline {figure}{\numberline {5.11}{\ignorespaces Social Features and Map on Android---Stories and Location Integration}}{37}{figure.caption.40}%
-\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Stories Interface}}}{37}{figure.caption.40}%
-\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Interactive Map}}}{37}{figure.caption.40}%
-\addvspace {10\p@ }
-\addvspace {10\p@ }
-\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Account Creation Flow on Android---Dark Theme Achievement}}{30}{figure.caption.22}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Welcome Screen}}}{30}{figure.caption.22}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Create Account}}}{30}{figure.caption.22}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Email Verification}}}{30}{figure.caption.22}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Account Creation on Web---Light Theme Responsive Design}}{31}{figure.caption.23}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Login Interface on Web---Light Theme Design}}{31}{figure.caption.25}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Login Interface on Android---Dark Theme Achievement}}{32}{figure.caption.26}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Password Recovery Flow on Android---Reset Process}}{32}{figure.caption.28}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Reset Request}}}{32}{figure.caption.28}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Verification Code}}}{32}{figure.caption.28}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces Home Feed Interface on Android---Dark Theme Achievement}}{33}{figure.caption.30}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Main Feed}}}{33}{figure.caption.30}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Alternative View}}}{33}{figure.caption.30}%
+\contentsline {figure}{\numberline {5.7}{\ignorespaces Home Feed Interface on Web---Light Theme Responsive Design}}{34}{figure.caption.31}%
+\contentsline {figure}{\numberline {5.8}{\ignorespaces Profile Management on Android---Comprehensive User Account Features}}{35}{figure.caption.33}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Settings Overview}}}{35}{figure.caption.33}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Profile View}}}{35}{figure.caption.33}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Edit Profile}}}{35}{figure.caption.33}%
+\contentsline {figure}{\numberline {5.9}{\ignorespaces Profile Security and Notification Management on Android}}{36}{figure.caption.34}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Change Password}}}{36}{figure.caption.34}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Notification Settings}}}{36}{figure.caption.34}%
+\contentsline {figure}{\numberline {5.10}{\ignorespaces Profile Management on Web---Comprehensive User Interface}}{37}{figure.caption.35}%
+\contentsline {figure}{\numberline {5.11}{\ignorespaces Content Creation Flow on Android---Multi-Step Post Publishing}}{38}{figure.caption.37}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Post Creation - Step 1}}}{38}{figure.caption.37}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Post Creation - Step 2}}}{38}{figure.caption.37}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Date Selection}}}{38}{figure.caption.37}%
+\contentsline {figure}{\numberline {5.12}{\ignorespaces Camera Interface on Android---Unified Photo and Video Capture}}{39}{figure.caption.39}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Photo Mode}}}{39}{figure.caption.39}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Video Mode with Photo/Video Toggle}}}{39}{figure.caption.39}%
+\contentsline {figure}{\numberline {5.13}{\ignorespaces Messaging System on Android---Communication and Smart Assistant Features}}{40}{figure.caption.41}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Personal Messaging}}}{40}{figure.caption.41}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Smart Assistant Integration}}}{40}{figure.caption.41}%
+\contentsline {figure}{\numberline {5.14}{\ignorespaces Conversation Management Overview---List, Filtering, and Creation}}{41}{figure.caption.42}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Conversation List Overview}}}{41}{figure.caption.42}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Conversation Filtering Options}}}{41}{figure.caption.42}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {New Conversation Interface}}}{41}{figure.caption.42}%
+\contentsline {figure}{\numberline {5.15}{\ignorespaces Advanced Conversation Controls---Search, Message Management, and Status Tracking}}{42}{figure.caption.43}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Conversation Search Functionality}}}{42}{figure.caption.43}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Message Options: Reply/Copy/Edit/Delete}}}{42}{figure.caption.43}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Message Status Indicators}}}{42}{figure.caption.43}%
+\contentsline {figure}{\numberline {5.16}{\ignorespaces Conversation Management Actions---Long-Press Controls, AI Options, and In-Chat Settings}}{43}{figure.caption.44}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Long-Press Actions: Mute/Mark/Archive/Delete}}}{43}{figure.caption.44}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {AI Assistant Conversation Options}}}{43}{figure.caption.44}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {In-Conversation Menu Options}}}{43}{figure.caption.44}%
+\contentsline {figure}{\numberline {5.17}{\ignorespaces Social Features on Android---Stories and Story Viewer}}{44}{figure.caption.46}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Stories Interface}}}{44}{figure.caption.46}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Story Viewer}}}{44}{figure.caption.46}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Story Location Details}}}{44}{figure.caption.46}%
+\contentsline {figure}{\numberline {5.18}{\ignorespaces Stories Integration on Web---Location-Based Story Discovery with Map Interface}}{44}{figure.caption.47}%
+\contentsline {figure}{\numberline {5.19}{\ignorespaces Core Map Features---Interactive Interface, Search, and Navigation}}{45}{figure.caption.49}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Interactive Map Interface}}}{45}{figure.caption.49}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Map Search Functionality}}}{45}{figure.caption.49}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Route Planning}}}{45}{figure.caption.49}%
+\contentsline {figure}{\numberline {5.20}{\ignorespaces Advanced Map Features---Content Discovery and Category Visualization}}{46}{figure.caption.50}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Map Reels Discovery}}}{46}{figure.caption.50}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Map Legend and Categories}}}{46}{figure.caption.50}%
+\contentsline {figure}{\numberline {5.21}{\ignorespaces Notifications Interface---Dashboard, List View, and In-App Alerts}}{48}{figure.caption.52}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Main Notifications Dashboard}}}{48}{figure.caption.52}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Dedicated Notification List}}}{48}{figure.caption.52}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {In-App Snackbar Notification}}}{48}{figure.caption.52}%
+\contentsline {figure}{\numberline {5.22}{\ignorespaces Advanced Notifications Management---Bulk Actions, Swipe Controls, and Real-Time Reception}}{49}{figure.caption.53}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Management Options Sheet}}}{49}{figure.caption.53}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Swipe Actions: Delete/Mark}}}{49}{figure.caption.53}%
+\contentsline {subfigure}{\numberline {(c)}{\ignorespaces {Foreground Notification Reception}}}{49}{figure.caption.53}%
+\contentsline {figure}{\numberline {5.23}{\ignorespaces Notifications Management on Web---Desktop Interface with Enhanced Functionality}}{49}{figure.caption.54}%
+\contentsline {figure}{\numberline {5.24}{\ignorespaces External News Aggregation and Article Integration on Android---Third-Party Content Discovery}}{50}{figure.caption.56}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {News From Around the Web}}}{50}{figure.caption.56}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {External Article Integration}}}{50}{figure.caption.56}%
+\contentsline {figure}{\numberline {5.25}{\ignorespaces User-Generated Posts System on Android---Community Content and Interaction Features}}{51}{figure.caption.57}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {User Post Detail View}}}{51}{figure.caption.57}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {User Posts Feed Interface}}}{51}{figure.caption.57}%
+\contentsline {figure}{\numberline {5.26}{\ignorespaces Social Profile Features---User Content Discovery and Community Interaction}}{52}{figure.caption.58}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {User Profile Posts View}}}{52}{figure.caption.58}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Follow Features and User Discovery}}}{52}{figure.caption.58}%
+\contentsline {figure}{\numberline {5.27}{\ignorespaces Social Discovery Features---Search Functionality and Follow Management}}{53}{figure.caption.59}%
+\contentsline {subfigure}{\numberline {(a)}{\ignorespaces {Search Posts and People}}}{53}{figure.caption.59}%
+\contentsline {subfigure}{\numberline {(b)}{\ignorespaces {Following List Management}}}{53}{figure.caption.59}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
